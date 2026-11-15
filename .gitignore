@@ -27,7 +27,8 @@ apk/
 
 # 临时文件
 .memtest/
-promo/_*
+# 本地运营素材（封面模板、文案、示例图）只留在本机，不提交
+promo/
 _draft/
 *.log
 .DS_Store

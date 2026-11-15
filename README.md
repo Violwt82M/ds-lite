@@ -3,7 +3,7 @@
 **一个用起来更顺手的 DeepSeek 安卓客户端。** 基于 DeepSeek 官方开源前端 [chat-demo](https://github.com/deepseek-ai/chat-demo)（MIT）适配打包，不是官方产品。
 
 <p align="center">
-  <img src="promo/封面示例.png" width="360" alt="DS Lite" />
+  <img src="docs/cover.png" width="360" alt="DS Lite" />
 </p>
 
 > 免费 · 开源 · 无广告 · 无内购 · 不收集任何数据
