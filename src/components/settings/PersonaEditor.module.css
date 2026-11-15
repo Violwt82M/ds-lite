@@ -1,0 +1,55 @@
+/* 角色卡编辑器：单列表单，长文本用 textarea */
+.dialog {
+  width: 620px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: min(62vh, 620px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.hint {
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--dsw-alias-label-secondary, rgba(96, 96, 96, 0.95));
+}
+
+.input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid var(--dsw-alias-border-inverted, rgba(128, 128, 128, 0.3));
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+
+.textarea {
+  composes: input;
+  min-height: 76px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.required {
+  color: #e5484d;
+  margin-left: 2px;
+}

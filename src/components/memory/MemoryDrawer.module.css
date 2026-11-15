@@ -1,0 +1,279 @@
+/* 记忆面板：上下文占用 + 自动整理开关 + 笔记列表 */
+.dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+.sectionValue {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.progress {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(128, 128, 128, 0.18);
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--ds-primary, #4d6bfe);
+  transition: width 0.2s ease;
+}
+
+.progressFill[data-level='mid'] {
+  background: #e0a13c;
+}
+
+.progressFill[data-level='high'] {
+  background: #e5484d;
+}
+
+.progressFill[data-level='critical'] {
+  background: #1a1a1a;
+}
+
+/* 四色水位图例 */
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.legendRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--ds-primary, #4d6bfe);
+}
+
+.dot[data-level='mid'] {
+  background: #e0a13c;
+}
+
+.dot[data-level='high'] {
+  background: #e5484d;
+}
+
+.dot[data-level='critical'] {
+  background: repeating-linear-gradient(135deg, #f5c518 0 2px, #1a1a1a 2px 4px);
+}
+
+/* 关闭自动整理的二次确认 */
+.confirmBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 220px;
+}
+
+/* 使用建议 */
+.guideList {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+.guideTip {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-left: 3px solid #e0a13c;
+  border-radius: 8px;
+  background: rgba(224, 161, 60, 0.12);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.hint {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.error {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #d33a3f;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+.compactRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty {
+  padding: 10px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ds-border, rgba(128, 128, 128, 0.25));
+  border-radius: 10px;
+}
+
+.noteText {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.noteMeta {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.noteSource {
+  margin-right: 2px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+}
+
+.iconButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: rgba(128, 128, 128, 0.12);
+}
+
+.noteEdit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ds-primary, #4d6bfe);
+  border-radius: 10px;
+}
+
+.textarea {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--ds-border, rgba(128, 128, 128, 0.25));
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.noteActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.footer {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}

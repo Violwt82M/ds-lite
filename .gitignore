@@ -1,0 +1,37 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 构建产物
+dist/
+build/
+.cache/
+tmp/
+android/app/build/
+android/build/
+android/.gradle/
+android/capacitor-cordova-android-plugins/build/
+android/local.properties
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+
+# ===== 签名与打包产物：绝对不要提交 =====
+android/keystore/
+android/keystore.properties
+签名备份/
+apk/
+*.jks
+*.keystore
+*.p12
+
+# 临时文件
+.memtest/
+promo/_*
+_draft/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example

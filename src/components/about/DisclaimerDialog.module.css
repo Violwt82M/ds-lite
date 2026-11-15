@@ -1,0 +1,47 @@
+.dialog {
+  width: 520px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(60vh, 560px);
+  overflow-y: auto;
+}
+
+.lead {
+  margin: 0;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.meta {
+  margin: 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--dsw-alias-label-secondary, rgba(96, 96, 96, 0.95));
+  word-break: break-all;
+}
+
+.link {
+  color: #4d6bfe;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}

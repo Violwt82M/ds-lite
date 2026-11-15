@@ -1,0 +1,45 @@
+/* 一次性上下文引导：三句话 + 一条建议 */
+.dialog {
+  width: min(440px, calc(100vw - 32px));
+}
+
+.list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+.price {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.tip {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border-left: 3px solid #e0a13c;
+  border-radius: 8px;
+  background: rgba(224, 161, 60, 0.12);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+.meta {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}

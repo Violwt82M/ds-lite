@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DS Lite 封面模板 · 1080×1440</title>
+<style>
+  :root{
+    --blue:#4D6BFE;
+    --ink:#0A0A0C;
+    --grey:#86868B;
+    --line:#111114;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E9E9EC;
+    font-family:"Noto Sans SC","Source Han Sans SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- 工具条 ---------- */
+  #ui{
+    position:fixed;left:0;right:0;top:0;z-index:99;
+    display:flex;align-items:center;gap:10px;
+    padding:10px 16px;
+    background:rgba(255,255,255,.92);
+    backdrop-filter:blur(8px);
+    border-bottom:1px solid #D8D8DC;
+    font-size:13px;color:#3A3A3F;
+    font-family:system-ui,"Microsoft YaHei",sans-serif;
+  }
+  #ui .tip{flex:1;color:#6E6E73;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+  #ui .tip b{color:#1B1B1F;font-weight:600;}
+  #ui button{
+    appearance:none;border:1px solid #CFCFD4;background:#fff;color:#1B1B1F;
+    font-size:13px;line-height:1;padding:9px 14px;border-radius:8px;cursor:pointer;
+    font-family:inherit;transition:.15s;
+  }
+  #ui button:hover{background:#F4F5FF;border-color:var(--blue);color:var(--blue);}
+  #ui button.primary{background:var(--blue);border-color:var(--blue);color:#fff;}
+  #ui button.primary:hover{background:#3D5AE8;color:#fff;}
+
+  /* ---------- 画布 ---------- */
+  #viewport{position:relative;margin:0 auto;}
+  #stage{
+    position:relative;width:1080px;height:1440px;
+    background:#fff;overflow:hidden;
+    transform-origin:top left;
+    box-shadow:0 8px 40px rgba(0,0,0,.14);
+  }
+
+  /* 装饰：右上淡蓝大圆 */
+  .circle{
+    position:absolute;right:-236px;top:-150px;
+    width:820px;height:820px;border-radius:50%;
+    background:#EDF1FF;
+  }
+  /* 右上极细十字准星，瑞士式细节 */
+  .crosshair{position:absolute;background:#C9C9CF;}
+
+  /* 顶部信息 */
+  .meta{
+    position:absolute;left:88px;top:82px;width:904px;
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:15px;letter-spacing:.24em;color:#111115;
+  }
+  .meta .r{color:var(--grey);}
+  .rule-top{position:absolute;left:88px;top:130px;width:904px;height:1.5px;background:var(--line);}
+
+  /* 图标 */
+  .icon{
+    position:absolute;left:88px;top:198px;
+    width:320px;height:320px;border-radius:80px;
+    background:var(--blue);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+  }
+  .icon img{width:100%;height:100%;object-fit:cover;border-radius:80px;display:block;}
+  .icon-ds{
+    font-size:144px;font-weight:700;color:#fff;line-height:1;
+    letter-spacing:-.03em;margin-left:-6px;
+  }
+  .icon-lite{
+    font-size:47px;font-weight:500;color:#fff;line-height:1;
+    align-self:flex-end;margin-right:72px;margin-top:0;
+    letter-spacing:.01em;
+  }
+
+  /* 蓝色小色块 */
+  .accent{position:absolute;left:88px;top:574px;width:120px;height:10px;background:var(--blue);}
+
+  /* 大字 */
+  .big{
+    position:absolute;left:88px;top:624px;width:904px;
+    font-size:148px;line-height:1;font-weight:700;
+    letter-spacing:-.02em;color:var(--ink);
+  }
+  .big div{white-space:nowrap;}
+
+  /* 副说明 */
+  .sub{
+    position:absolute;left:88px;top:1116px;width:820px;
+    font-size:27px;line-height:1.62;font-weight:400;color:#3C3C41;
+    letter-spacing:.01em;
+  }
+
+  /* 底部 */
+  .rule-bottom{position:absolute;left:88px;top:1258px;width:904px;height:1px;background:#D9D9DE;}
+  .foot{
+    position:absolute;left:88px;top:1290px;width:904px;
+    display:flex;justify-content:space-between;
+    font-size:15px;letter-spacing:.2em;color:var(--grey);
+  }
+  .foot .sword{display:flex;align-items:center;gap:8px;letter-spacing:.2em;}
+  .foot .dot{width:9px;height:9px;background:var(--blue);display:inline-block;}
+
+  /* ---------- 可编辑提示 ---------- */
+  [contenteditable]{outline:none;border-radius:3px;transition:background .12s,box-shadow .12s;}
+  body.editing [contenteditable]:hover{
+    background:rgba(77,107,254,.07);
+    box-shadow:0 0 0 2px rgba(77,107,254,.22);
+  }
+  body.editing [contenteditable]:focus{
+    background:rgba(77,107,254,.10);
+    box-shadow:0 0 0 2px var(--blue);
+  }
+  #toast{
+    position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);
+    background:#111115;color:#fff;font-size:13px;padding:10px 18px;border-radius:10px;
+    font-family:system-ui,"Microsoft YaHei",sans-serif;opacity:0;pointer-events:none;
+    transition:.25s;z-index:200;
+  }
+  #toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body class="editing">
+
+<div id="ui">
+  <span class="tip">点画面里的文字就能<b>直接改</b> —— 改完点「下载 PNG」；换图标点右侧第一个按钮</span>
+  <button id="btnA">A−</button>
+  <button id="btnA2">A＋</button>
+  <button id="btnIcon">换图标</button>
+  <button id="btnReset">还原文字</button>
+  <button id="btnExport" class="primary">下载 PNG（2×）</button>
+  <input type="file" id="fileIcon" accept="image/*" hidden>
+</div>
+
+<div id="viewport">
+  <div id="stage">
+    <div class="circle"></div>
+
+    <div class="meta">
+      <div class="l" contenteditable="true" spellcheck="false">DS LITE — ANDROID</div>
+      <div class="r" contenteditable="true" spellcheck="false">免费 · 开源 · 无广告</div>
+    </div>
+    <div class="rule-top"></div>
+
+    <div class="icon" id="icon">
+      <div class="icon-ds" contenteditable="true" spellcheck="false">DS</div>
+      <div class="icon-lite" contenteditable="true" spellcheck="false">Lite</div>
+    </div>
+
+    <div class="accent"></div>
+
+    <div class="big" id="big">
+      <div contenteditable="true" spellcheck="false">不限额</div>
+      <div contenteditable="true" spellcheck="false">不过期</div>
+      <div contenteditable="true" spellcheck="false">不续费</div>
+    </div>
+
+    <div class="sub" id="sub">
+      <div contenteditable="true" spellcheck="false">自带 API Key，用多少扣多少 · 1M 上下文长对话不中断</div>
+      <div contenteditable="true" spellcheck="false">操作贴近原生，支持导入酒馆 v2 角色卡</div>
+    </div>
+
+    <div class="rule-bottom"></div>
+    <div class="foot">
+      <div class="sword"><span class="dot"></span><span contenteditable="true" spellcheck="false">DS LITE v0.9.9 · ANDROID 7.0+</span></div>
+      <div contenteditable="true" spellcheck="false">非官方客户端 · 不收取任何费用</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="lib/html2canvas.min.js"></script>
+<script>
+(function(){
+  var stage = document.getElementById('stage');
+  var viewport = document.getElementById('viewport');
+  var ui = document.getElementById('ui');
+  var UIH = 56;
+
+  function fit(){
+    var w = window.innerWidth - 40;
+    var h = window.innerHeight - UIH - 40;
+    var k = Math.min(w/1080, h/1440, 1);
+    stage.style.transform = 'scale(' + k + ')';
+    viewport.style.width = (1080*k) + 'px';
+    viewport.style.height = (1440*k) + 'px';
+    viewport.style.marginTop = (UIH + 20) + 'px';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  // 记录原始文字，供还原
+  var orig = {};
+  document.querySelectorAll('[contenteditable]').forEach(function(el,i){ orig[i] = el.innerHTML; });
+
+  function toast(msg){
+    var t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('on');
+    clearTimeout(toast._t); toast._t = setTimeout(function(){ t.classList.remove('on'); }, 2200);
+  }
+
+  // 字号微调
+  function bump(delta){
+    var el = document.activeElement;
+    if(!el || !el.isContentEditable){ toast('先点一下要调的那行字，再按 A− / A＋'); return; }
+    var cs = getComputedStyle(el);
+    var fs = parseFloat(cs.fontSize);
+    el.style.fontSize = Math.max(12, Math.min(220, fs + delta)) + 'px';
+  }
+  document.getElementById('btnA').onclick = function(){ bump(-6); };
+  document.getElementById('btnA2').onclick = function(){ bump(6); };
+
+  // 换图标
+  document.getElementById('btnIcon').onclick = function(){ document.getElementById('fileIcon').click(); };
+  document.getElementById('fileIcon').onchange = function(e){
+    var f = e.target.files && e.target.files[0];
+    if(!f) return;
+    var r = new FileReader();
+    r.onload = function(){
+      var icon = document.getElementById('icon');
+      icon.innerHTML = '<img src="' + r.result + '" alt="">';
+      toast('图标已换（想换回文字图标就刷新页面）');
+    };
+    r.readAsDataURL(f);
+  };
+
+  // 还原
+  document.getElementById('btnReset').onclick = function(){
+    var els = document.querySelectorAll('[contenteditable]');
+    els.forEach(function(el,i){
+      el.innerHTML = orig[i] || el.innerHTML;
+      el.style.fontSize = '';
+    });
+    toast('文字已还原');
+  };
+
+  // 导出 PNG
+  var busy = false;
+  document.getElementById('btnExport').onclick = function(){
+    if(busy) return;
+    busy = true;
+    if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    ui.style.display = 'none';
+    stage.style.transform = 'none';
+    viewport.style.width = '1080px';
+    viewport.style.height = '1440px';
+    viewport.style.marginTop = '0px';
+    window.scrollTo(0,0);
+    setTimeout(function(){
+      html2canvas(stage, {
+        scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false,
+        width: 1080, height: 1440, windowWidth: 1080, windowHeight: 1440,
+        scrollX: 0, scrollY: 0
+      }).then(function(canvas){
+        canvas.toBlob(function(blob){
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'DS-Lite-封面-' + Date.now() + '.png';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+          done(); toast('已下载 2160×2880 PNG');
+        }, 'image/png');
+      }).catch(function(err){
+        done();
+        toast('导出失败：' + err.message.slice(0,40));
+        console.error(err);
+      });
+    }, 260);
+    function done(){
+      ui.style.display = 'flex';
+      fit();
+      busy = false;
+    }
+  };
+
+  // 快捷键 Ctrl/Cmd+S = 导出
+  document.addEventListener('keydown', function(e){
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase() === 's'){ e.preventDefault(); document.getElementById('btnExport').click(); }
+  });
+})();
+</script>
+</body>
+</html>

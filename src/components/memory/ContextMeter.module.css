@@ -1,0 +1,90 @@
+/* 顶栏上下文指示：细进度条 + 百分比，四色水位 */
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--ds-border, rgba(128, 128, 128, 0.25));
+  border-radius: 11px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+  cursor: pointer;
+}
+
+.meter:hover {
+  background: rgba(128, 128, 128, 0.08);
+}
+
+.bar {
+  position: relative;
+  display: block;
+  width: 26px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(128, 128, 128, 0.22);
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ds-primary, #4d6bfe);
+}
+
+.text {
+  font-size: 11px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 蓝：正常 */
+.low .fill {
+  background: var(--ds-primary, #4d6bfe);
+}
+
+/* 橙：建议整理 */
+.mid .fill {
+  background: #e0a13c;
+}
+
+.mid .text {
+  color: #b87511;
+}
+
+/* 红：会自动整理 */
+.high .fill {
+  background: #e5484d;
+}
+
+.high .text {
+  color: #d33a3f;
+}
+
+/* 黄黑：再不整理就发不出去了，用条纹强调 */
+.critical {
+  border-color: #1a1a1a;
+  background: repeating-linear-gradient(
+    135deg,
+    #f5c518 0 6px,
+    #1a1a1a 6px 12px
+  );
+}
+
+.critical .bar {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.critical .fill {
+  background: #1a1a1a;
+}
+
+.critical .text {
+  padding: 1px 4px;
+  border-radius: 6px;
+  background: #1a1a1a;
+  color: #f5c518;
+  font-weight: 600;
+}

@@ -1,0 +1,66 @@
+/* 新手引导：API Key 从哪来 */
+.guide {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(77, 107, 254, 0.06);
+  border: 1px solid rgba(77, 107, 254, 0.18);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.title {
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.link {
+  display: inline-block;
+  margin-top: 6px;
+  color: #4d6bfe;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.steps {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--dsw-alias-label-secondary, rgba(96, 96, 96, 0.95));
+}
+
+.steps li {
+  margin-bottom: 6px;
+}
+
+.balance {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--dsw-alias-label-secondary, rgba(96, 96, 96, 0.95));
+}
+
+.balance .link {
+  margin-top: 0;
+}
+
+.price {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--dsw-alias-label-secondary, rgba(96, 96, 96, 0.95));
+}
+
+.price .link {
+  margin-top: 0;
+}
+
+.tip {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--dsw-alias-label-secondary, rgba(96, 96, 96, 0.95));
+}

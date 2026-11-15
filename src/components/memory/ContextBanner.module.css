@@ -1,0 +1,90 @@
+/* 会话顶部的上下文条：蓝 / 橙 / 红 / 黄黑四档常驻显示 */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--ds-border, rgba(128, 128, 128, 0.2));
+  font-size: 13px;
+  line-height: 1.4;
+  background: rgba(224, 161, 60, 0.1);
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+/* 自动整理完成后的一次性提示 */
+.notice {
+  border-left: 3px solid var(--ds-primary, #4d6bfe);
+  background: rgba(77, 107, 254, 0.08);
+  font-size: 13px;
+}
+
+.low {
+  border-left: 3px solid var(--ds-primary, #4d6bfe);
+  background: rgba(77, 107, 254, 0.04);
+}
+
+.mid {
+  border-left: 3px solid #e0a13c;
+}
+
+.high {
+  border-left: 3px solid #e5484d;
+  background: rgba(229, 72, 77, 0.09);
+}
+
+.critical {
+  border-left: 3px solid #1a1a1a;
+  background: repeating-linear-gradient(135deg, rgba(245, 197, 24, 0.16) 0 8px, rgba(26, 26, 26, 0.08) 8px 16px);
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.action {
+  padding: 4px 10px;
+  border: 1px solid var(--ds-border, rgba(128, 128, 128, 0.3));
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.actionStrong {
+  border-color: #e5484d;
+  background: #e5484d;
+  color: #fff;
+}
+
+@media not all and (min-width: 768px) {
+  .banner {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+  }
+}

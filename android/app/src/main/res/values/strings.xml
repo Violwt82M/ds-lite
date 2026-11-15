@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DS Lite</string>
+    <string name="title_activity_main">DS Lite</string>
+    <string name="package_name">com.dslite.app</string>
+    <string name="custom_url_scheme">com.dslite.app</string>
+</resources>
