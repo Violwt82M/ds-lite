@@ -321,6 +321,7 @@ export const en = {
   contextBannerCompacting: 'Organizing earlier chats…',
   contextBannerCompact: 'Organize now',
   contextBannerView: 'View',
+  contextBannerDismiss: 'Dismiss for this chat (other chats still show it)',
   contextGuideTitle: 'Three things about context',
   contextGuidePoint1: 'You pay with your own API key, by usage. The longer the chat, the more it re-reads every turn, and the more it costs.',
   contextGuidePoint2: 'The percentage at the top is how heavy this chat is: you can organize at any color — the earlier you do, the cheaper each turn; red also organizes for you.',

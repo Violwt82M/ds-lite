@@ -314,6 +314,7 @@ export const zh = {
   contextBannerCompacting: '正在整理较早的对话…',
   contextBannerCompact: '立即整理',
   contextBannerView: '查看',
+  contextBannerDismiss: '关掉这个对话里的这一档提示（别的对话照常提醒）',
   contextGuideTitle: '关于上下文，记住三件事',
   contextGuidePoint1: '费用从你自己的 API Key 扣，按量计费；聊得越久，每轮要重新读的内容越多，也越贵。',
   contextGuidePoint2: '顶栏那个百分比就是「这段对话有多重」：随时都能点整理，整得越早每轮越省；变红时还会自动帮你整。',
