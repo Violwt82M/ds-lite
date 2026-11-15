@@ -45,9 +45,15 @@
 - 安装包约 5 MB
 - 数据只存在你自己手机上（localStorage + IndexedDB），卸载即清空，**卸载前记得导出对话**
 
-### 网页版
+### 网页版（iPhone / iPad 用这个）
 
 不想装 APK 也能用：[https://Violwt82M.github.io/ds-lite/](https://Violwt82M.github.io/ds-lite/) （由 GitHub Actions 部署，就是同一套前端跑在浏览器里）
+
+- **iPhone / iPad**：用 Safari 打开 → 分享 → **添加到主屏幕**，桌面就有图标，点开是全屏
+- **第一次成功打开后，界面文件会缓存在你手机上**：以后即使这个站点连不上，也能正常打开（只有发消息需要联网）
+- 想自己存一份、或者换到自己喜欢的服务器上：下载 Releases 里的 `DS-Lite-web-*.zip`，解压就是一个完整的静态站点
+
+详细说明（含打不开怎么办、本地自托管）：[网页版说明.md](网页版说明.md)
 
 ## 从源码构建
 
