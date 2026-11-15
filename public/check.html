@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>DS Lite 兼容性自检</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin:0; padding:16px; font:15px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background:#f7f8fa; color:#1b1d21; }
+  @media (prefers-color-scheme: dark) { body { background:#16181c; color:#e6e8eb; } .card { background:#23262c !important; } }
+  h1 { font-size:19px; margin:0 0 4px; }
+  .sub { color:#7a7f88; font-size:12px; margin-bottom:14px; }
+  .card { background:#fff; border-radius:12px; padding:14px; margin-bottom:12px; box-shadow:0 1px 2px rgba(0,0,0,.06); }
+  .verdict { font-size:17px; font-weight:600; line-height:1.5; }
+  .ok { color:#1a8f4c; } .bad { color:#d2342b; } .warn { color:#b8770a; }
+  .row { display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid rgba(128,128,128,.16); font-size:13px; }
+  .row:last-child { border-bottom:0; }
+  .row span:first-child { color:#7a7f88; flex:0 0 auto; }
+  .row span:last-child { text-align:right; word-break:break-all; }
+  code { font:12px/1.5 ui-monospace, Consolas, monospace; word-break:break-all; }
+  button { width:100%; padding:11px; border:0; border-radius:10px; background:#4d6bfe; color:#fff; font-size:15px; font-weight:600; }
+  .hint { font-size:12px; color:#7a7f88; margin-top:8px; text-align:center; }
+</style>
+</head>
+<body>
+<h1>DS Lite 兼容性自检</h1>
+<div class="sub">如果你打开 DS Lite 是白屏，请把这个页面截图发给开发者</div>
+<div class="card"><div id="verdict" class="verdict">检测中…</div><div id="reasons" class="sub" style="margin:8px 0 0"></div></div>
+<div class="card" id="checks"></div>
+<div class="card" id="env"></div>
+<button id="copy">复制全部信息</button>
+<div class="hint">仅在本机运行检测，不会上传任何数据</div>
+<script>
+(function () {
+  var rows = [];
+  var envRows = [];
+  function row(label, value, flag) {
+    var cls = flag === 'bad' ? 'bad' : flag === 'warn' ? 'warn' : '';
+    rows.push('<div class="row"><span>' + label + '</span><span class="' + cls + '">' + value + '</span></div>');
+  }
+  function envRow(label, value) {
+    envRows.push('<div class="row"><span>' + label + '</span><span><code>' + String(value) + '</code></span></div>');
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; });
+  }
+
+  var ua = navigator.userAgent || '';
+  var m = ua.match(/Chrom(e|ium)\/(\d+)/);
+  var chromeMajor = m ? parseInt(m[2], 10) : 0;
+  var isAndroid = /Android/i.test(ua);
+  var isWebView = /; wv\)/.test(ua) || /Version\/\d+\.\d+.*Chrome\//.test(ua);
+
+  // 语法类检测（用 new Function 避免整页解析失败）
+  function syntaxOk(code) { try { new Function(code); return true; } catch (e) { return false; } }
+  var support = {
+    hasOwn: typeof Object.hasOwn === 'function',
+    toSorted: typeof Array.prototype.toSorted === 'function',
+    structuredClone: typeof structuredClone === 'function',
+    logicalAssign: syntaxOk('var a=1; a||=2; a&&=3; a??=4;'),
+    optionalChain: syntaxOk('var o={}; return o?.a ?? 1;'),
+    classFields: syntaxOk('class A { x = 1 } return new A().x;'),
+    flatMap: typeof Array.prototype.flatMap === 'function',
+    replaceAll: typeof String.prototype.replaceAll === 'function',
+    serviceWorker: 'serviceWorker' in navigator,
+    caches: typeof caches !== 'undefined',
+    dvh: !!(window.CSS && CSS.supports && CSS.supports('height', '100dvh')),
+    has: !!(window.CSS && CSS.supports && CSS.supports('selector(:has(a))')),
+    container: !!(window.CSS && CSS.supports && CSS.supports('container-type', 'inline-size')),
+    resObs: typeof ResizeObserver === 'function',
+    visViewport: 'visualViewport' in window,
+    idb: typeof indexedDB !== 'undefined',
+    ls: true,
+  };
+  try { localStorage.setItem('__dslite_check', '1'); localStorage.removeItem('__dslite_check'); } catch (e) { support.ls = false; }
+
+  // 硬性门槛：DS Lite 当前打包目标要求 Chromium 105，启动代码还用到 Object.hasOwn (93+)
+  var fatal = [];
+  if (!support.logicalAssign) fatal.push('语法不支持（||= / ??=），整个脚本会解析失败');
+  if (!support.optionalChain) fatal.push('语法不支持（?. / ??），脚本解析失败');
+  if (!support.hasOwn) fatal.push('缺少 Object.hasOwn（需要 Chrome 93+），启动即报错');
+  if (!support.idb) fatal.push('IndexedDB 不可用，聊天记录无法保存');
+  if (!support.ls) fatal.push('localStorage 不可用（可能开了无痕模式或禁用了本地存储）');
+
+  var soft = [];
+  if (chromeMajor && chromeMajor < 105) soft.push('内核版本低于 105，样式可能不完整');
+  if (!support.toSorted) soft.push('缺少 toSorted（导入对话时会报错）');
+  if (!support.dvh) soft.push('不支持 dvh 单位（手机会有高度偏差）');
+  if (!support.has) soft.push('不支持 :has() 选择器（部分样式失效）');
+  if (!support.serviceWorker) soft.push('不支持 Service Worker（网页版无法离线）');
+
+  var verdict = document.getElementById('verdict');
+  var reasons = document.getElementById('reasons');
+  if (fatal.length) {
+    verdict.className = 'verdict bad';
+    verdict.textContent = '❌ 这台设备跑不了当前版本的 DS Lite';
+    reasons.innerHTML = fatal.map(function (r) { return '· ' + esc(r); }).join('<br>');
+  } else if (soft.length) {
+    verdict.className = 'verdict warn';
+    verdict.textContent = '⚠️ 应该能打开，但可能有样式/功能问题';
+    reasons.innerHTML = soft.map(function (r) { return '· ' + esc(r); }).join('<br>');
+  } else {
+    verdict.className = 'verdict ok';
+    verdict.textContent = '✅ 这台设备可以运行 DS Lite';
+    reasons.textContent = '如果 DS Lite 仍然白屏，请把截图和下面的信息一起发给开发者';
+  }
+
+  row('Chromium 内核版本', chromeMajor ? (chromeMajor + (support.logicalAssign && support.optionalChain ? '（语法可用）' : '（语法不支持）')) : '未识别', chromeMajor && chromeMajor < 93 ? 'bad' : chromeMajor && chromeMajor < 105 ? 'warn' : '');
+  row('Object.hasOwn', support.hasOwn ? '支持' : '不支持', support.hasOwn ? '' : 'bad');
+  row('||= / &&= / ??=', support.logicalAssign ? '支持' : '不支持', support.logicalAssign ? '' : 'bad');
+  row('?. / ??  空值合并', support.optionalChain ? '支持' : '不支持', support.optionalChain ? '' : 'bad');
+  row('class 字段', support.classFields ? '支持' : '不支持', support.classFields ? '' : 'warn');
+  row('Array.toSorted', support.toSorted ? '支持' : '不支持', support.toSorted ? '' : 'warn');
+  row('structuredClone', support.structuredClone ? '支持' : '不支持', '');
+  row('CSS :has()', support.has ? '支持' : '不支持', '');
+  row('CSS @container', support.container ? '支持' : '不支持', '');
+  row('CSS dvh 单位', support.dvh ? '支持' : '不支持', '');
+  row('ResizeObserver', support.resObs ? '支持' : '不支持', support.resObs ? '' : 'bad');
+  row('visualViewport', support.visViewport ? '支持' : '不支持', '');
+  row('IndexedDB', support.idb ? '可用' : '不可用', support.idb ? '' : 'bad');
+  row('localStorage', support.ls ? '可用' : '不可用', support.ls ? '' : 'bad');
+  row('Service Worker', support.serviceWorker ? '支持' : '不支持', '');
+  row('Cache API', support.caches ? '支持' : '不支持', '');
+
+  envRow('User-Agent', esc(ua));
+  envRow('平台', navigator.platform || '-');
+  envRow('语言', navigator.language || '-');
+  envRow('屏幕', window.screen.width + '×' + window.screen.height + ' @' + (window.devicePixelRatio || 1) + 'x');
+  envRow('视口', window.innerWidth + '×' + window.innerHeight);
+  envRow('触屏', navigator.maxTouchPoints || 0);
+  envRow('WebView 容器', isWebView ? '是' : '否');
+  envRow('Android', isAndroid ? '是' : '否');
+  envRow('在线状态', navigator.onLine ? '在线' : '离线');
+
+  document.getElementById('checks').innerHTML = '<div class="sub" style="margin:0 0 6px">能力检测</div>' + rows.join('');
+  document.getElementById('env').innerHTML = '<div class="sub" style="margin:0 0 6px">设备信息</div>' + envRows.join('');
+
+  // 顺便验证站点的静态资源是否真的能下载
+  function probe(name, url) {
+    return fetch(url, { cache: 'no-store' }).then(function (res) {
+      envRow('资源 ' + name, res.status + ' ' + res.statusText);
+    }).catch(function (e) {
+      envRow('资源 ' + name, '失败：' + (e && e.message ? e.message : e));
+    }).then(function () {
+      document.getElementById('env').innerHTML = '<div class="sub" style="margin:0 0 6px">设备信息</div>' + envRows.join('');
+    });
+  }
+  probe('manifest', 'manifest.webmanifest');
+  probe('图标', 'icon-192.png');
+  fetch('index.html', { cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (text) {
+    var js = (text.match(/static\/js\/[^"']+\.js/) || [])[0];
+    var css = (text.match(/static\/css\/[^"']+\.css/) || [])[0];
+    if (js) { probe('主脚本', js); }
+    if (css) { probe('样式表', css); }
+  }).catch(function (e) { envRow('index.html', '读取失败：' + e.message); });
+
+  document.getElementById('copy').onclick = function () {
+    var info = ['DS Lite 自检结果', verdict.textContent].concat(
+      rows.map(function (html) { return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(); }),
+      envRows.map(function (html) { return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(); })
+    ).join('\n');
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(info).then(function () { alert('已复制，粘贴到聊天里发给开发者即可'); }, function () { alert('复制失败，请直接截图'); });
+    } else {
+      alert('这个浏览器不支持自动复制，请直接截图');
+    }
+  };
+})();
+</script>
+</body>
+</html>

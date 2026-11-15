@@ -109,8 +109,13 @@ self.addEventListener('fetch', (event) => {
   // 只接管本站静态资源，API 请求（api.deepseek.com）一律直连，不缓存
   if (url.origin !== self.location.origin) return;
 
+  // 只有应用本体（站点根 / index.html）才走离线外壳，其他页面（如 check.html）交给浏览器
+  const scopePath = new URL('./', self.registration.scope).pathname;
+  const isShell = url.pathname === scopePath || url.pathname === scopePath + 'index.html';
+
   // 打开页面：有缓存就先给缓存（秒开），后台顺手拉一份新的
   if (request.mode === 'navigate') {
+    if (!isShell) return;
     event.respondWith(
       (async () => {
         const cache = await caches.open(CACHE);
