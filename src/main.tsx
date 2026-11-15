@@ -5,7 +5,25 @@ import { ensureKatex } from './services/markdown/katex.js'
 import './app/theme.css'
 import './app/global.css'
 
+/** 网页版注册 Service Worker：第一次成功打开后即可离线启动；安卓包内（localhost）跳过 */
+function setupOffline() {
+  if (!('serviceWorker' in navigator)) {
+    return
+  }
+  const { hostname, protocol } = window.location
+  if (hostname === 'localhost') {
+    return
+  }
+  if (protocol !== 'https:' && hostname !== '127.0.0.1') {
+    return
+  }
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {})
+  })
+}
+
 ensureKatex()
 setupTheme()
+setupOffline()
 
 createRoot(document.getElementById('root') as HTMLElement).render(<App />)

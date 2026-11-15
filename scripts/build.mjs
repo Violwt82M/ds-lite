@@ -12,3 +12,9 @@ execFileSync(process.execPath, [join(root, 'node_modules/@rspack/cli/bin/rspack.
   cwd: root,
   env: { ...process.env, NODE_ENV: 'production' },
 });
+
+// 生成离线缓存用的 Service Worker（网页版专用，安卓包内不影响）
+execFileSync(process.execPath, [join(root, 'scripts/gen-sw.mjs')], {
+  stdio: 'inherit',
+  cwd: root,
+});
