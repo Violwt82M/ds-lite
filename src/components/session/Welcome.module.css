@@ -4,6 +4,14 @@
   display: flex;
 }
 
+/* 桌面端欢迎页没有标题栏，人设入口浮在右上角 */
+.personaCorner {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  z-index: 5;
+}
+
 .welcome {
   display: flex;
   flex-direction: column;

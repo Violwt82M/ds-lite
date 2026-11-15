@@ -13,15 +13,15 @@
 
 /* 角色头像：固定在消息左上角，正文整体右移一点 */
 .withAvatar {
-  padding-left: 40px;
+  padding-left: 48px;
 }
 
 .avatar {
   position: absolute;
   top: 0;
   left: 0;
-  width: 30px;
-  height: 30px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   object-fit: cover;
   background: var(--dsw-alias-markdown-placeholder, rgba(128, 128, 128, 0.15));

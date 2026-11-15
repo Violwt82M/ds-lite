@@ -76,15 +76,50 @@ const resolve = (cards: PersonaEntry[], scope: string | undefined): SessionPerso
   return { entry, cardId: entry?.id ?? null }
 }
 
-/** 新对话创建时快照一次：全局开着就带上当前卡，否则记「不使用」 */
+/**
+ * 还没发第一句话时（欢迎页）选的人设：先存在这里，等会话创建时写进绑定。
+ * undefined = 没选过，按全局默认走。
+ */
+export const usePersonaDraft = create<{ cardId: string | undefined }>(() => ({ cardId: undefined }))
+
+export const setDraftPersona = (cardId: string | undefined) =>
+  usePersonaDraft.setState({ cardId })
+
+/** 标题栏 / 欢迎页共用：sessionId 为 null 时看「下一条新对话」 */
+export const useChatPersona = (sessionId: string | null): SessionPersona => {
+  const cards = usePersona((state) => state.cards)
+  const enabled = usePersona((state) => state.enabled)
+  const activeId = usePersona((state) => state.activeId)
+  const scope = usePersonaScope((state) => (sessionId === null ? undefined : state.map[sessionId]))
+  const draft = usePersonaDraft((state) => state.cardId)
+  return useMemo(() => {
+    if (sessionId !== null) {
+      return resolve(cards, scope)
+    }
+    if (draft !== undefined) {
+      return resolve(cards, draft)
+    }
+    const usable = enabled && activeId !== null && cards.some((entry) => entry.id === activeId)
+    return resolve(cards, usable ? activeId : 'none')
+  }, [cards, enabled, activeId, scope, draft, sessionId])
+}
+
+/** 新对话创建时写入绑定：优先用欢迎页选的，否则快照全局设置 */
 export const bindPersonaForNewSession = (sessionId: string) => {
   const map = usePersonaScope.getState().map
   if (map[sessionId] !== undefined) {
     return
   }
   const { enabled, activeId, cards } = usePersona.getState()
+  const draft = usePersonaDraft.getState().cardId
+  // 欢迎页选过卡就直接用；卡被删了则退回全局默认
+  const picked = draft !== undefined && cards.some((entry) => entry.id === draft) ? draft : undefined
   const usable = enabled && activeId !== null && cards.some((entry) => entry.id === activeId)
-  commit({ ...map, [sessionId]: usable ? (activeId as string) : 'none' })
+  const scope = picked ?? (usable ? (activeId as string) : 'none')
+  commit({ ...map, [sessionId]: scope })
+  if (draft !== undefined) {
+    usePersonaDraft.setState({ cardId: undefined })
+  }
 }
 
 /** 非响应式解析，给请求组装用 */

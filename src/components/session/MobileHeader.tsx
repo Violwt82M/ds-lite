@@ -8,7 +8,7 @@ import { openMobileSider } from '../sider/mobileSiderState.js'
 import { PersonaButton } from './PersonaPicker.js'
 import styles from './MobileHeader.module.css'
 
-/** 移动端顶栏：左侧菜单打开侧边栏；会话页再显示标题、上下文占用与开启新对话 */
+/** 移动端顶栏：左侧菜单打开侧边栏；会话页再显示标题、人设、上下文占用与开启新对话 */
 export const MobileHeader = ({ title, session }: { title?: string; session?: Session }) => {
   const t = useTranslate()
   return (
@@ -20,7 +20,13 @@ export const MobileHeader = ({ title, session }: { title?: string; session?: Ses
         aria-label={t('expandSiderbarButton')}
         onClick={openMobileSider}
       />
-      {title === undefined ? null : (
+      {title === undefined ? (
+        <>
+          {/* 还没发第一句话：只放人设入口，让新对话可以先选人设 */}
+          <div className={styles.title} />
+          <PersonaButton sessionId={null} />
+        </>
+      ) : (
         <>
           <div className={styles.title}>{title}</div>
           {session ? <PersonaButton sessionId={session.id} /> : null}
