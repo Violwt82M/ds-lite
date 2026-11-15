@@ -47,14 +47,14 @@
 
 ### 网页版
 
-不开源 Android 也能用：`https://__OWNER__.github.io/ds-lite/` （仓库启用 GitHub Pages 后自动部署，需要浏览器支持在 `file://` 或 https 下使用存储）
+不想装 APK 也能用：[https://Violwt82M.github.io/ds-lite/](https://Violwt82M.github.io/ds-lite/) （由 GitHub Actions 部署，就是同一套前端跑在浏览器里）
 
 ## 从源码构建
 
 需要 Node.js 22.12+、pnpm。
 
 ```sh
-git clone https://github.com/__OWNER__/ds-lite.git
+git clone https://github.com/Violwt82M/ds-lite.git
 cd ds-lite
 pnpm install
 
