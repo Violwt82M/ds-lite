@@ -33,7 +33,6 @@ import { Tooltip } from '../base/Tooltip.js'
 import { ensureApiKey } from '../settings/settingsDialogState.js'
 import { DragMask, useFileDrop } from './DragMask.js'
 import { showToast } from '../base/toastState.js'
-import { MAX_TEXT_CHARS } from '../../services/attachments.js'
 import { ACCEPT, useUploads } from '../../services/attachments.js'
 import { DraftAttachments } from './DraftAttachments.js'
 import { useVoiceInput } from './useVoiceInput.js'
@@ -240,12 +239,6 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       voice.status !== 'idle' ||
       !prepareDraftMessage(getDraft(sessionId), useUploads.getState().tasks)
     ) {
-      return
-    }
-    // 上百万字的粘贴同样读不进来，提前拦下并说清楚，别让用户等一句「服务器繁忙」
-    const draftText = getDraft(sessionId).text.trim()
-    if (draftText.length > MAX_TEXT_CHARS) {
-      showToast({ key: 'uploadTextTooLong', params: { chars: Math.round(draftText.length / 10_000) }, type: 'error' })
       return
     }
     // 文本与上传完成态由提交动作读取最新快照，不使用上一次渲染的草稿。

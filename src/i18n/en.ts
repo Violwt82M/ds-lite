@@ -221,8 +221,6 @@ export const en = {
   uploadMaxFiles: 'You can upload up to {count} files',
   uploadFileStatusUploading: 'Uploading...',
   uploadServerBusy: 'Server busy',
-  uploadFileTooLarge: 'File too large — the server rejected this upload',
-  uploadTextTooLong: 'Text is too long: roughly {chars} x 10k characters. The model reads about 200k characters at a time - split the text and upload the parts.',
   uploadParseFailed: 'Parsing failed',
   uploadFileCountLimit: 'Uploaded file limit reached ({limit} files). ',
   uploadStorageLimit: 'Uploaded file storage limit reached ({limit} GB). ',
