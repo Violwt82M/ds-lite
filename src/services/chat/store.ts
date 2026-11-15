@@ -15,6 +15,8 @@ import {
   prepareDraftMessage,
 } from './drafts.js'
 import { buildSystemPrompt } from '../persona/prompt.js'
+import { bindPersonaForNewSession, resolveSessionPersona } from '../persona/scope.js'
+import { usePersona } from '../persona/store.js'
 import {
   buildTranscript,
   parseMemoryNotes,
@@ -620,6 +622,7 @@ export const sendMessage = (targetSessionId: string | null) => {
       rootMessageId: null,
     }
     sessionId = session.id
+    bindPersonaForNewSession(session.id)
     touchSession(session.id)
     set((state) => ({
       sessions: [toSessionSummary(session), ...state.sessions],
@@ -1256,7 +1259,13 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             model: initial.model ?? MODEL,
             system: buildSystemPrompt(
               SYSTEM_PROMPT,
-              renderMemorySection(activeSession?.memory, useSettings.getState().locale)
+              renderMemorySection(activeSession?.memory, useSettings.getState().locale),
+              (() => {
+                const entry = resolveSessionPersona(sessionId).entry
+                return entry === null
+                  ? null
+                  : { card: entry.card, userName: usePersona.getState().userName }
+              })()
             ),
             messages,
             thinking: { type: initial.thinking ? 'enabled' : 'disabled' },

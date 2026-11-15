@@ -37,6 +37,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   busy,
   versions,
   onSelectVersion,
+  avatar,
 }: {
   sessionId: string
   message: AssistantMessageType
@@ -45,6 +46,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   busy: boolean
   versions: MessageVersions
   onSelectVersion: SelectMessageVersion
+  avatar?: { src: string | null; label: string } | null
 }) {
   const t = useTranslate()
   const view = useReplyView(message, streaming)
@@ -60,7 +62,14 @@ export const AssistantMessage = memo(function AssistantMessage({
   const waiting = streaming && view.steps.length === 0 && !view.answer && !message.thinking
   const summaryEntry = `${message.id}-summary`
   return (
-    <div className={styles.message}>
+    <div className={clsx(styles.message, avatar && styles.withAvatar)}>
+      {avatar ? (
+        avatar.src ? (
+          <img className={styles.avatar} src={avatar.src} alt="" />
+        ) : (
+          <span className={clsx(styles.avatar, styles.avatarText)}>{avatar.label.slice(0, 1)}</span>
+        )
+      ) : null}
       {refused ? null : (
         <ReplyArea
           message={message}

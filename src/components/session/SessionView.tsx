@@ -8,6 +8,7 @@ import { ContextBanner } from '../memory/ContextBanner.js'
 import { ContextMeter } from '../memory/ContextMeter.js'
 import { MemoryDrawer } from '../memory/MemoryDrawer.js'
 import { MobileHeader } from './MobileHeader.js'
+import { PersonaButton } from './PersonaPicker.js'
 import styles from './SessionView.module.css'
 
 /** 会话页：标题栏（移动端为顶栏）+ 消息列表，输入框吸底 */
@@ -33,6 +34,7 @@ export const SessionView = ({
             {title}
           </div>
           <div className={styles.headerActions}>
+            <PersonaButton sessionId={session.id} />
             <ContextMeter session={session} />
           </div>
         </div>

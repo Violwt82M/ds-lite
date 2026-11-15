@@ -6,6 +6,8 @@ import {
   type MessageVersions,
 } from '../../services/chat/branches.js'
 import { selectMessageVersion } from '../../services/chat/store.js'
+import { useSessionPersona } from '../../services/persona/scope.js'
+import { usePersona } from '../../services/persona/store.js'
 import type { Session } from '../../services/chat/types.js'
 import { useTranslate } from '../../i18n/index.js'
 import { closeSearchPanel } from '../search/searchPanelState.js'
@@ -53,6 +55,13 @@ export const MessageList = ({
   const restoreScrollRef = useRef<{ messageId: string; top: number } | null>(null)
   const t = useTranslate()
   const messages = getVisibleMessages(session)
+  // AI 消息左上角的角色头像：默认关闭，开关在「设置 → 角色扮演」
+  const showAvatar = usePersona((state) => state.showAvatar)
+  const persona = useSessionPersona(session.id)
+  const avatar =
+    showAvatar && persona.entry
+      ? { src: persona.entry.avatar ?? null, label: persona.entry.card.name }
+      : null
   // 只渲染最近的 N 条，前面的按需加载：几千条消息全量渲染会明显卡顿
   const [renderLimit, setRenderLimit] = useState(RENDER_PAGE)
   const expandAnchor = useRef<{ scrollTop: number; scrollHeight: number } | null>(null)
@@ -202,6 +211,7 @@ export const MessageList = ({
                   busy={streaming}
                   versions={versions.get(message.id) ?? EMPTY_VERSIONS}
                   onSelectVersion={selectVersion}
+                  avatar={avatar}
                 />
               )
             )}

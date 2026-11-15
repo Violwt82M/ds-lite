@@ -1,26 +1,28 @@
 import { renderSystemPrompt } from './card.js'
 import { substituteMacros } from './macros.js'
-import { usePersona } from './store.js'
+import type { PersonaCard } from './card.js'
 
 /** 玩家没填称呼时的兜底，避免卡片里的 {{user}} 变成空串 */
 const FALLBACK_USER_NAME = '我'
 
 /**
  * 组装本轮请求的 system 字段。
- * 未启用角色扮演时只拼基础提示词与长期记忆，保证默认行为与官方 demo 一致。
- * 启用时顺序为：角色设定 → 开场白说明 → 基础提示词 → 长期记忆。
+ * 没有生效的角色卡时只拼基础提示词与长期记忆，保证默认行为与官方 demo 一致。
+ * 有卡时顺序为：角色设定 → 开场白说明 → 基础提示词 → 长期记忆。
  * memory 为空串时完全不出现，不会给模型任何额外暗示。
+ *
+ * 卡片由调用方按「会话绑定 → 全局默认」解析好后传进来，这里不再读全局状态。
  */
-export const buildSystemPrompt = (base: string, memory = ''): string => {
-  const state = usePersona.getState()
-  if (!state.enabled) {
+export const buildSystemPrompt = (
+  base: string,
+  memory = '',
+  persona: { card: PersonaCard; userName: string } | null = null
+): string => {
+  if (persona === null) {
     return memory === '' ? base : `${base}\n\n${memory}`
   }
-  const card = state.cards.find((entry) => entry.id === state.activeId)?.card
-  if (!card) {
-    return base
-  }
-  const userName = state.userName.trim() === '' ? FALLBACK_USER_NAME : state.userName.trim()
+  const { card } = persona
+  const userName = persona.userName.trim() === '' ? FALLBACK_USER_NAME : persona.userName.trim()
   const parts = [renderSystemPrompt(card, { userName })]
   const greeting = card.firstMessage.trim()
   if (greeting !== '') {

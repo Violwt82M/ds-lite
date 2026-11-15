@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { cardToJsonText, emptyCard, type PersonaCard } from '../../services/persona/card.js'
-import { savePersonaCard } from '../../services/persona/store.js'
+import { savePersonaCard, setPersonaAvatar } from '../../services/persona/store.js'
+import { toAvatarDataUrl } from '../../utils/image.js'
 import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
 import { showToast } from '../base/toastState.js'
@@ -31,14 +32,19 @@ const isTouchInput = () =>
 export const PersonaEditor = ({
   id,
   initial,
+  avatar: initialAvatar,
   onClose,
 }: {
   /** null 表示新建 */
   id: string | null
   initial?: PersonaCard
+  /** 已有的头像（data URL） */
+  avatar?: string
   onClose: () => void
 }) => {
   const t = useTranslate()
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const [avatar, setAvatar] = useState<string | undefined>(initialAvatar)
   const [draft, setDraft] = useState<PersonaCard>(() => ({
     ...(initial ?? emptyCard()),
   }))
@@ -50,7 +56,10 @@ export const PersonaEditor = ({
       showToast({ key: 'personaNameRequired', type: 'error' })
       return
     }
-    savePersonaCard(id, { ...draft, name })
+    const entryId = savePersonaCard(id, { ...draft, name })
+    if (avatar !== initialAvatar) {
+      setPersonaAvatar(entryId, avatar ?? null)
+    }
     showToast({ key: 'personaSaved', params: { name } })
     onClose()
   }
@@ -104,6 +113,45 @@ export const PersonaEditor = ({
         </div>
       }
     >
+      <div className={styles.field}>
+        <div className={styles.label}>{t('personaAvatar')}</div>
+        <div className={styles.avatarRow}>
+          {avatar ? (
+            <img className={styles.avatarPreview} src={avatar} alt="" />
+          ) : (
+            <div className={styles.avatarEmpty}>{(draft.name.trim() || '?').slice(0, 1)}</div>
+          )}
+          <Button variant="outlined" size="s" onClick={() => avatarInputRef.current?.click()}>
+            {t('personaAvatarPick')}
+          </Button>
+          {avatar ? (
+            <Button variant="outlined" size="s" onClick={() => setAvatar(undefined)}>
+              {t('personaAvatarRemove')}
+            </Button>
+          ) : null}
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (!file) {
+                return
+              }
+              void toAvatarDataUrl(file).then((url) => {
+                if (url) {
+                  setAvatar(url)
+                } else {
+                  showToast({ key: 'personaAvatarFailed', type: 'error' })
+                }
+              })
+            }}
+          />
+        </div>
+      </div>
+
       <div className={styles.field}>
         <div className={styles.label}>
           {t('personaName')}

@@ -5,6 +5,7 @@ import { newChat } from '../../services/chat/store.js'
 import { IconButton } from '../base/IconButton.js'
 import { ContextMeter } from '../memory/ContextMeter.js'
 import { openMobileSider } from '../sider/mobileSiderState.js'
+import { PersonaButton } from './PersonaPicker.js'
 import styles from './MobileHeader.module.css'
 
 /** 移动端顶栏：左侧菜单打开侧边栏；会话页再显示标题、上下文占用与开启新对话 */
@@ -22,6 +23,7 @@ export const MobileHeader = ({ title, session }: { title?: string; session?: Ses
       {title === undefined ? null : (
         <>
           <div className={styles.title}>{title}</div>
+          {session ? <PersonaButton sessionId={session.id} /> : null}
           {session ? <ContextMeter session={session} className={styles.meter} /> : null}
           <IconButton
             size="xl"

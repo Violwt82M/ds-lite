@@ -2,8 +2,8 @@ import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
 import type { PersonaCard } from './card.js'
 
-/** 角色库条目：id 只用于本地标识，卡片内容随条目一起保存 */
-export type PersonaEntry = { id: string; card: PersonaCard }
+/** 角色库条目：id 只用于本地标识，卡片内容随条目一起保存；avatar 是本机设置的头像（data URL） */
+export type PersonaEntry = { id: string; card: PersonaCard; avatar?: string }
 
 /** 本机角色扮演设置，存 localStorage；不涉及任何服务端 */
 export type PersonaState = {
@@ -13,6 +13,8 @@ export type PersonaState = {
   userName: string
   cards: PersonaEntry[]
   activeId: string | null
+  /** 是否在 AI 消息左上角显示角色头像；默认关闭 */
+  showAvatar: boolean
 }
 
 const STORAGE_KEY = 'ds-lite:persona'
@@ -22,6 +24,7 @@ const emptyState = (): PersonaState => ({
   userName: '',
   cards: [],
   activeId: null,
+  showAvatar: false,
 })
 
 const isEntry = (value: unknown): value is PersonaEntry => {
@@ -33,7 +36,8 @@ const isEntry = (value: unknown): value is PersonaEntry => {
     typeof entry.id === 'string' &&
     typeof entry.card === 'object' &&
     entry.card !== null &&
-    typeof entry.card.name === 'string'
+    typeof entry.card.name === 'string' &&
+    (entry.avatar === undefined || (typeof entry.avatar === 'string' && entry.avatar.startsWith('data:image/')))
   )
 }
 
@@ -52,6 +56,7 @@ const readState = (): PersonaState => {
       userName: typeof parsed.userName === 'string' ? parsed.userName : '',
       cards,
       activeId,
+      showAvatar: parsed.showAvatar === true,
     }
   } catch {
     return emptyState()
@@ -122,6 +127,25 @@ export const savePersonaCard = (id: string | null, card: PersonaCard): string =>
 }
 
 export const setPersonaEnabled = (enabled: boolean) => commit({ enabled })
+
+/** 头像显示开关：默认关闭，开启后 AI 消息左上角出现当前角色的头像 */
+export const setPersonaShowAvatar = (showAvatar: boolean) => commit({ showAvatar })
+
+/** 设置某张卡的头像；传 null 移除。图片已在调用侧压成小图，存进 localStorage */
+export const setPersonaAvatar = (id: string, avatar: string | null) => {
+  const state = usePersona.getState()
+  if (!state.cards.some((entry) => entry.id === id)) {
+    return
+  }
+  commit({
+    cards: state.cards.map((entry) => {
+      if (entry.id !== id) {
+        return entry
+      }
+      return avatar === null ? { id: entry.id, card: entry.card } : { ...entry, avatar }
+    }),
+  })
+}
 
 export const setPersonaUserName = (userName: string) => commit({ userName })
 

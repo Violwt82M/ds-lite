@@ -6,10 +6,13 @@ import {
   addPersonaCard,
   removePersonaCard,
   setActivePersona,
+  setPersonaAvatar,
   setPersonaEnabled,
+  setPersonaShowAvatar,
   setPersonaUserName,
   usePersona,
 } from '../../services/persona/store.js'
+import { toAvatarDataUrl } from '../../utils/image.js'
 import { setSafety, useSettings } from '../../services/settings.js'
 import { Button } from '../base/Button.js'
 import { IconEditOutline16, IconUploadOutline14 } from '../base/icons.js'
@@ -49,11 +52,16 @@ const Row = ({
 export const PersonaSetting = () => {
   const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
-  const [editor, setEditor] = useState<{ id: string | null; initial?: PersonaCard } | null>(null)
+  const [editor, setEditor] = useState<{
+    id: string | null
+    initial?: PersonaCard
+    avatar?: string
+  } | null>(null)
   const enabled = usePersona((state) => state.enabled)
   const userName = usePersona((state) => state.userName)
   const cards = usePersona((state) => state.cards)
   const activeId = usePersona((state) => state.activeId)
+  const showAvatar = usePersona((state) => state.showAvatar)
   const safety = useSettings((state) => state.safety)
   const active = cards.find((entry) => entry.id === activeId)
 
@@ -67,7 +75,14 @@ export const PersonaSetting = () => {
         showToast({ key: 'personaImportFailed', params: { message: result.error }, type: 'error' })
         return
       }
-      addPersonaCard(result.card)
+      const entryId = addPersonaCard(result.card)
+      // PNG 角色卡自带立绘，直接裁成头像；用户之后可以在编辑器里换
+      if (file.type === 'image/png') {
+        const avatar = await toAvatarDataUrl(file)
+        if (avatar) {
+          setPersonaAvatar(entryId, avatar)
+        }
+      }
       showToast({ key: 'personaImported', params: { name: result.card.name } })
     } catch {
       showToast({ key: 'personaImportFailed', params: { message: '' }, type: 'error' })
@@ -141,6 +156,11 @@ export const PersonaSetting = () => {
                 className={styles.select}
                 onClick={() => setActivePersona(entry.id)}
               >
+                {entry.avatar ? (
+                  <img className={styles.avatar} src={entry.avatar} alt="" />
+                ) : (
+                  <span className={styles.avatarText}>{entry.card.name.slice(0, 1)}</span>
+                )}
                 {entry.card.name}
                 {entry.id === activeId ? <span className={styles.tag}>{t('personaInUse')}</span> : null}
               </button>
@@ -148,7 +168,7 @@ export const PersonaSetting = () => {
                 type="button"
                 className={styles.editButton}
                 aria-label={t('personaEdit')}
-                onClick={() => setEditor({ id: entry.id, initial: entry.card })}
+                onClick={() => setEditor({ id: entry.id, initial: entry.card, avatar: entry.avatar })}
               >
                 <IconEditOutline16 />
               </button>
@@ -163,6 +183,21 @@ export const PersonaSetting = () => {
           ))}
         </div>
       )}
+      <Row
+        label={t('personaAvatar')}
+        description={t('personaAvatarDescription')}
+        action={
+          <Button
+            variant={showAvatar ? 'dangerOutlined' : 'outlined'}
+            size="m"
+            className={settingsStyles.cellButton}
+            disabled={!enabled}
+            onClick={() => setPersonaShowAvatar(!showAvatar)}
+          >
+            {t(showAvatar ? 'personaAvatarOn' : 'personaAvatarOff')}
+          </Button>
+        }
+      />
       <Row
         label={t('safetyTitle')}
         description={t('safetyDescription')}
@@ -191,7 +226,12 @@ export const PersonaSetting = () => {
         }
       />
       {editor ? (
-        <PersonaEditor id={editor.id} initial={editor.initial} onClose={() => setEditor(null)} />
+        <PersonaEditor
+          id={editor.id}
+          initial={editor.initial}
+          avatar={editor.avatar}
+          onClose={() => setEditor(null)}
+        />
       ) : null}
     </>
   )
