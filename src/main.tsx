@@ -1,3 +1,4 @@
+import './app/compat.js'
 import { createRoot } from 'react-dom/client'
 import { App } from './app/App.js'
 import { setupTheme } from './app/theme.js'
@@ -27,3 +28,6 @@ setupTheme()
 setupOffline()
 
 createRoot(document.getElementById('root') as HTMLElement).render(<App />)
+
+// 启动成功的标记：index.html 里的兜底脚本用它判断要不要显示“没能启动”
+;(window as Window & { __dsLiteBooted?: boolean }).__dsLiteBooted = true

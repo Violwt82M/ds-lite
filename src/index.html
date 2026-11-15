@@ -12,6 +12,66 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="DS Lite" />
     <title>DS Lite</title>
+    <style>
+      #boot-error {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 12px;
+        padding: 24px;
+        background: #fff;
+        color: #1b1d21;
+        font: 15px/1.7 -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      }
+      #boot-error h1 { margin: 0; font-size: 19px; }
+      #boot-error p { margin: 0; }
+      #boot-error .detail { font-size: 12px; color: #7a7f88; word-break: break-all; }
+      @media (prefers-color-scheme: dark) {
+        #boot-error { background: #16181c; color: #e6e8eb; }
+        #boot-error .detail { color: #8b909a; }
+      }
+    </style>
+    <script>
+      (function () {
+        var shown = false;
+        function show(detail) {
+          if (shown || window.__dsLiteBooted) return;
+          shown = true;
+          var el = document.getElementById('boot-error');
+          if (!el) {
+            el = document.createElement('div');
+            el.id = 'boot-error';
+            document.body.appendChild(el);
+          }
+          var ua = navigator.userAgent || '';
+          var engine = (ua.match(/Chrom(?:e|ium)\/(\d+)/) || [])[1] || '未知';
+          var text = String(detail || '未知错误').replace(/[<>&]/g, '');
+          el.innerHTML =
+            '<h1>DS Lite 没能启动</h1>' +
+            '<p>这台设备的浏览器内核是 <b>Chromium ' + engine + '</b>，低于本应用需要的版本（87 以上）。</p>' +
+            '<p>解决办法：到应用商店搜索「Android System WebView」更新到最新版，或升级系统后重试。</p>' +
+            '<p class="detail">错误信息：' + text + '</p>';
+        }
+        window.addEventListener('error', function (event) {
+          show(event && event.message);
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+          var reason = event && event.reason;
+          show((reason && reason.message) || reason);
+        });
+        window.addEventListener('load', function () {
+          setTimeout(function () {
+            var root = document.getElementById('root');
+            if (!window.__dsLiteBooted && (!root || root.children.length === 0)) {
+              show('界面没有渲染出来（可能是内核版本过低）');
+            }
+          }, 8000);
+        });
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

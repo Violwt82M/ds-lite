@@ -57,6 +57,15 @@
     position: fixed;
     top: var(--app-viewport-top, 0px);
     bottom: auto;
-    height: var(--app-viewport-height, 100dvh);
+    /* 老内核不认识 dvh，用 vh 兜底，否则高度会塌成 0（整页白屏） */
+    height: var(--app-viewport-height, 100vh);
+  }
+}
+
+@supports (height: 100dvh) {
+  @media not all and (min-width: 768px) {
+    .frame {
+      height: var(--app-viewport-height, 100dvh);
+    }
   }
 }

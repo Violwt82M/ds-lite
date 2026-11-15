@@ -41,7 +41,7 @@
 
 详细步骤（含 Key 怎么申请、旧版本怎么迁移）：[安卓安装说明.md](安卓安装说明.md)
 
-- 最低要求 Android 7.0（API 24）
+- 最低要求 Android 7.0（API 24）+ 系统 WebView（Chromium 内核）87 以上，2020 年以后出厂的手机基本都满足
 - 安装包约 5 MB
 - 数据只存在你自己手机上（localStorage + IndexedDB），卸载即清空，**卸载前记得导出对话**
 
