@@ -31,9 +31,11 @@ import {
   setLocale,
   setLocation,
   setThemePreference,
+  setThinkingEffort,
   setTtsVoice,
   useSettings,
   type ThemePreference,
+  type ThinkingEffort,
 } from '../../services/settings.js'
 import { translate, useTranslate, type TranslationKey, type TranslationMessage } from '../../i18n/index.js'
 import { Button } from '../base/Button.js'
@@ -125,6 +127,7 @@ const SettingsContent = () => {
           {section === 'general' ? (
             <>
               <ThemeSetting />
+              <ThinkingEffortSetting />
               <LocaleSetting />
               <TtsVoiceSetting />
               <LocationSetting />
@@ -298,6 +301,31 @@ const LocationSetting = () => {
             />
           )}
         </div>
+      }
+    />
+  )
+}
+
+/** 思考强度：对应 API 的 output_config.effort；日常推荐低 */
+const ThinkingEffortSetting = () => {
+  const t = useTranslate()
+  const thinkingEffort = useSettings((state) => state.thinkingEffort)
+  return (
+    <SettingCell
+      label={t('settingsThinkingEffort')}
+      description={t('settingsThinkingEffortHint')}
+      status={null}
+      action={
+        <Select<ThinkingEffort>
+          ariaLabel={t('settingsThinkingEffort')}
+          value={thinkingEffort}
+          options={[
+            { value: 'low', label: t('thinkingEffortLow') },
+            { value: 'high', label: t('thinkingEffortHigh') },
+            { value: 'max', label: t('thinkingEffortMax') },
+          ]}
+          onChange={setThinkingEffort}
+        />
       }
     />
   )

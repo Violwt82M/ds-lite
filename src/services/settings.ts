@@ -11,6 +11,9 @@ export type Locale = 'zh-CN' | 'en-US'
  */
 export type SafetyLevel = 'low' | 'high'
 
+/** 思考强度：对应 API 的 output_config.effort，low 更快更省，max 想得更久 */
+export type ThinkingEffort = 'low' | 'high' | 'max'
+
 /** 主题偏好；默认跟随系统 */
 export type ThemePreference = 'light' | 'dark' | 'system'
 
@@ -22,6 +25,8 @@ type Settings = {
   location: UserLocation | null
   ttsVoice: TtsVoice
   thinking: boolean
+  /** 思考强度，只在开启深度思考时生效 */
+  thinkingEffort: ThinkingEffort
   search: boolean
   safety: SafetyLevel
   siderCollapsed: boolean
@@ -36,6 +41,7 @@ const KEYS = {
   themePreference: 'chat-demo:theme-preference',
   ttsVoice: 'chat-demo:tts-voice',
   thinking: 'chat-demo:thinking',
+  thinkingEffort: 'chat-demo:thinking-effort',
   search: 'chat-demo:search',
   siderCollapsed: 'chat-demo:sider-collapsed',
   safety: 'chat-demo:safety',
@@ -106,6 +112,11 @@ export const useSettings = create<Settings>(() => ({
   themePreference: initialThemePreference(),
   ttsVoice: initialTtsVoice(),
   thinking: read(KEYS.thinking) === 'true',
+  // 默认 high，和官方 API 的默认档一致
+  thinkingEffort:
+    read(KEYS.thinkingEffort) === 'low' || read(KEYS.thinkingEffort) === 'max'
+      ? (read(KEYS.thinkingEffort) as ThinkingEffort)
+      : 'high',
   search: read(KEYS.search) === 'true',
   // 默认走官方 API 的默认档；只有显式选过"严格"才用 high
   safety: read(KEYS.safety) === 'high' ? 'high' : 'low',
@@ -143,6 +154,11 @@ export const setApiKey = (apiKey: string | null) => {
 export const setThinking = (thinking: boolean) => {
   write(KEYS.thinking, String(thinking))
   useSettings.setState({ thinking })
+}
+
+export const setThinkingEffort = (thinkingEffort: ThinkingEffort) => {
+  write(KEYS.thinkingEffort, thinkingEffort)
+  useSettings.setState({ thinkingEffort })
 }
 
 export const setSearch = (search: boolean) => {

@@ -1,5 +1,6 @@
 import clsx from 'clsx'
-import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   IconGlobeLanguageOutline14,
   IconPaperclipOutline16,
@@ -7,7 +8,13 @@ import {
   IconStopFill16,
   IconThinkOutline14,
 } from '../base/icons.js'
-import { setSearch, setThinking, useSettings } from '../../services/settings.js'
+import {
+  setSearch,
+  setThinking,
+  setThinkingEffort,
+  useSettings,
+  type ThinkingEffort,
+} from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
 import {
@@ -34,6 +41,9 @@ import { Spectrum } from './Spectrum.js'
 import { useTranslate } from '../../i18n/index.js'
 import styles from './ChatInput.module.css'
 
+/** 「点 ▾ 可以调思考强度」只提示一次 */
+const EFFORT_HINT_KEY = 'chat-demo:thinking-effort-hint'
+
 /** 输入框：自适应高度的文本框 + 文件 + 深度思考与智能搜索开关 + 语音输入 + 发送 / 停止 */
 export const ChatInput = memo(function ChatInput({ sessionId }: { sessionId: string | null }) {
   // 切换目标时释放录音、转写和 DOM 状态；文字与附件由草稿服务保留。
@@ -53,9 +63,93 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
+  const thinkingEffort = useSettings((state) => state.thinkingEffort)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const togglesRef = useRef<HTMLDivElement>(null)
+  // 思考强度的选择菜单 + 「点 ▾ 可以调强度」的一次性提示
+  const [effortOpen, setEffortOpen] = useState(false)
+  const [hintVisible, setHintVisible] = useState(false)
+  const [hintSeen, setHintSeen] = useState(() => {
+    try {
+      return window.localStorage.getItem(EFFORT_HINT_KEY) === '1'
+    } catch {
+      return true
+    }
+  })
+
+  const markHintSeen = useCallback(() => {
+    setHintVisible(false)
+    setHintSeen(true)
+    try {
+      window.localStorage.setItem(EFFORT_HINT_KEY, '1')
+    } catch {
+      // 存不进去就每次提醒一次，不致命
+    }
+  }, [])
+
+  // 第一次开启深度思考时，冒一次「点 ▾ 可以调强度」，让从网页版搬过来的人也知道
+  const toggleThinking = () => {
+    const next = !thinking
+    setThinking(next)
+    if (next && !hintSeen) {
+      setHintVisible(true)
+      window.setTimeout(() => setHintVisible(false), 8000)
+    }
+  }
+
+  // 菜单贴在按钮上方弹出：记下按钮位置，用 fixed 坐标放到 body 上，避免被输入框裁掉
+  const [effortAnchorBox, setEffortAnchorBox] = useState<{ left: number; bottom: number } | null>(null)
+  const effortAnchorRef = useRef<HTMLButtonElement>(null)
+  const effortFloatingRef = useRef<HTMLDivElement>(null)
+
+  const openEffortMenu = () => {
+    const rect = effortAnchorRef.current?.getBoundingClientRect()
+    if (rect) {
+      setEffortAnchorBox({
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - 200)),
+        bottom: Math.max(8, window.innerHeight - rect.top + 8),
+      })
+    }
+    setEffortOpen((open) => !open)
+    markHintSeen()
+  }
+
+  useEffect(() => {
+    if (!effortOpen) {
+      return
+    }
+    const close = () => setEffortOpen(false)
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (
+        effortAnchorRef.current?.contains(target) ||
+        effortFloatingRef.current?.contains(target)
+      ) {
+        return
+      }
+      close()
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        close()
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [effortOpen])
+
+  const effortOptions: { value: ThinkingEffort; label: string; desc: string }[] = [
+    { value: 'low', label: t('thinkingEffortLow'), desc: t('thinkingEffortLowDesc') },
+    { value: 'high', label: t('thinkingEffortHigh'), desc: t('thinkingEffortHighDesc') },
+    { value: 'max', label: t('thinkingEffortMax'), desc: t('thinkingEffortMaxDesc') },
+  ]
+  const effortLabel =
+    effortOptions.find((item) => item.value === thinkingEffort)?.label ?? t('thinkingEffortHigh')
 
   useLayoutEffect(() => {
     const toggles = togglesRef.current
@@ -202,18 +296,78 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       <div className={styles.functionRow}>
         {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
         <div ref={togglesRef} className={styles.toggles}>
-          <Tooltip content={t('deactivatedThinkTooltip')}>
+          <div className={styles.thinkGroup}>
+            <Tooltip content={t('deactivatedThinkTooltip')}>
+              <button
+                type="button"
+                className={clsx(styles.toggle, thinking && styles.selected)}
+                aria-label={t('thinkingSwitch')}
+                aria-pressed={thinking}
+                onClick={toggleThinking}
+              >
+                <IconThinkOutline14 />
+                <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
+              </button>
+            </Tooltip>
             <button
+              ref={effortAnchorRef}
               type="button"
-              className={clsx(styles.toggle, thinking && styles.selected)}
-              aria-label={t('thinkingSwitch')}
-              aria-pressed={thinking}
-              onClick={() => setThinking(!thinking)}
+              title={t('thinkingEffortTip', { level: effortLabel })}
+              className={clsx(
+                styles.caret,
+                thinking && styles.caretSelected,
+                thinkingEffort !== 'high' && styles.caretCustom
+              )}
+              aria-label={t('thinkingEffort')}
+              aria-haspopup="menu"
+              aria-expanded={effortOpen}
+              onClick={openEffortMenu}
             >
-              <IconThinkOutline14 />
-              <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
+              <span aria-hidden>▾</span>
             </button>
-          </Tooltip>
+            {effortOpen
+              ? createPortal(
+                  <div
+                    ref={effortFloatingRef}
+                    className={styles.effortMenu}
+                    style={
+                      effortAnchorBox
+                        ? { left: effortAnchorBox.left, bottom: effortAnchorBox.bottom }
+                        : { left: 8, bottom: 80 }
+                    }
+                    role="menu"
+                    aria-label={t('thinkingEffort')}
+                  >
+                    {effortOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={thinkingEffort === option.value}
+                        className={clsx(
+                          styles.effortItem,
+                          thinkingEffort === option.value && styles.effortItemActive
+                        )}
+                        onClick={() => {
+                          setThinkingEffort(option.value)
+                          setEffortOpen(false)
+                          markHintSeen()
+                        }}
+                      >
+                        <span>{option.label}</span>
+                        <span className={styles.effortItemDesc}>{option.desc}</span>
+                      </button>
+                    ))}
+                  </div>,
+                  document.body
+                )
+              : null}
+            {hintVisible ? (
+              <div className={styles.effortHint} role="status">
+                {t('thinkingEffortHint')}
+              </div>
+            ) : null}
+          </div>
           <Tooltip content={t('deactivatedSearchTooltip')}>
             <button
               type="button"

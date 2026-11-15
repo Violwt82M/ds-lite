@@ -177,6 +177,8 @@ export type CreateMessageRequest = {
   system: string
   messages: MessageParam[]
   thinking: { type: 'enabled' | 'disabled' }
+  /** 思考强度：Anthropic 格式的 output_config.effort（low / high / max，默认 high） */
+  output_config?: { effort: 'low' | 'high' | 'max' }
   tools: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
   /** low 为官方默认行为；high 额外复检输入输出 */
   safety_check: { level: 'low' | 'high' }
