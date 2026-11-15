@@ -134,6 +134,7 @@ export const zh = {
   importPickerSelectAll: '全选',
   importPickerSelectNone: '全不选',
   importPickerSelected: '已选 {selected} / {total} 条',
+  importPickerAdvice: '建议只选取需要的聊天记录',
   importPickerExisting: '本机已有',
   importPickerConfirm: '导入选中的 {count} 条',
   importPickerMeta: '{count} 条消息 · {date}',
@@ -149,7 +150,7 @@ export const zh = {
   historyImportConfirmDescription:
     '勾选的对话会追加到本机对话列表；本机已有的同一条对话会保留原样、不会覆盖。',
   historyImportDescription:
-    '把 DeepSeek 导出的 ZIP 里的对话追加到现有列表，本机已有的同一条对话会跳过、不覆盖。',
+    '把 DeepSeek 导出的 ZIP 里的对话追加到现有列表，本机已有的同一条对话会跳过、不覆盖。建议只选取需要的聊天记录。',
   historyImportedOne: '已导入 1 个对话',
   historyImported: '已导入 {count} 个对话',
   historyImportedOneSkipped: '已导入 1 个对话，跳过 {skipped} 个本机已有的',

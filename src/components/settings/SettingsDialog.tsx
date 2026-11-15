@@ -419,6 +419,7 @@ const ImportPicker = ({
           size: (file.size / 1048576).toFixed(1),
         })}
       </div>
+      <div className={styles.importAdvice}>{t('importPickerAdvice')}</div>
       {loadingSessions ? (
         <div className={styles.importPickerLoading}>{t('importPickerLoading')}</div>
       ) : (

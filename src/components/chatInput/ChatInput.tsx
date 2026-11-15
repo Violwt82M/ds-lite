@@ -44,6 +44,13 @@ import styles from './ChatInput.module.css'
 /** 「点 ▾ 可以调思考强度」只提示一次 */
 const EFFORT_HINT_KEY = 'chat-demo:thinking-effort-hint'
 
+/**
+ * 触屏设备（安卓 / iPhone / iPad，含网页版 PWA）：软键盘没有 Shift，回车一律当换行。
+ * 个别 iOS 版本会把 pointer 报成 fine，这里用 maxTouchPoints 兜一层。
+ */
+const isTouchDevice = () =>
+  window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
+
 /** 输入框：自适应高度的文本框 + 文件 + 深度思考与智能搜索开关 + 语音输入 + 发送 / 停止 */
 export const ChatInput = memo(function ChatInput({ sessionId }: { sessionId: string | null }) {
   // 切换目标时释放录音、转写和 DOM 状态；文字与附件由草稿服务保留。
@@ -262,6 +269,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
           className={clsx(styles.textarea, recording && isMobile && styles.textareaHidden)}
           placeholder={t('chatInputPlaceholderChat')}
           rows={2}
+          enterKeyHint="enter"
           // 移动端不自动聚焦，避免一打开就弹出键盘
           autoFocus={!isMobile}
           disabled={importingHistory}
@@ -275,7 +283,14 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             }
           }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+            if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+              return
+            }
+            // 触屏设备（手机 / 平板 / iOS 网页版）：回车当换行，发送交给右下角按钮
+            if (isMobile || isTouchDevice()) {
+              return
+            }
+            if (!event.shiftKey) {
               event.preventDefault()
               send()
             }

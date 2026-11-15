@@ -21,6 +21,12 @@ type FieldKey = keyof Pick<
   | 'postHistoryInstructions'
 >
 
+/** 触屏设备（安卓 / iPhone / iPad，含网页版 PWA）：软键盘没有 Shift、也没有真正的 Tab 键 */
+const isTouchInput = () =>
+  window.matchMedia('(pointer: coarse)').matches ||
+  navigator.maxTouchPoints > 0 ||
+  window.matchMedia('not all and (min-width: 768px)').matches
+
 /** 角色卡编辑器：本地新建或编辑，保存后写入本机 localStorage */
 export const PersonaEditor = ({
   id,
@@ -118,7 +124,28 @@ export const PersonaEditor = ({
             className={styles.textarea}
             value={draft[field.key]}
             placeholder={field.hint}
+            enterKeyHint="enter"
             onChange={(event) => set({ [field.key]: event.target.value } as Partial<PersonaCard>)}
+            onKeyDown={(event) => {
+              // 回车只用于换行：别让外层的弹窗 / 快捷键把它吃掉
+              if (event.key === 'Enter') {
+                event.stopPropagation()
+                return
+              }
+              // 部分安卓输入法把软键盘上的「下一项」实现成 Tab，会把焦点跳到下一个字段；
+              // 触屏设备上按换行处理，桌面键盘的 Tab 仍然正常切换焦点。
+              if (event.key !== 'Tab' || !isTouchInput() || event.shiftKey) {
+                return
+              }
+              event.preventDefault()
+              const element = event.currentTarget
+              const { selectionStart: start, selectionEnd: end } = element
+              set({ [field.key]: `${element.value.slice(0, start)}\n${element.value.slice(end)}` } as Partial<PersonaCard>)
+              requestAnimationFrame(() => {
+                element.focus({ preventScroll: true })
+                element.setSelectionRange(start + 1, start + 1)
+              })
+            }}
           />
         </div>
       ))}

@@ -139,6 +139,7 @@ export const en = {
   importPickerSelectAll: 'All',
   importPickerSelectNone: 'None',
   importPickerSelected: '{selected} of {total} selected',
+  importPickerAdvice: 'Only pick the chats you need',
   importPickerExisting: 'already on device',
   importPickerConfirm: 'Import {count} selected',
   importPickerMeta: '{count} messages · {date}',
@@ -154,7 +155,7 @@ export const en = {
   historyImportConfirmDescription:
     'Checked chats are added to your list; chats already on this device are left untouched.',
   historyImportDescription:
-    'Adds the chats from a DeepSeek-exported ZIP to your list. Chats already on this device are skipped, never overwritten.',
+    'Adds the chats from a DeepSeek-exported ZIP to your list. Chats already on this device are skipped, never overwritten. Only pick the chats you need.',
   historyImportedOne: 'Imported 1 chat',
   historyImported: 'Imported {count} chats',
   historyImportedOneSkipped: 'Imported 1 chat, skipped {skipped} already on this device',

@@ -538,6 +538,14 @@
   white-space: nowrap;
 }
 
+/* 导入前的提醒：只勾需要的对话，包越大越慢也越容易在手机上卡住 */
+.importAdvice {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
 .importSkip {
   display: flex;
   align-items: flex-start;

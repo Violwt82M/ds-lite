@@ -1,0 +1,26 @@
+/* 图片预览：一屏深色底，图片完整放进可视区域 */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 留出状态栏与手势区，横竖屏都不贴边 */
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0)
+    env(safe-area-inset-left, 0);
+  box-sizing: border-box;
+  background-color: rgba(0, 0, 0, 0.92);
+  cursor: zoom-out;
+}
+
+.image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  /* 拖动查看细节时不要触发页面滚动 */
+  touch-action: pinch-zoom;
+}
