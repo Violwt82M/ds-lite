@@ -773,6 +773,31 @@ const useHistoryImport = () => {
 }
 
 /** 导入 = 覆盖：用选中文件替换本地全部会话与附件。 */
+/** 导入教程：三步讲清「原版导出 → 下载 ZIP → 在这里上传」 */
+const ImportGuide = ({ onClose }: { onClose: () => void }) => {
+  const t = useTranslate()
+  return (
+    <Modal
+      title={t('historyImportGuideTitle')}
+      className={styles.importGuide}
+      closable
+      onClose={onClose}
+      footer={
+        <Button size="m" onClick={onClose}>
+          {t('confirm')}
+        </Button>
+      }
+    >
+      <ol className={styles.guideSteps}>
+        <li>{t('historyImportGuideStep1')}</li>
+        <li>{t('historyImportGuideStep2')}</li>
+        <li>{t('historyImportGuideStep3')}</li>
+      </ol>
+      <div className={styles.guideNote}>{t('historyImportGuideNote')}</div>
+    </Modal>
+  )
+}
+
 const ImportHistory = ({
   historyImport,
   disabled,
@@ -782,40 +807,51 @@ const ImportHistory = ({
 }) => {
   const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
+  const [guideOpen, setGuideOpen] = useState(false)
 
   return (
-    <SettingCell
-      label={t('historyImport')}
-      description={t('historyImportDescription')}
-      status={historyImport.status}
-      action={
-        <>
-          <Button
-            variant="outlined"
-            size="m"
-            className={clsx(styles.cellButton, styles.uploadButton)}
-            disabled={disabled}
-            onClick={() => inputRef.current?.click()}
-          >
-            <IconUploadOutline14 />
-            {t('upload')}
-          </Button>
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream"
-            hidden
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              event.target.value = ''
-              if (file) {
-                historyImport.select(file)
-              }
-            }}
-          />
-        </>
-      }
-    />
+    <>
+      <SettingCell
+        label={t('historyImport')}
+        description={t('historyImportDescription')}
+        status={historyImport.status}
+        action={
+          <>
+            <button
+              type="button"
+              className={styles.importLink}
+              onClick={() => setGuideOpen(true)}
+            >
+              {t('historyImportGuideLink')}
+            </button>
+            <Button
+              variant="outlined"
+              size="m"
+              className={clsx(styles.cellButton, styles.uploadButton)}
+              disabled={disabled}
+              onClick={() => inputRef.current?.click()}
+            >
+              <IconUploadOutline14 />
+              {t('upload')}
+            </Button>
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                if (file) {
+                  historyImport.select(file)
+                }
+              }}
+            />
+          </>
+        }
+      />
+      {guideOpen ? <ImportGuide onClose={() => setGuideOpen(false)} /> : null}
+    </>
   )
 }
 

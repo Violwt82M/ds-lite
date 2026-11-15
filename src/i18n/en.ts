@@ -139,6 +139,13 @@ export const en = {
   importPickerSelectAll: 'All',
   importPickerSelectNone: 'None',
   importPickerSelected: '{selected} of {total} selected',
+  historyImportGuideLink: 'How to import',
+  historyImportGuideTitle: 'How to bring your chats into DS Lite',
+  historyImportGuideStep1: 'In the DeepSeek app: Settings → Data → Export chats',
+  historyImportGuideStep2: 'It gives you a download link — use it to save the ZIP to your phone',
+  historyImportGuideStep3: 'Back in DS Lite: Settings → Data → Import history, tap Upload and pick that ZIP',
+  historyImportGuideNote:
+    'Pick only the chats you need — bigger archives import slower. Tick "skip images" if the export has many.',
   importPickerAdvice: 'Only pick the chats you need',
   importPickerExisting: 'already on device',
   importPickerConfirm: 'Import {count} selected',

@@ -538,6 +538,27 @@
   white-space: nowrap;
 }
 
+/* 导入教程：三步说明 */
+.importGuide {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.guideSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+
+.guideNote {
+  margin-top: 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
 /* 导入前的提醒：只勾需要的对话，包越大越慢也越容易在手机上卡住 */
 .importAdvice {
   margin-top: 4px;
