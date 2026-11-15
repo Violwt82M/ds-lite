@@ -14,6 +14,24 @@ export const MAX_SIZE_MB = 64
 /** 按 user_data 上传的文件（纯文本、代码、表格、电子书）原文件上限更小 */
 export const MAX_USER_DATA_SIZE_MB = 32
 export const MAX_COUNT = 50
+/**
+ * 纯文本类附件能塞进模型上下文的上限：deepseek 一次约 128K tokens，
+ * 按 4 字节 / token 粗估，留一点余量取 120K。
+ */
+export const MAX_TEXT_TOKENS = 120_000
+
+/** 单条消息的文字上限（约 15 万字 ≈ 9 万 tokens），超出直接提示，不浪费一次请求 */
+export const MAX_TEXT_CHARS = 150_000
+
+const TEXT_EXTS = new Set([
+  'txt', 'md', 'markdown', 'csv', 'json', 'jsonl', 'log', 'xml', 'yaml', 'yml',
+  'js', 'jsx', 'ts', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cc', 'cpp', 'h', 'hpp',
+  'sql', 'sh', 'html', 'css', 'vue', 'php', 'rb', 'kt', 'swift',
+])
+
+const isTextAttachment = (file: File) => TEXT_EXTS.has(getFileExt(file.name))
+/** 中英文混排大致 4 字节一个 token */
+const estimateTextTokens = (file: File) => Math.ceil(file.size / 4)
 /** 同时上传的文件数 */
 const MAX_CONCURRENT = 3
 
@@ -51,6 +69,12 @@ export const validateFiles = (files: File[], currentCount: number): TranslationM
   if (oversized) {
     return { key: 'uploadMaxMBSize', params: { size: getMaxSizeMB(oversized) } }
   }
+  // 文本远超上下文时直接拦下：传上去也读不进来，只会得到一句「服务器繁忙」
+  const tooLong = files.find((file) => isTextAttachment(file) && estimateTextTokens(file) > MAX_TEXT_TOKENS)
+  if (tooLong) {
+    const wanChars = Math.round(tooLong.size / 3 / 10_000)
+    return { key: 'uploadTextTooLong', params: { chars: wanChars } }
+  }
   if (currentCount + files.length > MAX_COUNT) {
     return { key: 'uploadMaxFiles', params: { count: MAX_COUNT } }
   }
@@ -62,6 +86,9 @@ export const validateFiles = (files: File[], currentCount: number): TranslationM
  * 服务端原文多为英文且较长，不直接展示。
  */
 export const describeUploadError = (error: unknown): TranslationMessage => {
+  if (classifyApiError(error) === 'tooLarge') {
+    return { key: 'uploadFileTooLarge' }
+  }
   if (classifyApiError(error) === 'serverBusy') {
     return { key: 'uploadServerBusy' }
   }

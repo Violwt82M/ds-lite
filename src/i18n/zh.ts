@@ -214,6 +214,8 @@ export const zh = {
   uploadMaxFiles: '上传文件最多支持 {count} 个',
   uploadFileStatusUploading: '上传中...',
   uploadServerBusy: '服务器繁忙',
+  uploadFileTooLarge: '文件太大，服务器拒绝了这次上传',
+  uploadTextTooLong: '文本太长：约 {chars} 万字，模型一次只能读约 20 万字，请拆成几段再上传',
   uploadParseFailed: '解析失败',
   uploadFileCountLimit: '已上传文件数达到上限（{limit} 个），可 ',
   uploadStorageLimit: '已上传文件占用空间达到上限（{limit}GB），可 ',
