@@ -156,7 +156,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     { value: 'max', label: t('thinkingEffortMax'), desc: t('thinkingEffortMaxDesc') },
   ]
   const effortLabel =
-    effortOptions.find((item) => item.value === thinkingEffort)?.label ?? t('thinkingEffortHigh')
+    effortOptions.find((item) => item.value === thinkingEffort)?.label ?? t('thinkingEffortLow')
 
   useLayoutEffect(() => {
     const toggles = togglesRef.current
@@ -331,7 +331,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               className={clsx(
                 styles.caret,
                 thinking && styles.caretSelected,
-                thinkingEffort !== 'high' && styles.caretCustom
+                thinkingEffort !== 'low' && styles.caretCustom
               )}
               aria-label={t('thinkingEffort')}
               aria-haspopup="menu"

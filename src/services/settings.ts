@@ -112,11 +112,11 @@ export const useSettings = create<Settings>(() => ({
   themePreference: initialThemePreference(),
   ttsVoice: initialTtsVoice(),
   thinking: read(KEYS.thinking) === 'true',
-  // 默认 high，和官方 API 的默认档一致
+  // 默认 low：更快更省；显式选过高/最高的人保持自己的选择
   thinkingEffort:
-    read(KEYS.thinkingEffort) === 'low' || read(KEYS.thinkingEffort) === 'max'
+    read(KEYS.thinkingEffort) === 'high' || read(KEYS.thinkingEffort) === 'max'
       ? (read(KEYS.thinkingEffort) as ThinkingEffort)
-      : 'high',
+      : 'low',
   search: read(KEYS.search) === 'true',
   // 默认走官方 API 的默认档；只有显式选过"严格"才用 high
   safety: read(KEYS.safety) === 'high' ? 'high' : 'low',
