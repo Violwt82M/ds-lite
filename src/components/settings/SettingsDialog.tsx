@@ -1,6 +1,6 @@
 import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
 import clsx from 'clsx'
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   IconDarkOutline16,
   IconDataOutline16,
@@ -22,6 +22,7 @@ import {
   readLocalSessionIds,
 } from '../../services/chat/backup.js'
 import type { ImportSessionOption } from '../../services/chat/history/importIndex.js'
+import { consumeSharedArchive, useSharedArchive } from '../../services/chat/history/sharedArchive.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { useTransfer } from '../../services/chat/transfer.js'
@@ -33,6 +34,7 @@ import {
   FONT_SCALES,
   setLocale,
   setModel,
+  setRecordModel,
   setLocation,
   setThemePreference,
   setThinkingEffort,
@@ -53,8 +55,10 @@ import { PersonaSetting } from './PersonaSetting.js'
 import { AboutPanel } from '../about/AboutPanel.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
 import type { ChatModel } from '../../services/api/types.js'
+import { ImageCropDialog } from '../base/ImageCropDialog.js'
+import { OFFICIAL_API_ORIGIN, useApiOrigin } from '../../services/api/base.js'
 import {
-  setCustomWallpaper,
+  setCustomWallpaperBlob,
   setWallpaper,
   useWallpaper,
   type WallpaperPreset,
@@ -143,6 +147,7 @@ const SettingsContent = () => {
               <WallpaperSetting />
               <FontScaleSetting />
               <ModelSetting />
+              <RecordModelSetting />
               <ThinkingEffortSetting />
               <LocaleSetting />
               <TtsVoiceSetting />
@@ -325,24 +330,56 @@ const LocationSetting = () => {
   )
 }
 
+/** 只允许官方地址用 Pro：第三方接口的模型名和价格都不确定 */
+const modelOptions = (
+  t: (key: TranslationKey) => string,
+  custom: boolean
+): { value: ChatModel; label: string }[] =>
+  custom
+    ? [{ value: 'deepseek-flash', label: t('modelFlash') }]
+    : [
+        { value: 'deepseek-flash', label: t('modelFlash') },
+        { value: 'deepseek-v4-pro', label: t('modelPro') },
+      ]
+
 /** 对话模型：flash 更快更便宜且支持图片，v4 pro 更强 */
 const ModelSetting = () => {
   const t = useTranslate()
   const model = useSettings((state) => state.model)
+  const custom = useApiOrigin((state) => state.origin) !== OFFICIAL_API_ORIGIN
   return (
     <SettingCell
       label={t('settingsModel')}
-      description={t('settingsModelHint')}
+      description={custom ? t('settingsCustomApiModelHint') : t('settingsModelHint')}
       status={null}
       action={
         <Select<ChatModel>
           ariaLabel={t('settingsModel')}
-          value={model}
-          options={[
-            { value: 'deepseek-flash', label: t('modelFlash') },
-            { value: 'deepseek-v4-pro', label: t('modelPro') },
-          ]}
+          value={custom ? 'deepseek-flash' : model}
+          options={modelOptions(t, custom)}
           onChange={setModel}
+        />
+      }
+    />
+  )
+}
+
+/** 记录生成模型：写回顾用 flash 足够，想细腻可选 pro */
+const RecordModelSetting = () => {
+  const t = useTranslate()
+  const recordModel = useSettings((state) => state.recordModel)
+  const custom = useApiOrigin((state) => state.origin) !== OFFICIAL_API_ORIGIN
+  return (
+    <SettingCell
+      label={t('settingsRecordModel')}
+      description={t('settingsRecordModelHint')}
+      status={null}
+      action={
+        <Select<ChatModel>
+          ariaLabel={t('settingsRecordModel')}
+          value={custom ? 'deepseek-flash' : recordModel}
+          options={modelOptions(t, custom)}
+          onChange={setRecordModel}
         />
       }
     />
@@ -354,44 +391,59 @@ const WallpaperSetting = () => {
   const t = useTranslate()
   const preset = useWallpaper((state) => state.preset)
   const inputRef = useRef<HTMLInputElement>(null)
+  const [cropFile, setCropFile] = useState<File | null>(null)
   return (
-    <SettingCell
-      label={t('settingsWallpaper')}
-      description={t('wallpaperHint')}
-      status={null}
-      action={
-        <div className={styles.wallpaperActions}>
-          <Select<string>
-            ariaLabel={t('settingsWallpaper')}
-            value={preset}
-            options={[
-              { value: 'none', label: t('wallpaperNone') },
-              { value: 'paper', label: t('wallpaperPaper') },
-              { value: 'mist', label: t('wallpaperMist') },
-              { value: 'dusk', label: t('wallpaperDusk') },
-            ]}
-            onChange={(value) => setWallpaper(value as WallpaperPreset)}
-          />
-          <Button size="m" variant="outlined" onClick={() => inputRef.current?.click()}>
-            {t('wallpaperCustom')}
-          </Button>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            style={HIDDEN_FILE_INPUT_STYLE}
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              event.target.value = ''
-              if (!file) {
-                return
-              }
-              void setCustomWallpaper(file).catch(() => showToast({ key: 'wallpaperFailed' }))
-            }}
-          />
-        </div>
-      }
-    />
+    <>
+      <SettingCell
+        label={t('settingsWallpaper')}
+        description={t('wallpaperHint')}
+        status={null}
+        action={
+          <div className={styles.wallpaperActions}>
+            <Select<string>
+              ariaLabel={t('settingsWallpaper')}
+              value={preset}
+              options={[
+                { value: 'none', label: t('wallpaperNone') },
+                { value: 'paper', label: t('wallpaperPaper') },
+                { value: 'mist', label: t('wallpaperMist') },
+                { value: 'dusk', label: t('wallpaperDusk') },
+              ]}
+              onChange={(value) => setWallpaper(value as WallpaperPreset)}
+            />
+            <Button size="m" variant="outlined" onClick={() => inputRef.current?.click()}>
+              {t('wallpaperCustom')}
+            </Button>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              style={HIDDEN_FILE_INPUT_STYLE}
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                if (file) {
+                  setCropFile(file)
+                }
+              }}
+            />
+          </div>
+        }
+      />
+      {cropFile !== null ? (
+        <ImageCropDialog
+          file={cropFile}
+          aspect="screen"
+          onCancel={() => setCropFile(null)}
+          onConfirm={(blob) => {
+            setCropFile(null)
+            void setCustomWallpaperBlob(blob).catch(() =>
+              showToast({ key: 'wallpaperFailed' })
+            )
+          }}
+        />
+      ) : null}
+    </>
   )
 }
 
@@ -782,7 +834,7 @@ const useHistoryImport = () => {
   const [status, setStatus] = useState<Status>(null)
   const importing = useRef(false)
 
-  const select = (next: File) => {
+  const select = (next: File, all = false) => {
     setFile(next)
     // 30MB 以上的归档通常是图片占绝大部分，默认跳过附件，先让对话进来
     setSkipImages(next.size > 30 * 1024 * 1024)
@@ -796,7 +848,8 @@ const useHistoryImport = () => {
         setSessions(list)
         setExisting(new Set(localIds))
         // 默认不勾选：勾了哪些就导入哪些，避免「想选一条却把整包都导入」
-        setSelected(new Set())
+        // 从系统分享进来的归档是用户主动要的，直接全选
+        setSelected(all ? new Set(list.map((item) => item.id)) : new Set())
       })
       .catch((error: unknown) => {
         // 读不到清单说明归档结构不对，导入也一定会失败，直接结束这次选择
@@ -807,6 +860,18 @@ const useHistoryImport = () => {
       })
       .finally(() => setLoadingSessions(false))
   }
+
+  // 系统分享 / 打开方式传进来的 ZIP：挂载时取一次，之后监听新分享
+  useEffect(() => {
+    const take = () => {
+      const shared = consumeSharedArchive()
+      if (shared) {
+        select(shared, true)
+      }
+    }
+    take()
+    return useSharedArchive.subscribe(take)
+  }, [])
 
   const confirm = async () => {
     if (!file || importing.current) {

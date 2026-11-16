@@ -76,7 +76,7 @@ export const ReplyArea = memo(function ReplyArea({
   const title = thinking ? getAreaTitle(view, streaming, Date.now(), hasResponse) : null
   const stopped = !streaming && !hasResponse
   return (
-    <div className={styles.area}>
+    <div className={`${styles.area} ds-reply-area`}>
       {title ? (
         <div className={styles.title} onClick={() => setOpen((value) => !value)}>
           <span className={clsx(styles.titleIcon, stopped && styles.stoppedIcon)}>

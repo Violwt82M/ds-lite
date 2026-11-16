@@ -6,10 +6,13 @@
 .body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   max-height: min(62vh, 620px);
   overflow-y: auto;
-  padding-right: 4px;
+  padding: 14px 14px 4px;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.03));
 }
 
 .field {
@@ -33,13 +36,24 @@
 .input {
   width: 100%;
   box-sizing: border-box;
-  padding: 8px 12px;
-  border: 1px solid var(--dsw-alias-border-inverted, rgba(128, 128, 128, 0.3));
+  padding: 9px 12px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
   border-radius: 10px;
-  background: transparent;
+  background: var(--dsw-specific-input-major, rgba(0, 0, 0, 0.04));
   color: inherit;
   font: inherit;
   font-size: 14px;
+  line-height: 1.6;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--dsw-alias-brand-primary, #4d6bfe);
+  box-shadow: 0 0 0 3px rgba(77, 107, 254, 0.12);
+}
+
+.input::placeholder {
+  color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.75));
 }
 
 .textarea {

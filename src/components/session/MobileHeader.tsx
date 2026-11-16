@@ -3,8 +3,10 @@ import { useTranslate } from '../../i18n/index.js'
 import type { Session } from '../../services/chat/types.js'
 import { newChat } from '../../services/chat/store.js'
 import { IconButton } from '../base/IconButton.js'
+import { IconEditOutline16 } from '../base/icons.js'
 import { BalanceChip } from '../balance/BalanceChip.js'
 import { ContextMeter } from '../memory/ContextMeter.js'
+import { openRecordsPanel } from '../records/recordsPanelState.js'
 import { openMobileSider } from '../sider/mobileSiderState.js'
 import { PersonaButton } from './PersonaPicker.js'
 import styles from './MobileHeader.module.css'
@@ -33,6 +35,14 @@ export const MobileHeader = ({ title, session }: { title?: string; session?: Ses
           {session ? <PersonaButton sessionId={session.id} /> : null}
           <BalanceChip className={styles.meter} />
           {session ? <ContextMeter session={session} className={styles.meter} /> : null}
+          {session ? (
+            <IconButton
+              size="xs"
+              tooltip={t('recordsTitle')}
+              icon={<IconEditOutline16 />}
+              onClick={openRecordsPanel}
+            />
+          ) : null}
           <IconButton
             size="xl"
             tone="primary"

@@ -301,3 +301,144 @@
   color: inherit;
   font-size: 13px;
 }
+
+/* 摘要功能区整块框起来：和下面的整理按钮区分开 */
+.summaryCard {
+  padding: 12px;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.1));
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.03));
+}
+
+.summaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* 指向关于页教程的入口 */
+.guideLink {
+  padding: 0;
+  margin-top: 8px;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* ---- 生成记忆笔记：整块突出，和下面的整理按钮分开 ---- */
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 12px 14px;
+  border: 1px solid rgba(77, 107, 254, 0.28);
+  border-left: 3px solid var(--dsw-alias-brand-primary, #4d6bfe);
+  border-radius: 12px;
+  background: rgba(77, 107, 254, 0.07);
+}
+
+.summaryHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.summaryTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+.summaryBadge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--dsw-alias-brand-primary, #4d6bfe);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.summaryHint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.summaryInput {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid rgba(77, 107, 254, 0.3);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-base, #fff);
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.summaryInput:focus {
+  outline: none;
+  border-color: var(--dsw-alias-brand-primary, #4d6bfe);
+  box-shadow: 0 0 0 3px rgba(77, 107, 254, 0.14);
+}
+
+.summaryActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* ---- 笔记标题可折叠 ---- */
+.sectionToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+}
+
+.chevron,
+.chevronOpen {
+  display: inline-flex;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+  transition: transform 0.15s ease;
+}
+
+.chevron {
+  transform: rotate(-90deg);
+}
+
+.chevronOpen {
+  transform: rotate(0deg);
+}
+
+/* ---- 长笔记默认收两行 ---- */
+.noteTextClamp {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.noteToggle {
+  align-self: flex-start;
+  padding: 0;
+  margin-top: 2px;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+  font-size: 12px;
+  cursor: pointer;
+}

@@ -4,6 +4,7 @@ import { useTranslate } from '../../i18n/index.js'
 import { cardToJsonText, emptyCard, type PersonaCard } from '../../services/persona/card.js'
 import { savePersonaCard, setPersonaAvatar } from '../../services/persona/store.js'
 import { toAvatarDataUrl } from '../../utils/image.js'
+import { ImageCropDialog } from '../base/ImageCropDialog.js'
 import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
 import { showToast } from '../base/toastState.js'
@@ -46,6 +47,7 @@ export const PersonaEditor = ({
   const t = useTranslate()
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const [avatar, setAvatar] = useState<string | undefined>(initialAvatar)
+  const [cropFile, setCropFile] = useState<File | null>(null)
   const [draft, setDraft] = useState<PersonaCard>(() => ({
     ...(initial ?? emptyCard()),
   }))
@@ -141,17 +143,30 @@ export const PersonaEditor = ({
               if (!file) {
                 return
               }
-              void toAvatarDataUrl(file).then((url) => {
-                if (url) {
-                  setAvatar(url)
-                } else {
-                  showToast({ key: 'personaAvatarFailed', type: 'error' })
-                }
-              })
+              setCropFile(file)
             }}
           />
         </div>
       </div>
+
+      {cropFile !== null ? (
+        <ImageCropDialog
+          file={cropFile}
+          aspect="square"
+          onCancel={() => setCropFile(null)}
+          onConfirm={(blob) => {
+            setCropFile(null)
+            const cropped = new File([blob], 'avatar.png', { type: 'image/png' })
+            void toAvatarDataUrl(cropped).then((url) => {
+              if (url) {
+                setAvatar(url)
+              } else {
+                showToast({ key: 'personaAvatarFailed', type: 'error' })
+              }
+            })
+          }}
+        />
+      ) : null}
 
       <div className={styles.field}>
         <div className={styles.label}>

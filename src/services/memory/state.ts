@@ -10,6 +10,8 @@ type MemoryPanelState = {
   /** 正在整理记忆的会话 id */
   compacting: Record<string, boolean>
   errors: Record<string, TranslationMessage | undefined>
+  /** 分段整理进度：done / total，没有在整理时为空 */
+  progress: Record<string, { done: number; total: number } | undefined>
   notices: Record<string, MemoryNotice | undefined>
 }
 
@@ -18,7 +20,16 @@ export const useMemoryPanel = create<MemoryPanelState>(() => ({
   compacting: {},
   errors: {},
   notices: {},
+  progress: {},
 }))
+
+export const setCompactProgress = (
+  sessionId: string,
+  progress: { done: number; total: number } | undefined
+) =>
+  useMemoryPanel.setState((state) => ({
+    progress: { ...state.progress, [sessionId]: progress },
+  }))
 
 export const setMemoryNotice = (sessionId: string, rounds: number) =>
   useMemoryPanel.setState((state) => ({

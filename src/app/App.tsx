@@ -14,7 +14,7 @@ import { closeSearchPanel } from '../components/search/searchPanelState.js'
 import { SessionView } from '../components/session/SessionView.js'
 import { MobileHeader } from '../components/session/MobileHeader.js'
 import { Welcome } from '../components/session/Welcome.js'
-import { ensureApiKey } from '../components/settings/settingsDialogState.js'
+import { ensureApiKey, openSettings } from '../components/settings/settingsDialogState.js'
 import { SettingsDialog } from '../components/settings/SettingsDialog.js'
 import { DisclaimerDialog } from '../components/about/DisclaimerDialog.js'
 import { ContextGuideDialog } from '../components/memory/ContextGuideDialog.js'
@@ -23,6 +23,7 @@ import { Toast } from '../components/base/Toast.js'
 import { showToast } from '../components/base/toastState.js'
 import { onUploadNotice } from '../services/attachments.js'
 import { setupWallpaper } from '../services/wallpaper.js'
+import { initSharedArchive, useSharedArchive } from '../services/chat/history/sharedArchive.js'
 import { Button } from '../components/base/Button.js'
 import { stopReadAloud } from '../services/speech/readAloud.js'
 import { CollapsedSider } from '../components/sider/CollapsedSider.js'
@@ -74,6 +75,16 @@ export const App = () => {
   // 背景图：预设走 CSS，自定义图从 IndexedDB 读回来
   useEffect(setupWallpaper, [])
 
+  // 系统分享 / 打开方式传进来归档：直接跳到「数据管理 → 导入历史对话」
+  useEffect(() => {
+    void initSharedArchive()
+    return useSharedArchive.subscribe((state) => {
+      if (state.pending !== null) {
+        openSettings('data')
+      }
+    })
+  }, [])
+
   useEffect(() => {
     void initChat()
     // 首次打开先让用户看完免责声明，确认后再引导填 API Key，避免两个弹窗叠在一起
@@ -84,8 +95,7 @@ export const App = () => {
 
   return (
     <>
-      <div className="wallpaper-layer" aria-hidden />
-      <div ref={frameRef} className={styles.frame}>
+      <div ref={frameRef} className={`${styles.frame} app-frame`}>
         {isMobile ? <MobileSider /> : siderCollapsed ? null : <Sider />}
         <main className={styles.main}>
           {saveError ? (

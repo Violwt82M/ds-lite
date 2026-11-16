@@ -71,7 +71,7 @@ export const readLocalSessionIds = (): Promise<string[]> =>
   enqueueBackup(async () => (await db.loadSessionSummaries()).map((summary) => summary.id))
 
 /** 导入结果：写入的新会话数，以及因为本机已有而跳过的会话数 */
-export type ImportHistoryResult = { imported: number; skipped: number }
+export type ImportHistoryResult = { imported: number; skipped: number; failed: number }
 
 /**
  * 追加导入：勾选的会话并入本机对话列表，本机已有数据和已有会话都保留。
@@ -88,7 +88,7 @@ export const importHistory = (
       await checkArchiveFormat(file, reportScanProgress)
       const existingIds = (await db.loadSessionSummaries()).map((summary) => summary.id)
       startReading()
-      let result = { imported: 0, skipped: 0 }
+      let result = { imported: 0, skipped: 0, failed: 0 }
       const imported = await replaceHistory(
         async () => {
           result = await importArchive(file, {
@@ -100,7 +100,7 @@ export const importHistory = (
         },
         { merge: true }
       )
-      return { imported, skipped: result.skipped }
+      return { imported, skipped: result.skipped, failed: result.failed }
     } finally {
       endImport()
     }

@@ -115,6 +115,8 @@ export type ImportArchiveResult = {
   imported: number
   /** 因为本机已有而跳过的会话数 */
   skipped: number
+  /** 因为文件损坏或格式不对而跳过的会话数 */
+  failed: number
 }
 
 export const importArchive = async (
@@ -160,6 +162,8 @@ export const importArchive = async (
   let currentSessionId: string | undefined
   /** 当前正在处理的条目，出错时写进提示，方便定位是哪个文件导致了失败 */
   let currentPath = ''
+  /** 读坏 / 校验不过而被跳过的会话数 */
+  let failedSessions = 0
 
   const saveImage = async (entry: ArchiveEntry, id: string) => {
     if (stored.has(id)) {
@@ -214,7 +218,18 @@ export const importArchive = async (
         // 账号信息（已脱敏）不导入；文件可能缺失。
         await skipEntry(entry)
       } else if (sessionId !== null && !index) {
-        const local = toLocalSession(readSessionFile(await readJson(entry)))
+        let local: ReturnType<typeof toLocalSession>
+        try {
+          local = toLocalSession(readSessionFile(await readJson(entry)))
+        } catch (error) {
+          // 单条会话读坏了就跳过它，别让整包导入直接失败
+          if (error instanceof ArchiveError || error instanceof BackupError) {
+            failedSessions += 1
+            currentSessionId = undefined
+            continue
+          }
+          throw error
+        }
         if (local.session.id !== sessionId || imported.has(sessionId)) {
           fail('backupIncomplete')
         }
@@ -270,5 +285,5 @@ export const importArchive = async (
     fail('backupIncomplete')
   }
   await db.updateStagingFileTypes(stored)
-  return { imported: imported.size, skipped: skippedSessions.size }
+  return { imported: imported.size, skipped: skippedSessions.size, failed: failedSessions }
 }

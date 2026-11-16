@@ -58,7 +58,7 @@ const readErrorResponse = async (
   url?: string
 ): Promise<ApiError> => {
   const text = await response.text().catch(() => '')
-  let message = text || fallback
+  let message: string | TranslationMessage = text || fallback
   try {
     const body: unknown = JSON.parse(text)
     if (isErrorBody(body)) {
@@ -68,7 +68,15 @@ const readErrorResponse = async (
       message = (body as { detail: string }).detail
     }
   } catch {
-    // 非 JSON 响应体直接展示原文
+    // 返回 HTML 说明请求打到了网页而不是 API：多半是第三方中转/反代的地址。
+    // 这类服务不在支持范围，直接给结论，不把整页 HTML 丢给用户。
+    if (/^\s*<(!doctype|html|head|body)/i.test(text) || text.includes('<script')) {
+      message = { key: 'errorNotApiEndpoint' }
+    }
+  }
+  // 纯文本错误体也可能很长（nginx 整页堆栈），截断后再展示
+  if (typeof message === 'string' && message.length > 400) {
+    message = `${message.slice(0, 400)}…`
   }
   return new ApiError(kind, message, response.status, url)
 }

@@ -5,6 +5,7 @@ import {
   cancelMemoryCompaction,
   clearSessionMemory,
   compactSessionMemory,
+  generateMemoryNote,
   getFoldedRounds,
   removeMemoryNote,
   saveMemoryNote,
@@ -12,6 +13,7 @@ import {
   useChatStore,
 } from '../../services/chat/store.js'
 import type { Session } from '../../services/chat/types.js'
+import { openSettings } from '../settings/settingsDialogState.js'
 import {
   formatCharCount,
   getContextLevel,
@@ -37,6 +39,7 @@ const MemoryPanel = ({ session }: { session: Session }) => {
   const t = useTranslate()
   const usage = useMemo(() => getContextUsage(session), [session])
   const compacting = useMemoryPanel((state) => Boolean(state.compacting[session.id]))
+  const progress = useMemoryPanel((state) => state.progress[session.id])
   const error = useMemoryPanel((state) => state.errors[session.id])
   const autoMemory = useSettings((state) => state.autoMemory)
   const hasApiKey = useSettings((state) => Boolean(state.apiKey))
@@ -47,6 +50,11 @@ const MemoryPanel = ({ session }: { session: Session }) => {
   const foldable = Math.max(0, roundCount - 1)
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null)
   const [instruction, setInstruction] = useState(session.memory?.instruction ?? '')
+  const [summaryInstruction, setSummaryInstruction] = useState('')
+  const [notesOpen, setNotesOpen] = useState(true)
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({})
+  const [summarizing, setSummarizing] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
   const [confirmDisableAuto, setConfirmDisableAuto] = useState(false)
   const level = getContextLevel(usage.ratio)
@@ -250,7 +258,9 @@ const MemoryPanel = ({ session }: { session: Session }) => {
         </div>
         <div className={styles.compactRow}>
           <Button size="m" disabled={blocked !== null} onClick={() => void onCompact()}>
-            {t(compacting ? 'memoryCompacting' : 'memoryCompactNow')}
+            {compacting && progress
+              ? t('memoryCompactProgress', { done: progress.done, total: progress.total })
+              : t(compacting ? 'memoryCompacting' : 'memoryCompactNow')}
           </Button>
           {compacting ? (
             <Button size="m" variant="outlined" onClick={() => cancelMemoryCompaction(session.id)}>
@@ -268,9 +278,66 @@ const MemoryPanel = ({ session }: { session: Session }) => {
         ) : null}
       </div>
 
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryHead}>
+            <span className={styles.summaryTitle}>{t('memorySummaryLabel')}</span>
+            <span className={styles.summaryBadge}>{t('memorySummaryBadge')}</span>
+          </div>
+          <div className={styles.summaryHint}>{t('memorySummaryHint')}</div>
+          <textarea
+            className={styles.summaryInput}
+            rows={2}
+            maxLength={300}
+            placeholder={t('memorySummaryDefault')}
+            value={summaryInstruction}
+            onChange={(event) => setSummaryInstruction(event.target.value)}
+          />
+          <div className={styles.summaryActions}>
+            {summaryError !== null ? (
+              <span className={styles.error}>{summaryError}</span>
+            ) : (
+              <span />
+            )}
+            <Button
+              size="m"
+              disabled={summarizing || streaming || !hasApiKey}
+              onClick={async () => {
+                setSummarizing(true)
+                setSummaryError(null)
+                const result = await generateMemoryNote(
+                  session.id,
+                  summaryInstruction.trim() || t('memorySummaryDefault')
+                )
+                setSummarizing(false)
+                if (!result.ok) {
+                  setSummaryError(
+                    result.reason === 'nokey'
+                      ? t('memoryCompactNeedKey')
+                      : t('memorySummaryFailed', { message: result.reason ?? '' })
+                  )
+                }
+              }}
+            >
+              {summarizing ? t('memorySummaryBusy') : t('memorySummaryButton')}
+            </Button>
+          </div>
+        </div>
+
       <div className={styles.section}>
         <div className={styles.sectionHead}>
-          <span className={styles.sectionTitle}>{t('memoryNotesTitle', { count: notes.length })}</span>
+          <button
+            type="button"
+            className={styles.sectionToggle}
+            aria-expanded={notesOpen}
+            onClick={() => setNotesOpen((value) => !value)}
+          >
+            <span className={styles.sectionTitle}>
+              {t('memoryNotesTitle', { count: notes.length })}
+            </span>
+            <span className={notesOpen ? styles.chevronOpen : styles.chevron} aria-hidden>
+              ▾
+            </span>
+          </button>
           <Button
             size="s"
             variant="outlined"
@@ -282,7 +349,7 @@ const MemoryPanel = ({ session }: { session: Session }) => {
             {t('memoryAdd')}
           </Button>
         </div>
-        {notes.length === 0 ? (
+        {!notesOpen ? null : notes.length === 0 ? (
           <div className={styles.empty}>{t('memoryNotesEmpty')}</div>
         ) : (
           <div className={styles.notes}>
@@ -314,9 +381,27 @@ const MemoryPanel = ({ session }: { session: Session }) => {
                 </div>
               ) : (
                 <div key={note.id} className={styles.note}>
-                  <div className={styles.noteText}>
+                  <div
+                    className={
+                      expandedNotes[note.id] ? styles.noteText : `${styles.noteText} ${styles.noteTextClamp}`
+                    }
+                  >
                     {note.text || t('memoryNotePlaceholder')}
                   </div>
+                  {note.text.length > 120 ? (
+                    <button
+                      type="button"
+                      className={styles.noteToggle}
+                      onClick={() =>
+                        setExpandedNotes((current) => ({
+                          ...current,
+                          [note.id]: !current[note.id],
+                        }))
+                      }
+                    >
+                      {t(expandedNotes[note.id] ? 'recordsCollapse' : 'recordsExpand')}
+                    </button>
+                  ) : null}
                   <div className={styles.noteMeta}>
                     <span className={styles.noteSource}>
                       {t(note.source === 'auto' ? 'memorySourceAuto' : 'memorySourceManual')}
@@ -356,6 +441,13 @@ const MemoryPanel = ({ session }: { session: Session }) => {
           <li>{t('contextGuidePoint3')}</li>
         </ul>
         <div className={styles.guideTip}>{t('contextGuideTip')}</div>
+        <button
+          type="button"
+          className={styles.guideLink}
+          onClick={() => openSettings('about')}
+        >
+          {t('tutorialLinkHint')} →
+        </button>
       </div>
     </Modal>
   )

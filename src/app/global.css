@@ -57,30 +57,23 @@ body.change-theme *::after {
  * 聊天背景：.wallpaper-layer 固定铺满、垫在页面内容之下（内容都在定位容器里，
  * DOM 顺序排在它后面，所以自然盖在上面）。自定义图用 --ds-wallpaper-image 注入。
  */
-.wallpaper-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
-}
-
-body[data-wallpaper='paper'] .wallpaper-layer {
+body[data-wallpaper='paper'] .app-frame {
   background-image: linear-gradient(180deg, #f7f3ea 0%, #efe8da 100%);
 }
 
-body[data-wallpaper='mist'] .wallpaper-layer {
+body[data-wallpaper='mist'] .app-frame {
   background-image: linear-gradient(160deg, #e8f1fb 0%, #d7e6f7 55%, #cfe0f2 100%);
 }
 
-body[data-wallpaper='dusk'] .wallpaper-layer {
+body[data-wallpaper='dusk'] .app-frame {
   background-image: linear-gradient(180deg, #2a2f45 0%, #3a3050 60%, #4a3a55 100%);
 }
 
-body[data-wallpaper='custom'] .wallpaper-layer {
+body[data-wallpaper='custom'] .app-frame {
   background-image: var(--ds-wallpaper-image, none);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
 }
 
 /* 有背景时气泡改成半透明，让底色透出来一点，不然像贴了两块白纸 */
@@ -96,4 +89,59 @@ body[data-wallpaper]:not([data-wallpaper='none']).dark {
   body[data-wallpaper]:not([data-wallpaper='none']) {
     --dsw-specific-bubble: var(--dsw-alias-bg-base);
   }
+}
+
+/*
+ * 有背景图时，消息必须自己带一层"纸"，否则文字直接压在照片上没法看。
+ * 助手侧本来没有气泡，这里补一块半透明面板；用户气泡加深并加描边。
+ */
+body[data-wallpaper]:not([data-wallpaper='none']) .ds-assistant-message-main-content {
+  padding: 12px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+body[data-wallpaper]:not([data-wallpaper='none']).dark .ds-assistant-message-main-content {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(28, 30, 34, 0.82);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+body[data-wallpaper]:not([data-wallpaper='none']) .ds-user-bubble {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+body[data-wallpaper]:not([data-wallpaper='none']).dark .ds-user-bubble {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* 深色背景预设下，气泡颜色也要压深，浅色半透明会糊成一片 */
+body[data-wallpaper='dusk'] {
+  --dsw-specific-bubble: rgba(58, 66, 92, 0.86);
+}
+
+/* 思考过程（思维链）也要有自己的纸，否则深色背景上整段看不见 */
+body[data-wallpaper]:not([data-wallpaper='none']) .ds-reply-area {
+  padding: 8px 14px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+body[data-wallpaper]:not([data-wallpaper='none']).dark .ds-reply-area {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(24, 26, 30, 0.7);
+}
+
+body[data-wallpaper]:not([data-wallpaper='none']) .ds-think-content {
+  color: var(--dsw-alias-label-secondary);
 }

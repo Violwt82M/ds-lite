@@ -110,8 +110,8 @@ export type MemoryNote = {
   id: string
   text: string
   createdAt: number
-  /** auto：模型自动整理时写入；manual：用户在记忆面板里编辑或手动整理 */
-  source: 'auto' | 'manual'
+  /** auto：模型自动整理时写入；manual：用户手动编辑；summary：按提示词生成的摘要（同样进上下文） */
+  source: 'auto' | 'manual' | 'summary'
 }
 
 /**
@@ -119,6 +119,15 @@ export type MemoryNote = {
  * foldedIds 记录已被折叠进记忆的回答消息 id，请求时跳过这些轮次。
  * 缺省表示从未整理过，上下文为全量。
  */
+/** 一段由 AI 生成的观赏性记录（不进上下文，跟会话一起存） */
+export type SessionRecord = {
+  id: string
+  title: string
+  text: string
+  createdAt: number
+  updatedAt: number
+}
+
 export type SessionMemory = {
   notes: MemoryNote[]
   /** 已折叠（不再进入请求上下文）的回答消息 id */
@@ -141,6 +150,8 @@ export type Session = {
   rootMessageId?: string | null
   /** 外置记忆与上下文折叠状态；缺省表示全量上下文 */
   memory?: SessionMemory
+  /** 观赏性记录（AI 按提示词写的回顾/日记）：不进上下文，也不随导出备份 */
+  records?: SessionRecord[]
 }
 
 /** 会话列表元数据；消息只在打开会话时加载。 */

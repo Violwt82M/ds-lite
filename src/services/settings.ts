@@ -39,6 +39,8 @@ type Settings = {
   model: ChatModel
   /** 界面字号百分比：90 / 100 / 110 / 120 / 130 */
   fontScale: number
+  /** 生成「记录」用的模型（默认 flash，花钱少） */
+  recordModel: ChatModel
 }
 
 /** 允许的字号档位（百分比） */
@@ -59,6 +61,7 @@ const KEYS = {
   showBalance: 'chat-demo:show-balance',
   model: 'chat-demo:model',
   fontScale: 'chat-demo:font-scale',
+  recordModel: 'chat-demo:record-model',
 } as const
 
 const read = (key: string) => {
@@ -142,6 +145,7 @@ export const useSettings = create<Settings>(() => ({
     const saved = Number(read(KEYS.fontScale))
     return FONT_SCALES.includes(saved) ? saved : 100
   })(),
+  recordModel: read(KEYS.recordModel) === 'deepseek-v4-pro' ? 'deepseek-v4-pro' : 'deepseek-flash',
   // 默认 flash：更快更便宜，而且支持图片
   model: read(KEYS.model) === 'deepseek-v4-pro' ? 'deepseek-v4-pro' : 'deepseek-flash',
 }))
@@ -210,6 +214,11 @@ export const setShowBalance = (showBalance: boolean) => {
 export const setModel = (model: ChatModel) => {
   write(KEYS.model, model)
   useSettings.setState({ model })
+}
+
+export const setRecordModel = (recordModel: ChatModel) => {
+  write(KEYS.recordModel, recordModel)
+  useSettings.setState({ recordModel })
 }
 
 export const setFontScale = (fontScale: number) => {

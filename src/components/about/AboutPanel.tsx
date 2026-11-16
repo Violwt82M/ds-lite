@@ -2,12 +2,13 @@ import clsx from 'clsx'
 import { useTranslate } from '../../i18n/index.js'
 import { Button } from '../base/Button.js'
 import { openDisclaimer } from './disclaimerState.js'
+import { Tutorials } from './Tutorials.js'
 import settingsStyles from '../settings/Settings.module.css'
 
 /** 上游开源项目与版本信息：二次开发必须保留出处 */
 export const OFFICIAL_REPO = 'https://github.com/deepseek-ai/chat-demo'
 export const OFFICIAL_LICENSE = 'https://github.com/deepseek-ai/chat-demo/blob/main/LICENSE'
-export const APP_VERSION = '0.9.22'
+export const APP_VERSION = '0.9.23'
 export const UPSTREAM_VERSION = '0.1.1'
 
 /** 设置里的「关于」分组：非官方声明、开源许可、上游仓库 */
@@ -16,6 +17,7 @@ export const AboutPanel = () => {
 
   return (
     <>
+      <Tutorials />
       <div className={clsx(settingsStyles.cell, settingsStyles.row)}>
         <div className={settingsStyles.text}>
           <div className={settingsStyles.label}>{t('aboutVersion')}</div>

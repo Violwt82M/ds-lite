@@ -1,0 +1,66 @@
+.dialog {
+  width: min(380px, calc(100vw - 32px));
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.viewport {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-skeleton, rgba(128, 128, 128, 0.12));
+  border: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.16));
+  touch-action: none;
+  cursor: grab;
+}
+
+.viewport:active {
+  cursor: grabbing;
+}
+
+.image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* 四角压暗，提示这里就是最终取景范围 */
+.mask {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 9999px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.hint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+  text-align: center;
+}
+
+.slider {
+  width: 100%;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

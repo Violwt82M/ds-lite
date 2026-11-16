@@ -1,0 +1,214 @@
+.dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(70vh, 640px);
+}
+
+.generate {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 12px;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.1));
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.03));
+}
+
+.instruction {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.16));
+  border-radius: 10px;
+  background: var(--dsw-specific-input-major, rgba(0, 0, 0, 0.04));
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.65;
+  resize: vertical;
+}
+
+.instruction:focus {
+  outline: none;
+  border-color: var(--dsw-alias-brand-primary, #4d6bfe);
+}
+
+.generateRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+}
+
+.error {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #d92d20;
+}
+
+.empty {
+  padding: 20px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.record {
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.1));
+  border-radius: 10px;
+  padding: 6px 8px 8px;
+  background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.03));
+}
+
+.recordHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.titleInput {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.titleInput:focus {
+  outline: none;
+  background: var(--dsw-specific-input-major, rgba(0, 0, 0, 0.04));
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-brand-primary, #4d6bfe);
+}
+
+.time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+}
+
+.preview {
+  margin: 4px 0 0 24px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+  cursor: pointer;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.text {
+  margin: 8px 0 0 24px;
+  width: calc(100% - 24px);
+  box-sizing: border-box;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.16));
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--dsw-specific-input-major, rgba(0, 0, 0, 0.04));
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.75;
+  resize: vertical;
+}
+
+.text:focus {
+  outline: none;
+  border-color: var(--dsw-alias-brand-primary, #4d6bfe);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 折叠箭头：转 90 度表示展开，比换图标更连贯 */
+.chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+  transition: transform 0.15s ease;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.recordHead {
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.recordHead:hover .chevron {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 「不计入上下文」的说明：要能看见，不能只是小灰字 */
+.notice {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(77, 107, 254, 0.08);
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.listHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.listHint {
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+}
+
+/* 指向关于页教程的入口 */
+.guideLink {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+  font-size: 13px;
+  line-height: 1.6;
+  cursor: pointer;
+}

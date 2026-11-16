@@ -3,6 +3,7 @@ import type { TranslationMessage } from '../../i18n/index.js'
 import { createId } from '../../utils/id.js'
 import { ApiError, streamMessage } from '../api/client.js'
 import type { ChatModel, CreateMessageRequest } from '../api/types.js'
+import { isCustomApiOrigin } from '../api/base.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
 import { useSettings } from '../settings.js'
@@ -21,6 +22,9 @@ import { usePersona } from '../persona/store.js'
 import {
   buildTranscript,
   parseMemoryNotes,
+  roundsChars,
+  SEGMENT_CHARS,
+  splitRounds,
   renderMemorySection,
   rewriteNotes,
   summarizeRounds,
@@ -32,7 +36,7 @@ import {
   getUnfoldedRounds,
   type ContextUsage,
 } from '../memory/context.js'
-import { setCompacting, setMemoryError, setMemoryNotice } from '../memory/state.js'
+import { setCompactProgress, setCompacting, setMemoryError, setMemoryNotice } from '../memory/state.js'
 import { createLatestReminder } from './latestReminder.js'
 import {
   applyEvent,
@@ -49,12 +53,21 @@ import {
   type Message,
   type Session,
   type SessionMemory,
+  type SessionRecord,
   type SessionSummary,
   type UserMessage,
 } from './types.js'
 
-/** 当前模型：设置里选的（默认 flash，只有它支持图片输入） */
-const currentModel = (): ChatModel => useSettings.getState().model
+/**
+ * 当前模型：设置里选的（默认 flash，只有它支持图片输入）。
+ * 换了第三方 API 地址时强制走 flash：对方的模型名和价格都可能不一样，不能按官方 pro 发。
+ */
+const currentModel = (): ChatModel =>
+  isCustomApiOrigin() ? 'deepseek-flash' : useSettings.getState().model
+/** 一次整理最多处理多少段，剩下的留给下次运行 */
+const MAX_COMPACT_SEGMENTS = 12
+/** 单段最多送多少字：再大就慢且容易超时，不如多跑一段 */
+const MAX_SEGMENT_CHARS = 90_000
 /** 所有生成请求统一携带的助手身份说明 */
 const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
@@ -826,6 +839,204 @@ const updateMemory = (
   persist(sessionId)
 }
 
+/* ---------- 记录：AI 写的回顾/日记，纯观赏，不进上下文 ---------- */
+
+export const addSessionRecord = (sessionId: string, title: string, text: string): string | null => {
+  const session = getSession(sessionId)
+  if (!session) {
+    return null
+  }
+  const now = Date.now()
+  const record: SessionRecord = { id: createId(), title, text, createdAt: now, updatedAt: now }
+  updateSession(sessionId, (current) => ({ ...current, records: [record, ...(current.records ?? [])] }))
+  persist(sessionId)
+  return record.id
+}
+
+export const updateSessionRecord = (
+  sessionId: string,
+  recordId: string,
+  patch: { title?: string; text?: string }
+) => {
+  updateSession(sessionId, (session) => ({
+    ...session,
+    records: (session.records ?? []).map((record) =>
+      record.id === recordId ? { ...record, ...patch, updatedAt: Date.now() } : record
+    ),
+  }))
+  persist(sessionId)
+}
+
+export const deleteSessionRecord = (sessionId: string, recordId: string) => {
+  updateSession(sessionId, (session) => ({
+    ...session,
+    records: (session.records ?? []).filter((record) => record.id !== recordId),
+  }))
+  persist(sessionId)
+}
+
+/** 记录只取最近这么多条消息，避免生成调用本身把上下文撑爆 */
+const RECORD_SOURCE_MESSAGES = 20
+const RECORD_SOURCE_CHARS = 6000
+
+const recordText = (message: Message): string => {
+  if (message.role === 'user') {
+    return message.content
+  }
+  return message.blocks
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+}
+
+/**
+ * 按用户给的提示词生成一段记录（回顾/日记）。
+ * 素材是记忆笔记 + 最近若干条消息；用记录专用模型（默认 flash）单独发一次请求，
+ * 结果只存本地展示，不进入对话上下文。
+ */
+export const generateSessionRecord = async (
+  sessionId: string,
+  instruction: string
+): Promise<{ ok: boolean; reason?: string }> => {
+  const { apiKey, locale } = useSettings.getState()
+  const session = getSession(sessionId)
+  if (!apiKey || !session) {
+    return { ok: false, reason: 'nokey' }
+  }
+  if (getStreamController(sessionId)) {
+    return { ok: false, reason: 'busy' }
+  }
+  const persona = resolveSessionPersona(sessionId).entry
+  const notes = (session.memory?.notes ?? []).map((note) => `- ${note.text}`).join('\n')
+  const recent = getVisibleMessages(session).slice(-RECORD_SOURCE_MESSAGES)
+  const transcript = recent
+    .map((message) => `${message.role === 'user' ? '用户' : (persona ? persona.card.name : 'AI')}：${recordText(message)}`)
+    .join('\n')
+    .slice(-RECORD_SOURCE_CHARS)
+  const english = locale === 'en-US'
+  const system = [
+    persona
+      ? english
+        ? `You are roleplaying ${persona.card.name}. Stay fully in character and write in that voice.`
+        : `你现在扮演「${persona.card.name}」，用这个角色的语气和视角来写。`
+      : '',
+    english
+      ? 'You write short first-person records of past conversations for the user to keep. Be concrete, no preamble, no meta commentary.'
+      : '你要为用户写一段第一人称的回顾记录，供他留存。要具体，不要开场白，不要说明自己在做什么。',
+  ]
+    .filter(Boolean)
+    .join('\n')
+  const body: CreateMessageRequest = {
+    model: isCustomApiOrigin() ? 'deepseek-flash' : useSettings.getState().recordModel,
+    system,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          instruction.trim() ? `${english ? '[Requirement]' : '【要求】'}\n${instruction.trim()}` : '',
+          notes ? `${english ? '[Memory notes]' : '【记忆笔记】'}\n${notes}` : '',
+          `${english ? '[Recent conversation]' : '【最近对话】'}\n${transcript}`,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      },
+    ],
+    thinking: { type: 'disabled' },
+    safety_check: safetyCheck(),
+    tools: [],
+  }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 120_000)
+  try {
+    let text = ''
+    for await (const event of streamMessage(apiKey, body, controller.signal)) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        text += event.delta.text
+      }
+    }
+    const trimmed = text.trim()
+    if (trimmed === '') {
+      return { ok: false, reason: 'empty' }
+    }
+    const firstLine = trimmed.split('\n').find((line) => line.trim() !== '') ?? trimmed
+    const title = firstLine.replace(/^#+\s*/, '').slice(0, 30)
+    addSessionRecord(sessionId, title, trimmed)
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+/**
+ * 按用户的提示词，把最近的对话写成一条记忆笔记（source: summary）。
+ * 和「记录」不同：这条笔记会通过系统提示词进入上下文，等于让 AI 按你的要求记住某些内容。
+ */
+export const generateMemoryNote = async (
+  sessionId: string,
+  instruction: string
+): Promise<{ ok: boolean; reason?: string }> => {
+  const { apiKey } = useSettings.getState()
+  const session = getSession(sessionId)
+  if (!apiKey || !session) {
+    return { ok: false, reason: 'nokey' }
+  }
+  const notes = (session.memory?.notes ?? []).map((note) => `- ${note.text}`).join('\n')
+  const transcript = getVisibleMessages(session)
+    .slice(-RECORD_SOURCE_MESSAGES)
+    .map((message) => `${message.role === 'user' ? '用户' : 'AI'}：${recordText(message)}`)
+    .join('\n')
+    .slice(-RECORD_SOURCE_CHARS)
+  const body: CreateMessageRequest = {
+    model: 'deepseek-flash',
+    system:
+      '你把对话压缩成供后续对话使用的记忆笔记：只写事实、结论、偏好和待办，不写寒暄和过程。' +
+      '输出若干条短句，每行一条，不要编号以外的修饰。',
+    messages: [
+      {
+        role: 'user',
+        content: [
+          instruction.trim() ? `【整理要求】\n${instruction.trim()}` : '',
+          notes ? `【已有笔记】\n${notes}` : '',
+          `【最近的对话】\n${transcript}`,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      },
+    ],
+    thinking: { type: 'disabled' },
+    safety_check: safetyCheck(),
+    tools: [],
+  }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 120_000)
+  try {
+    let text = ''
+    for await (const event of streamMessage(apiKey, body, controller.signal)) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        text += event.delta.text
+      }
+    }
+    const trimmed = text.trim()
+    if (trimmed === '') {
+      return { ok: false, reason: 'empty' }
+    }
+    const now = Date.now()
+    const noteId = createId()
+    updateMemory(sessionId, (memory) => ({
+      ...memory,
+      notes: [...memory.notes, { id: noteId, text: trimmed, createdAt: now, source: 'summary' }],
+      updatedAt: now,
+    }))
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 /** 记录用户对整理的额外要求（最多 200 字，空字符串表示恢复默认） */
 export const setMemoryInstruction = (sessionId: string, instruction: string) => {
   const trimmed = instruction.trim().slice(0, 200)
@@ -881,25 +1092,50 @@ const runCompaction = async (
   }
   const controller = new AbortController()
   memoryControllers.set(sessionId, controller)
-  // 网络卡住时别让「整理中」永远转下去，两分钟没结果就取消
-  const timeout = setTimeout(() => controller.abort(), 120_000)
   setCompacting(sessionId, true)
   try {
-    const text = await summarizeRounds({
-      apiKey,
-      transcript: buildTranscript(candidates, locale),
-      existingNotes: (session.memory?.notes ?? []).map((note) => note.text),
-      locale,
-      signal: controller.signal,
-      instruction: session.memory?.instruction,
-    })
-    const notes = parseMemoryNotes(text)
-    if (notes.length === 0) {
-      setMemoryError(sessionId, { key: 'memoryCompactEmpty' })
-      return false
+    // 分段整理：一次请求只送一段，前一段的笔记作为下一段的「已有记忆」，
+    // 长会话不会被截断丢掉前半部分。
+    // 段大小自适应：尽量一次点击跑完全部内容，但单段不超过 MAX_SEGMENT_CHARS。
+    const total = roundsChars(candidates)
+    const budget = Math.min(
+      MAX_SEGMENT_CHARS,
+      Math.max(SEGMENT_CHARS, Math.ceil(total / MAX_COMPACT_SEGMENTS))
+    )
+    const chunks = splitRounds(candidates, budget)
+    const segments = chunks.slice(0, MAX_COMPACT_SEGMENTS)
+    const folded = segments.flat()
+    let notes = (session.memory?.notes ?? []).map((note) => note.text)
+    setCompactProgress(sessionId, { done: 0, total: segments.length })
+    for (const [index, chunk] of segments.entries()) {
+      // 段越大越慢，超时按段长度放宽，最长 10 分钟
+      const timeout = setTimeout(
+        () => controller.abort(),
+        Math.min(600_000, 120_000 + buildTranscript(chunk, locale, budget).length * 2)
+      )
+      let text: string
+      try {
+        text = await summarizeRounds({
+          apiKey,
+          transcript: buildTranscript(chunk, locale, budget),
+          existingNotes: notes,
+          locale,
+          signal: controller.signal,
+          instruction: session.memory?.instruction,
+        })
+      } finally {
+        clearTimeout(timeout)
+      }
+      const parsed = parseMemoryNotes(text)
+      if (parsed.length === 0) {
+        setMemoryError(sessionId, { key: 'memoryCompactEmpty' })
+        return false
+      }
+      notes = parsed
+      setCompactProgress(sessionId, { done: index + 1, total: segments.length })
     }
     const now = Date.now()
-    const foldedIds = candidates.map(([, reply]) => reply.id)
+    const foldedIds = folded.map(([, reply]) => reply.id)
     updateMemory(sessionId, (memory) => ({
       // 覆盖式：模型输出的就是最新一版笔记，旧笔记被整体替换
       notes: rewriteNotes(memory, notes, now),
@@ -919,8 +1155,8 @@ const runCompaction = async (
     setMemoryError(sessionId, describeCompactFailure(error))
     return false
   } finally {
-    clearTimeout(timeout)
     memoryControllers.delete(sessionId)
+    setCompactProgress(sessionId, undefined)
     setCompacting(sessionId, false)
   }
 }

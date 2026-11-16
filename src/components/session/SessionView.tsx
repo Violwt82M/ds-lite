@@ -2,12 +2,15 @@ import clsx from 'clsx'
 import { useIsMobile } from '../../app/viewport.js'
 import { useTranslate } from '../../i18n/index.js'
 import type { Session } from '../../services/chat/types.js'
+import { Button } from '../base/Button.js'
 import { ChatInput } from '../chatInput/ChatInput.js'
 import { MessageList } from '../messages/MessageList.js'
 import { ContextBanner } from '../memory/ContextBanner.js'
 import { BalanceChip } from '../balance/BalanceChip.js'
 import { ContextMeter } from '../memory/ContextMeter.js'
 import { MemoryDrawer } from '../memory/MemoryDrawer.js'
+import { RecordsPanel } from '../records/RecordsPanel.js'
+import { openRecordsPanel, useRecordsPanel } from '../records/recordsPanelState.js'
 import { MobileHeader } from './MobileHeader.js'
 import { PersonaButton } from './PersonaPicker.js'
 import styles from './SessionView.module.css'
@@ -24,6 +27,7 @@ export const SessionView = ({
 }) => {
   const t = useTranslate()
   const isMobile = useIsMobile()
+  const recordsOpen = useRecordsPanel((state) => state.open)
   const title = session.title || t('untitledChat')
   return (
     <div className={styles.view}>
@@ -36,6 +40,9 @@ export const SessionView = ({
           </div>
           <div className={styles.headerActions}>
             <BalanceChip />
+            <Button size="s" variant="outlined" onClick={openRecordsPanel}>
+              {t('recordsTitle')}
+            </Button>
             <PersonaButton sessionId={session.id} />
             <ContextMeter session={session} />
           </div>
@@ -53,6 +60,7 @@ export const SessionView = ({
         }
       />
       <MemoryDrawer session={session} />
+      {recordsOpen ? <RecordsPanel session={session} /> : null}
     </div>
   )
 }

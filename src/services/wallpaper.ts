@@ -50,9 +50,33 @@ const setObjectUrl = (blob: Blob | null) => {
   useWallpaper.setState({ customUrl: objectUrl })
 }
 
+/** 老 WebView / iOS 14 没有 createImageBitmap，退回 <img> 解码 */
+const decode = async (file: File): Promise<ImageBitmap | HTMLImageElement> => {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await createImageBitmap(file)
+    } catch {
+      // 某些格式解不开，继续走 <img>
+    }
+  }
+  return await new Promise<HTMLImageElement>((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const image = new Image()
+    image.onload = () => {
+      URL.revokeObjectURL(url)
+      resolve(image)
+    }
+    image.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('decode failed'))
+    }
+    image.src = url
+  })
+}
+
 /** 把选中的图片缩到长边 1600px 再存，避免几 MB 的原图进库 */
 const shrink = async (file: File): Promise<Blob> => {
-  const bitmap = await createImageBitmap(file)
+  const bitmap = await decode(file)
   const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height))
   const width = Math.round(bitmap.width * scale)
   const height = Math.round(bitmap.height * scale)
@@ -64,7 +88,9 @@ const shrink = async (file: File): Promise<Blob> => {
     throw new Error('canvas unavailable')
   }
   context.drawImage(bitmap, 0, 0, width, height)
-  bitmap.close()
+  if ('close' in bitmap) {
+    bitmap.close()
+  }
   return await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob === null ? reject(new Error('encode failed')) : resolve(blob)),
@@ -74,13 +100,18 @@ const shrink = async (file: File): Promise<Blob> => {
   })
 }
 
-/** 保存自定义背景图并立即切换过去 */
-export const setCustomWallpaper = async (file: File): Promise<void> => {
-  const blob = await shrink(file)
+/** 保存已经裁好的背景图（框选对话框产出） */
+export const setCustomWallpaperBlob = async (blob: Blob): Promise<void> => {
   const db = await open()
   await db.put(STORE, blob, IMAGE_KEY)
   setObjectUrl(blob)
   setWallpaper('custom')
+}
+
+/** 保存自定义背景图并立即切换过去（未裁切时用，内部会等比缩放） */
+export const setCustomWallpaper = async (file: File): Promise<void> => {
+  const blob = await shrink(file)
+  await setCustomWallpaperBlob(blob)
 }
 
 export const setWallpaper = (preset: WallpaperPreset) => {

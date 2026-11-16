@@ -48,10 +48,58 @@ const DEMAND_HEADER: Record<Locale, string> = {
 const truncate = (text: string, limit: number) =>
   text.length <= limit ? text : `${text.slice(0, limit)}…`
 
+/**
+ * 分段整理：把待折叠的轮次按字符预算切成若干段。
+ * 一段一次请求，前面的结果作为下一段的【已有记忆】传下去，
+ * 这样上百万字的会话也不会被一次性丢掉（旧实现只取最后 24k 字）。
+ */
+export const SEGMENT_CHARS = 18_000
+
+const roundChars = (round: [UserMessage, AssistantMessage]): number => {
+  const [user, reply] = round
+  const answer = reply.blocks
+    .map((block) => (block.type === 'text' ? block.text : ''))
+    .join('\n')
+    .trim()
+  return (
+    Math.min(user.content.trim().length, MAX_MESSAGE_CHARS) +
+    Math.min(answer.length, MAX_MESSAGE_CHARS)
+  )
+}
+
+/** 一轮对话在原文里的字符量（按截断规则估算） */
+export const roundsChars = (rounds: [UserMessage, AssistantMessage][]): number =>
+  rounds.reduce((sum, round) => sum + roundChars(round), 0)
+
+export const splitRounds = (
+  rounds: [UserMessage, AssistantMessage][],
+  budget: number = SEGMENT_CHARS
+): [UserMessage, AssistantMessage][][] => {
+  const chunks: [UserMessage, AssistantMessage][][] = []
+  let current: [UserMessage, AssistantMessage][] = []
+  let size = 0
+  for (const round of rounds) {
+    const next = roundChars(round)
+    // 至少塞一轮，避免一堆超长消息切出空段
+    if (current.length > 0 && size + next > budget) {
+      chunks.push(current)
+      current = []
+      size = 0
+    }
+    current.push(round)
+    size += next
+  }
+  if (current.length > 0) {
+    chunks.push(current)
+  }
+  return chunks
+}
+
 /** 把待折叠的轮次拼成整理原文：按时间顺序，单条与总量都有上限，防止整理调用本身爆上下文 */
 export const buildTranscript = (
   rounds: [UserMessage, AssistantMessage][],
-  locale: Locale
+  locale: Locale,
+  maxChars: number = MAX_TRANSCRIPT_CHARS
 ): string => {
   const lines: string[] = []
   const roundLabel = locale === 'zh-CN' ? '第 {n} 轮' : 'Round {n}'
@@ -72,9 +120,7 @@ export const buildTranscript = (
     lines.push(parts.join('\n'))
   }
   const text = lines.join('\n\n')
-  return text.length <= MAX_TRANSCRIPT_CHARS
-    ? text
-    : `…${text.slice(text.length - MAX_TRANSCRIPT_CHARS)}`
+  return text.length <= maxChars ? text : `…${text.slice(text.length - maxChars)}`
 }
 
 /** 由已有笔记与新对话整理出新的笔记列表；只读流式文本，落库由调用方负责。 */

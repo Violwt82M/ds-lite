@@ -1,7 +1,18 @@
 import { useTranslate } from '../../i18n/index.js'
+import { openSettings } from './settingsDialogState.js'
 import styles from './ApiKeyGuide.module.css'
 
 const PLATFORM_URL = 'https://platform.deepseek.com'
+/** 指向关于页的教程：这一页讲不清的（扣费、上下文、模型）都在那边 */
+const GuideLink = () => {
+  const t = useTranslate()
+  return (
+    <button type="button" className={styles.guideLink} onClick={() => openSettings('about')}>
+      {t('tutorialLinkHint')} →
+    </button>
+  )
+}
+
 const KEYS_URL = 'https://platform.deepseek.com/api_keys'
 const TOP_UP_URL = 'https://platform.deepseek.com/top_up'
 const USAGE_URL = 'https://platform.deepseek.com/usage'
@@ -61,6 +72,7 @@ export const ApiKeyGuide = () => {
         <li>{t('apiKeyGuideTrouble3')}</li>
         <li>{t('apiKeyGuideTrouble4')}</li>
       </ul>
+      <GuideLink />
     </div>
   )
 }

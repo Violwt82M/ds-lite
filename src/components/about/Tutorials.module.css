@@ -1,0 +1,105 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 16px;
+}
+
+/* 标题做成一块品牌色卡片，一眼能看到「这里有教程」 */
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid rgba(77, 107, 254, 0.28);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(77, 107, 254, 0.16), rgba(77, 107, 254, 0.05));
+}
+
+.headTitle {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+.headHint {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.item {
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.1));
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base, #fff);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.item[open] {
+  border-color: rgba(77, 107, 254, 0.4);
+  box-shadow: 0 2px 10px rgba(77, 107, 254, 0.1);
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary:hover {
+  background: rgba(77, 107, 254, 0.05);
+}
+
+.item[open] .summary {
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+}
+
+.arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(77, 107, 254, 0.12);
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+
+.item[open] .arrow {
+  transform: rotate(180deg);
+}
+
+.body {
+  padding: 0 14px 14px;
+  font-size: 13px;
+  line-height: 1.95;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+  white-space: pre-line;
+  border-top: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.07));
+  padding-top: 12px;
+  margin-top: 0;
+}
+
+.body strong {
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  font-weight: 700;
+}
