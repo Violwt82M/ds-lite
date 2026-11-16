@@ -4,11 +4,13 @@ import type { SessionIndexEntry } from './format.js'
 import { INDEX_PATH, MANIFEST_PATH, USER_PATH, parseSessionPath, sessionFilesDir } from './paths.js'
 import { checkManifest, readSessionFile, readSessionIndex } from './schema.js'
 import { toLocalSession } from './toLocal.js'
+import { findArchivePrefix, stripPrefix } from './archivePrefix.js'
 import {
   ArchiveError,
   isZipFile,
   readArchive,
   readEntry,
+  readEntryPaths,
   skipEntry,
   type ArchiveEntry,
   type EntryProgress,
@@ -61,12 +63,13 @@ export const checkArchiveFormat = async (
   onDirectory?: (done: number, total: number) => void
 ): Promise<void> => {
   if (!(await isZipFile(file))) {
-    fail('backupUnrecognized')
+    fail('backupNotZip')
   }
   try {
+    const prefix = await findArchivePrefix(file)
     for await (const entry of readArchive(file, { onDirectory })) {
-      if (entry.path !== MANIFEST_PATH) {
-        fail('backupUnrecognized')
+      if (stripPrefix(prefix, entry.path) !== MANIFEST_PATH) {
+        fail('backupNoManifest')
       }
       checkManifest(await readJson(entry))
       return
@@ -137,8 +140,17 @@ export const importArchive = async (
   const pathWorked = (path: string) =>
     pathSelected(path) && !pathOwned(path) && (!skipImages || !path.includes('_files/'))
   if (!(await isZipFile(file))) {
-    fail('backupUnrecognized')
+    fail('backupNotZip')
   }
+  // 解压后重新压缩的包会多一层文件夹：按去掉这一层后的相对路径处理
+  const prefix = await findArchivePrefix(file)
+  if (prefix === '') {
+    const hasManifest = (await readEntryPaths(file)).includes(MANIFEST_PATH)
+    if (!hasManifest) {
+      fail('backupNoManifest')
+    }
+  }
+  const rel = (path: string) => stripPrefix(prefix, path)
   const imported = new Set<string>()
   const images = new Map<string, string>()
   /** 已保存的原件：文件 ID → MIME。同一图片出现在多个会话目录时只保存一次。 */
@@ -166,12 +178,19 @@ export const importArchive = async (
       // 大图片/大附件内部也汇报进度，别让进度条看着像卡死
       onEntryProgress: onEntry,
       // 未选中的会话、以及要跳过的图片条目：不读盘、不解压，只保留元数据
-      consume: pathWorked,
+      consume: (path) => pathWorked(rel(path)),
       // 进度只按要处理的条目算：只导入一个会话时不该显示整包 1800 项
-      count: pathWorked,
+      count: (path) => pathWorked(rel(path)),
     })) {
-      const { path } = entry
+      // 目录条目、macOS 的 __MACOSX/.DS_Store、以及前缀之外的条目都不算数据
+      if (prefix !== '' && !entry.path.startsWith(prefix)) {
+        continue
+      }
+      const path = rel(entry.path)
       currentPath = path
+      if (path === '' || path.endsWith('/') || path.startsWith('__MACOSX/') || path.endsWith('.DS_Store')) {
+        continue
+      }
       if (!pathSelected(path)) {
         continue
       }
@@ -186,7 +205,8 @@ export const importArchive = async (
       const sessionId = parseSessionPath(path)
       if (!manifest) {
         if (path !== MANIFEST_PATH) {
-          fail('backupUnrecognized')
+          // 清单之前可能还有别的条目（缩略图、说明文件），跳过即可
+          continue
         }
         checkManifest(await readJson(entry))
         manifest = true

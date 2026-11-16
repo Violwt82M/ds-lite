@@ -2,6 +2,7 @@ import { BackupError, fail } from './errors.js'
 import { INDEX_PATH, MANIFEST_PATH } from './paths.js'
 import { checkManifest, readSessionIndex } from './schema.js'
 import { ArchiveError, isZipFile, readArchiveEntry } from './zipReader.js'
+import { findArchivePrefix, withPrefix } from './archivePrefix.js'
 
 /** 导入选择列表里的一条会话 */
 export type ImportSessionOption = {
@@ -28,14 +29,16 @@ const parseJson = async (blob: Blob): Promise<unknown> => {
 export const readImportSessions = async (file: File): Promise<ImportSessionOption[]> => {
   try {
     if (!(await isZipFile(file))) {
-      fail('backupUnrecognized')
+      fail('backupNotZip')
     }
-    const manifest = await readArchiveEntry(file, MANIFEST_PATH)
+    // 解压后重新压缩的包会多一层文件夹，先认出这一层
+    const prefix = await findArchivePrefix(file)
+    const manifest = await readArchiveEntry(file, withPrefix(prefix, MANIFEST_PATH))
     if (!manifest) {
-      throw new BackupError('backupUnrecognized')
+      throw new BackupError('backupNoManifest')
     }
     checkManifest(await parseJson(manifest))
-    const indexBlob = await readArchiveEntry(file, INDEX_PATH)
+    const indexBlob = await readArchiveEntry(file, withPrefix(prefix, INDEX_PATH))
     if (!indexBlob) {
       throw new BackupError('backupIncomplete')
     }

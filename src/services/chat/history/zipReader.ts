@@ -463,6 +463,10 @@ export const skipEntry = async (entry: ArchiveEntry): Promise<void> => {
  * 按路径随机读取单个条目。会话清单（chat_session_index.json）位于归档末尾，
  * 但选择界面需要在导入前就拿到清单，所以不能只靠顺序遍历。
  */
+/** 中央目录里的全部条目名：用于容忍「解压后又套了一层文件夹」的 ZIP */
+export const readEntryPaths = async (file: File): Promise<string[]> =>
+  (await readDirectory(file)).entries.map((entry) => entry.path)
+
 export const readArchiveEntry = async (file: File, path: string): Promise<Blob | null> => {
   const directory = await readDirectory(file)
   const index = directory.entries.findIndex((entry) => entry.path === path)

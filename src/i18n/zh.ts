@@ -86,6 +86,8 @@ export const zh = {
   messageThinking: '正在思考',
   backupInvalidJson: '文件不是有效的 JSON',
   backupUnrecognized: '无法识别该文件，请选择 DeepSeek 导出的历史对话 ZIP 文件',
+  backupNotZip: '这个文件不是 ZIP 压缩包——可能下载时被存成了网页，请重新下载后再选',
+  backupNoManifest: '这个 ZIP 里没有 manifest.json，不是 DeepSeek 导出的原始包（重新压缩、解压后打包都会这样）',
   backupNewerVersion: '文件版本过新，请升级后再导入',
   backupInvalidVersion: '文件版本无效，无法导入',
   backupIncomplete: '文件内容不完整，无法导入',

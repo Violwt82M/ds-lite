@@ -91,6 +91,8 @@ export const en = {
   messageThinking: 'Thinking',
   backupInvalidJson: 'The file is not valid JSON.',
   backupUnrecognized: 'File not recognized. Please choose a DeepSeek chat history ZIP.',
+  backupNotZip: 'This is not a ZIP archive - the download may have been saved as a web page. Download it again and retry.',
+  backupNoManifest: 'This ZIP has no manifest.json, so it is not the original DeepSeek export (re-zipping or re-packing breaks it)',
   backupNewerVersion: 'This file uses a newer version. Please update the app before importing.',
   backupInvalidVersion: 'The file version is invalid and cannot be imported.',
   backupIncomplete: 'The file is incomplete and cannot be imported.',
