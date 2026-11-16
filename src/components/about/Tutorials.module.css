@@ -103,3 +103,29 @@
   color: var(--dsw-alias-label-primary, #1a1a1a);
   font-weight: 700;
 }
+
+/* 更新日志：版本号 + 当前版本标记 + 条目列表 */
+.summaryText {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--dsw-alias-brand-primary, #4d6bfe);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.7;
+}
+
+.body li {
+  margin-left: 16px;
+  list-style: disc;
+}
+
+.body li + li {
+  margin-top: 4px;
+}

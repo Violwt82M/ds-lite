@@ -7,6 +7,12 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
 rmSync(join(root, 'dist'), { recursive: true, force: true });
 
+// 更新日志由 CHANGELOG.md 生成，保证关于页和仓库同一份来源
+execFileSync(process.execPath, [join(root, 'scripts/gen-changelog.mjs')], {
+  stdio: 'inherit',
+  cwd: root,
+});
+
 execFileSync(process.execPath, [join(root, 'node_modules/@rspack/cli/bin/rspack.js'), 'build', '-c', 'rspack.config.ts'], {
   stdio: 'inherit',
   cwd: root,
