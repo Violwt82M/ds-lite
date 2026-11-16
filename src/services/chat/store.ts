@@ -1080,7 +1080,7 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   const pending = new Map<string, FileAttachment>()
   // 已折叠的轮次不进入请求，它们的附件也不必再补传
   const folded = new Set(getSession(sessionId)?.memory?.foldedIds ?? [])
-  for (const [user, reply] of getContextRounds(request.history).toReversed()) {
+  for (const [user, reply] of [...getContextRounds(request.history)].reverse()) {
     if (folded.has(reply.id)) {
       continue
     }

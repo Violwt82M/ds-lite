@@ -32,4 +32,32 @@ define(String.prototype, 'at', function at(this: string, index: number) {
   return position < 0 || position >= text.length ? undefined : text[position]
 })
 
+/** Chromium 110 才有；老内核里调用会直接 TypeError（曾表现为「上传失败」） */
+define(Array.prototype, 'toReversed', function toReversed(this: unknown[]) {
+  return this.slice().reverse()
+})
+
+/** Chromium 73 才有：把键值对数组转成对象 */
+define(Object, 'fromEntries', (entries: Iterable<readonly [PropertyKey, unknown]>) => {
+  const result: Record<PropertyKey, unknown> = {}
+  for (const pair of entries as Iterable<[PropertyKey, unknown]>) {
+    result[pair[0]] = pair[1]
+  }
+  return result
+})
+
+/** Chromium 76 才有 */
+if (typeof Promise.allSettled !== 'function') {
+  define(Promise, 'allSettled', (items: Iterable<unknown>) =>
+    Promise.all(
+      Array.from(items, (item) =>
+        Promise.resolve(item).then(
+          (value) => ({ status: 'fulfilled', value }),
+          (reason) => ({ status: 'rejected', reason })
+        )
+      )
+    )
+  )
+}
+
 export {}

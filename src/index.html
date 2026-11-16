@@ -37,6 +37,12 @@
     <script>
       (function () {
         var shown = false;
+        var MIN_CHROMIUM = 70;
+        function chromiumMajor() {
+          var ua = navigator.userAgent || '';
+          var m = ua.match(/Chrom(?:e|ium)\/(\d+)/);
+          return m ? parseInt(m[1], 10) : 0;
+        }
         function show(detail) {
           if (shown || window.__dsLiteBooted) return;
           shown = true;
@@ -46,14 +52,32 @@
             el.id = 'boot-error';
             document.body.appendChild(el);
           }
-          var ua = navigator.userAgent || '';
-          var engine = (ua.match(/Chrom(?:e|ium)\/(\d+)/) || [])[1] || '未知';
+          var engine = chromiumMajor() || '未知';
           var text = String(detail || '未知错误').replace(/[<>&]/g, '');
           el.innerHTML =
             '<h1>DS Lite 没能启动</h1>' +
-            '<p>这台设备的浏览器内核是 <b>Chromium ' + engine + '</b>，低于本应用需要的版本（87 以上）。</p>' +
-            '<p>解决办法：到应用商店搜索「Android System WebView」更新到最新版，或升级系统后重试。</p>' +
-            '<p class="detail">错误信息：' + text + '</p>';
+            '<p>这台设备的浏览器内核是 <b>Chromium ' + engine + '</b>，低于本应用需要的版本（' + MIN_CHROMIUM + ' 以上）。</p>' +
+            '<p>解决办法：到应用商店搜索「Android System WebView」并更新到最新版，或升级系统后重试。</p>' +
+            '<p>更新完请<b>完全退出应用再打开</b>（不是切到后台）。</p>' +
+            '<p class="detail">错误信息：' + text + '</p>' +
+            '<p><button id="boot-retry" style="margin-top:8px;padding:8px 16px;border-radius:8px;border:1px solid #ccc;background:#f5f6f8">重新加载</button></p>';
+          var retry = document.getElementById('boot-retry');
+          if (retry) {
+            retry.onclick = function () {
+              window.location.reload();
+            };
+          }
+        }
+        // 内核明显过旧：直接给说明，不去加载注定解析失败的脚本
+        var major = chromiumMajor();
+        if (major && major < MIN_CHROMIUM) {
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () {
+              show('浏览器内核 Chromium ' + major + '，版本过低');
+            });
+          } else {
+            show('浏览器内核 Chromium ' + major + '，版本过低');
+          }
         }
         window.addEventListener('error', function (event) {
           show(event && event.message);

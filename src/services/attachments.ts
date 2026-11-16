@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { LinkedMessage, TranslationMessage } from '../i18n/index.js'
-import { uploadFile } from './api/client.js'
+import { ApiError, uploadFile } from './api/client.js'
 import { classifyApiError, getUploadErrorInfo, isRetryableApiError } from './api/errors.js'
 import type { FilePurpose } from './api/types.js'
 import { ACCEPT_FILE_EXTS } from './uploadExts.js'
@@ -61,12 +61,41 @@ export const validateFiles = (files: File[], currentCount: number): TranslationM
  * 上传失败在附件上显示的文案：与设计稿状态对应的用具体原因，其余统一「上传失败」。
  * 服务端原文多为英文且较长，不直接展示。
  */
-export const describeUploadError = (error: unknown): TranslationMessage => {
-  if (classifyApiError(error) === 'serverBusy') {
-    return { key: 'uploadServerBusy' }
+/** 服务端原文摘要：只取前 60 字，方便用户把真正原因发回来 */
+const shortReason = (error: unknown): string => {
+  const message = error instanceof ApiError ? error.message : ''
+  const text = message.replace(/\s+/g, ' ').trim()
+  if (text === '') {
+    return ''
   }
+  return text.length > 60 ? `${text.slice(0, 60)}…` : text
+}
+
+export const describeUploadError = (error: unknown): TranslationMessage => {
   if (getUploadErrorInfo(error)?.code === 'parseFailed') {
     return { key: 'uploadParseFailed' }
+  }
+  const condition = classifyApiError(error)
+  if (condition === 'tooLarge') {
+    return { key: 'uploadFileTooLarge' }
+  }
+  if (condition === 'unauthorized') {
+    return { key: 'uploadInvalidKey' }
+  }
+  if (condition === 'insufficientBalance') {
+    return { key: 'uploadNoBalance' }
+  }
+  if (condition === 'rateLimited') {
+    return { key: 'uploadRateLimited' }
+  }
+  if (condition === 'network') {
+    return { key: 'uploadNetworkFailed' }
+  }
+  if (condition === 'serverBusy') {
+    const reason = shortReason(error)
+    return reason
+      ? { key: 'uploadServerBusyReason', params: { reason } }
+      : { key: 'uploadServerBusy' }
   }
   return { key: 'uploadFileStatusFailed' }
 }

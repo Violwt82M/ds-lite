@@ -5,7 +5,7 @@ import { defineConfig } from '@rspack/cli'
 import { rspack, type Configuration } from '@rspack/core'
 
 const dev = process.env.NODE_ENV !== 'production'
-const targets = ['chrome >= 87', 'edge >= 87', 'safari >= 15', 'firefox >= 102']
+const targets = ['chrome >= 70', 'edge >= 79', 'safari >= 14', 'firefox >= 78']
 const root = path.dirname(fileURLToPath(import.meta.url))
 const { version } = JSON.parse(
   readFileSync(new URL('./package.json', import.meta.url), 'utf8')

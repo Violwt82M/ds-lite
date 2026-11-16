@@ -43,6 +43,7 @@ import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
+import { ApiOriginField } from './ApiOriginField.js'
 import { PersonaSetting } from './PersonaSetting.js'
 import { AboutPanel } from '../about/AboutPanel.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
@@ -139,6 +140,7 @@ const SettingsContent = () => {
           ) : (
             <>
               <ApiKeyField editor={apiKeyEditor} />
+              <ApiOriginField />
               <ImportHistory historyImport={historyImport} disabled={historyBusy} />
               <ExportHistory disabled={historyBusy} />
               <ExportMemory disabled={historyBusy} />
@@ -774,6 +776,18 @@ const useHistoryImport = () => {
 
 /** 导入 = 覆盖：用选中文件替换本地全部会话与附件。 */
 /** 导入教程：三步讲清「原版导出 → 下载 ZIP → 在这里上传」 */
+/** 教程里的 **重点** 渲染成红字 */
+const renderEmphasis = (text: string) =>
+  text.split('**').map((part, index) =>
+    index % 2 === 1 ? (
+      <span key={index} className={styles.guideEmphasis}>
+        {part}
+      </span>
+    ) : (
+      part
+    )
+  )
+
 const ImportGuide = ({ onClose }: { onClose: () => void }) => {
   const t = useTranslate()
   return (
@@ -789,11 +803,14 @@ const ImportGuide = ({ onClose }: { onClose: () => void }) => {
       }
     >
       <ol className={styles.guideSteps}>
-        <li>{t('historyImportGuideStep1')}</li>
-        <li>{t('historyImportGuideStep2')}</li>
-        <li>{t('historyImportGuideStep3')}</li>
+        <li>{renderEmphasis(t('historyImportGuideStep1'))}</li>
+        <li>{renderEmphasis(t('historyImportGuideStep2'))}</li>
+        <li>{renderEmphasis(t('historyImportGuideStep3'))}</li>
+        <li>{renderEmphasis(t('historyImportGuideStep4'))}</li>
+        <li>{renderEmphasis(t('historyImportGuideStep5'))}</li>
       </ol>
-      <div className={styles.guideNote}>{t('historyImportGuideNote')}</div>
+      <div className={styles.guideCaution}>{renderEmphasis(t('historyImportGuideCaution'))}</div>
+      <div className={styles.guideNote}>{renderEmphasis(t('historyImportGuideNote'))}</div>
     </Modal>
   )
 }

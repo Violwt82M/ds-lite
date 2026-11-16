@@ -552,6 +552,23 @@
   line-height: 1.6;
 }
 
+/* 教程里的**重点**：红字加粗 */
+.guideEmphasis {
+  font-weight: 600;
+  color: #d92d20;
+}
+
+/* 「别把 ZIP 发到聊天框」这类致命提醒，单独一个红框 */
+.guideCaution {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217, 45, 32, 0.35);
+  border-radius: 8px;
+  background: rgba(217, 45, 32, 0.06);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .guideNote {
   margin-top: 16px;
   font-size: 13px;
@@ -662,4 +679,47 @@
     overflow-wrap: anywhere;
     max-width: 100%;
   }
+}
+
+/* 自定义 API 地址的弹窗 */
+.apiOriginDialog {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.apiOriginBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.apiOriginInput {
+  box-sizing: border-box;
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--ds-border, rgba(128, 128, 128, 0.25));
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+
+.apiOriginHint,
+.apiOriginWarn {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.apiOriginWarn {
+  color: #b4690e;
+}
+
+.apiOriginFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
 }
