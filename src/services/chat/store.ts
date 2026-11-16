@@ -874,6 +874,8 @@ const runCompaction = async (
   }
   const controller = new AbortController()
   memoryControllers.set(sessionId, controller)
+  // 网络卡住时别让「整理中」永远转下去，两分钟没结果就取消
+  const timeout = setTimeout(() => controller.abort(), 120_000)
   setCompacting(sessionId, true)
   try {
     const text = await summarizeRounds({
@@ -912,6 +914,7 @@ const runCompaction = async (
     })
     return false
   } finally {
+    clearTimeout(timeout)
     memoryControllers.delete(sessionId)
     setCompacting(sessionId, false)
   }

@@ -50,9 +50,24 @@ const MemoryPanel = ({ session }: { session: Session }) => {
   const level = getContextLevel(usage.ratio)
   const percent = Math.min(100, Math.round(usage.ratio * 100))
 
+  // 按钮为什么不能按，直接写在旁边，别让人猜
+  const blocked = compacting
+    ? null
+    : streaming
+      ? t('memoryCompactWaitReply')
+      : !hasApiKey
+        ? t('memoryCompactNeedKey')
+        : roundCount < 1
+          ? session.messages.length > 0
+            ? t('memoryCompactNoRounds', { count: session.messages.length })
+            : t('memoryCompactEmptyChat')
+          : null
+
   const onCompact = async () => {
     const before = getFoldedRounds(session.id)
-    const ok = await compactSessionMemory(session.id, 'manual')
+    // 只有 1 轮可折叠时（常见于刚导入的老记录），保留 0 轮，别让按钮变成摆设
+    const options = roundCount < 2 ? { keep: 0 } : undefined
+    const ok = await compactSessionMemory(session.id, 'manual', options)
     if (ok) {
       showToast({
         key: 'memoryCompactDone',
@@ -219,21 +234,18 @@ const MemoryPanel = ({ session }: { session: Session }) => {
           )}
         </div>
         <div className={styles.compactRow}>
-          <Button
-            size="m"
-            disabled={compacting || streaming || !hasApiKey || foldable < 1}
-            onClick={() => void onCompact()}
-          >
+          <Button size="m" disabled={blocked !== null} onClick={() => void onCompact()}>
             {t(compacting ? 'memoryCompacting' : 'memoryCompactNow')}
           </Button>
           {compacting ? (
             <Button size="m" variant="outlined" onClick={() => cancelMemoryCompaction(session.id)}>
               {t('cancel')}
             </Button>
-          ) : foldable < 1 ? (
-            <span className={styles.hint}>{t('memoryCompactDisabled')}</span>
           ) : (
-            <span className={styles.hint}>{t('memoryCompactHint', { count: foldable })}</span>
+            <span className={styles.hint}>
+              {blocked ??
+                t('memoryCompactHint', { count: Math.max(1, foldable) })}
+            </span>
           )}
         </div>
         {error ? (
