@@ -6,9 +6,12 @@ import { ensureKatex } from './services/markdown/katex.js'
 import './app/theme.css'
 import './app/global.css'
 
-/** 网页版注册 Service Worker：第一次成功打开后即可离线启动；安卓包内（localhost）跳过 */
+/** 网页版注册 Service Worker：第一次成功打开后即可离线启动；安卓包内（localhost）和鸿蒙外壳跳过 */
 function setupOffline() {
   if (!('serviceWorker' in navigator)) {
+    return
+  }
+  if (window.__DS_LITE_PLATFORM__ === 'harmonyos') {
     return
   }
   const { hostname, protocol } = window.location
