@@ -723,3 +723,22 @@
   gap: 12px;
   width: 100%;
 }
+.wallpaperActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.troubleTitle {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.troubleList {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}

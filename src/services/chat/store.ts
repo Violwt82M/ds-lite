@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { TranslationMessage } from '../../i18n/index.js'
 import { createId } from '../../utils/id.js'
 import { ApiError, streamMessage } from '../api/client.js'
 import type { ChatModel, CreateMessageRequest } from '../api/types.js'
@@ -52,8 +53,8 @@ import {
   type UserMessage,
 } from './types.js'
 
-/** deepseek-flash 同时支持深度思考与图片输入 */
-const MODEL: ChatModel = 'deepseek-flash'
+/** 当前模型：设置里选的（默认 flash，只有它支持图片输入） */
+const currentModel = (): ChatModel => useSettings.getState().model
 /** 所有生成请求统一携带的助手身份说明 */
 const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
@@ -295,7 +296,7 @@ const createReply = (): AssistantMessage => {
     id: createId(),
     role: 'assistant',
     createdAt: Date.now(),
-    model: MODEL,
+    model: currentModel(),
     thinking,
     search,
     prefix: true,
@@ -760,7 +761,7 @@ export const continueReply = (sessionId: string, messageId: string) => {
   const reply: AssistantMessage = {
     ...previous,
     // 未记录请求配置的回复，续写时使用默认模型和当前开关。
-    model: previous.model ?? MODEL,
+    model: previous.model ?? currentModel(),
     thinking: previous.thinking ?? thinking,
     search: previous.search ?? search,
     status: 'pending',
@@ -825,6 +826,12 @@ const updateMemory = (
   persist(sessionId)
 }
 
+/** 记录用户对整理的额外要求（最多 200 字，空字符串表示恢复默认） */
+export const setMemoryInstruction = (sessionId: string, instruction: string) => {
+  const trimmed = instruction.trim().slice(0, 200)
+  updateMemory(sessionId, (memory) => ({ ...memory, instruction: trimmed === '' ? undefined : trimmed }))
+}
+
 /** 已折叠的轮数：面板在整理完成后据此算出本次折叠了多少轮 */
 export const getFoldedRounds = (sessionId: string): number =>
   getSession(sessionId)?.memory?.foldedRounds ?? 0
@@ -884,6 +891,7 @@ const runCompaction = async (
       existingNotes: (session.memory?.notes ?? []).map((note) => note.text),
       locale,
       signal: controller.signal,
+      instruction: session.memory?.instruction,
     })
     const notes = parseMemoryNotes(text)
     if (notes.length === 0) {
@@ -908,15 +916,40 @@ const runCompaction = async (
     if (controller.signal.aborted) {
       return false
     }
-    setMemoryError(sessionId, {
-      key: 'memoryCompactFailed',
-      params: { message: error instanceof Error ? error.message : String(error) },
-    })
+    setMemoryError(sessionId, describeCompactFailure(error))
     return false
   } finally {
     clearTimeout(timeout)
     memoryControllers.delete(sessionId)
     setCompacting(sessionId, false)
+  }
+}
+
+/** 整理失败时把「哪个服务、什么状态码」一起说出来，405 单独给提示 */
+const describeCompactFailure = (error: unknown): TranslationMessage => {
+  if (error instanceof ApiError) {
+    const host = error.url === undefined ? '' : safeHost(error.url)
+    if (error.status === 405) {
+      return { key: 'memoryCompactMethodNotAllowed', params: { host } }
+    }
+    if (error.status !== undefined) {
+      return {
+        key: 'memoryCompactFailedWithStatus',
+        params: { status: String(error.status), host, message: error.message },
+      }
+    }
+  }
+  return {
+    key: 'memoryCompactFailed',
+    params: { message: error instanceof Error ? error.message : String(error) },
+  }
+}
+
+const safeHost = (url: string) => {
+  try {
+    return new URL(url).host
+  } catch {
+    return url
   }
 }
 
@@ -1254,12 +1287,14 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           prepared.prefix,
           initial.thinking ?? false,
           latestReminder,
-          activeSession ? getFoldedIds(activeSession) : undefined
+          activeSession ? getFoldedIds(activeSession) : undefined,
+          // v4 pro 不支持图片：历史里的图片块直接不发（用户选择「发得出去但看不见图」）
+          initial.model === 'deepseek-v4-pro'
         )
         const events = streamMessage(
           useSettings.getState().apiKey ?? '',
           {
-            model: initial.model ?? MODEL,
+            model: initial.model ?? currentModel(),
             system: buildSystemPrompt(
               SYSTEM_PROMPT,
               renderMemorySection(activeSession?.memory, useSettings.getState().locale),
@@ -1362,6 +1397,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       ),
     }))
     persist(sessionId)
+    // 这一轮的真实花费会体现在余额里，顺手刷新一下（同一分钟内复用结果）
+    void import('../balance.js').then((module) => module.refreshBalanceIfStale())
     void maybeAutoCompactMemory(sessionId)
   }
 }

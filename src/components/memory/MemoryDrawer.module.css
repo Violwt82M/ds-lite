@@ -277,3 +277,27 @@
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+
+/* 整理要求：可选，写在这里会随会话保存 */
+.instruction {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.instructionLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+}
+
+.instructionInput {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-l1, #fff);
+  color: inherit;
+  font-size: 13px;
+}

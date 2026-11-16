@@ -1,3 +1,4 @@
+import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
 import clsx from 'clsx'
 import { useRef, useState, type ReactNode } from 'react'
 import {
@@ -28,7 +29,10 @@ import { saveFile } from '../../services/export/saveFile.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
 import {
   isChineseBrowser,
+  setFontScale,
+  FONT_SCALES,
   setLocale,
+  setModel,
   setLocation,
   setThemePreference,
   setThinkingEffort,
@@ -44,9 +48,17 @@ import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { ApiOriginField } from './ApiOriginField.js'
+import { BalanceField, ShowBalanceField } from './BalanceField.js'
 import { PersonaSetting } from './PersonaSetting.js'
 import { AboutPanel } from '../about/AboutPanel.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
+import type { ChatModel } from '../../services/api/types.js'
+import {
+  setCustomWallpaper,
+  setWallpaper,
+  useWallpaper,
+  type WallpaperPreset,
+} from '../../services/wallpaper.js'
 import styles from './Settings.module.css'
 
 /**
@@ -128,6 +140,9 @@ const SettingsContent = () => {
           {section === 'general' ? (
             <>
               <ThemeSetting />
+              <WallpaperSetting />
+              <FontScaleSetting />
+              <ModelSetting />
               <ThinkingEffortSetting />
               <LocaleSetting />
               <TtsVoiceSetting />
@@ -141,6 +156,8 @@ const SettingsContent = () => {
             <>
               <ApiKeyField editor={apiKeyEditor} />
               <ApiOriginField />
+          <BalanceField />
+          <ShowBalanceField />
               <ImportHistory historyImport={historyImport} disabled={historyBusy} />
               <ExportHistory disabled={historyBusy} />
               <ExportMemory disabled={historyBusy} />
@@ -303,6 +320,97 @@ const LocationSetting = () => {
             />
           )}
         </div>
+      }
+    />
+  )
+}
+
+/** 对话模型：flash 更快更便宜且支持图片，v4 pro 更强 */
+const ModelSetting = () => {
+  const t = useTranslate()
+  const model = useSettings((state) => state.model)
+  return (
+    <SettingCell
+      label={t('settingsModel')}
+      description={t('settingsModelHint')}
+      status={null}
+      action={
+        <Select<ChatModel>
+          ariaLabel={t('settingsModel')}
+          value={model}
+          options={[
+            { value: 'deepseek-flash', label: t('modelFlash') },
+            { value: 'deepseek-v4-pro', label: t('modelPro') },
+          ]}
+          onChange={setModel}
+        />
+      }
+    />
+  )
+}
+
+/** 聊天背景：预设或自定义图，气泡跟着变半透明 */
+const WallpaperSetting = () => {
+  const t = useTranslate()
+  const preset = useWallpaper((state) => state.preset)
+  const inputRef = useRef<HTMLInputElement>(null)
+  return (
+    <SettingCell
+      label={t('settingsWallpaper')}
+      description={t('wallpaperHint')}
+      status={null}
+      action={
+        <div className={styles.wallpaperActions}>
+          <Select<string>
+            ariaLabel={t('settingsWallpaper')}
+            value={preset}
+            options={[
+              { value: 'none', label: t('wallpaperNone') },
+              { value: 'paper', label: t('wallpaperPaper') },
+              { value: 'mist', label: t('wallpaperMist') },
+              { value: 'dusk', label: t('wallpaperDusk') },
+            ]}
+            onChange={(value) => setWallpaper(value as WallpaperPreset)}
+          />
+          <Button size="m" variant="outlined" onClick={() => inputRef.current?.click()}>
+            {t('wallpaperCustom')}
+          </Button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            style={HIDDEN_FILE_INPUT_STYLE}
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (!file) {
+                return
+              }
+              void setCustomWallpaper(file).catch(() => showToast({ key: 'wallpaperFailed' }))
+            }}
+          />
+        </div>
+      }
+    />
+  )
+}
+
+/** 界面字号：整体缩放，改一次全站生效 */
+const FontScaleSetting = () => {
+  const t = useTranslate()
+  const fontScale = useSettings((state) => state.fontScale)
+  return (
+    <SettingCell
+      label={t('settingsFontScale')}
+      description={t('settingsFontScaleHint')}
+      status={null}
+      action={
+        <Select<string>
+          ariaLabel={t('settingsFontScale')}
+          value={String(fontScale)}
+          options={FONT_SCALES.map((scale) => ({ value: String(scale), label: `${scale}%` }))}
+          onChange={(value) => setFontScale(Number(value))}
+        />
       }
     />
   )
@@ -855,7 +963,7 @@ const ImportHistory = ({
               ref={inputRef}
               type="file"
               accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream"
-              hidden
+              style={HIDDEN_FILE_INPUT_STYLE}
               onChange={(event) => {
                 const file = event.target.files?.[0]
                 event.target.value = ''

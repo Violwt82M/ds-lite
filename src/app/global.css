@@ -52,3 +52,48 @@ body.change-theme *::after {
     overscroll-behavior-y: none;
   }
 }
+
+/*
+ * 聊天背景：.wallpaper-layer 固定铺满、垫在页面内容之下（内容都在定位容器里，
+ * DOM 顺序排在它后面，所以自然盖在上面）。自定义图用 --ds-wallpaper-image 注入。
+ */
+.wallpaper-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+body[data-wallpaper='paper'] .wallpaper-layer {
+  background-image: linear-gradient(180deg, #f7f3ea 0%, #efe8da 100%);
+}
+
+body[data-wallpaper='mist'] .wallpaper-layer {
+  background-image: linear-gradient(160deg, #e8f1fb 0%, #d7e6f7 55%, #cfe0f2 100%);
+}
+
+body[data-wallpaper='dusk'] .wallpaper-layer {
+  background-image: linear-gradient(180deg, #2a2f45 0%, #3a3050 60%, #4a3a55 100%);
+}
+
+body[data-wallpaper='custom'] .wallpaper-layer {
+  background-image: var(--ds-wallpaper-image, none);
+}
+
+/* 有背景时气泡改成半透明，让底色透出来一点，不然像贴了两块白纸 */
+body[data-wallpaper]:not([data-wallpaper='none']) {
+  --dsw-specific-bubble: rgba(219, 239, 255, 0.82);
+}
+
+body[data-wallpaper]:not([data-wallpaper='none']).dark {
+  --dsw-specific-bubble: rgba(48, 66, 86, 0.78);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  body[data-wallpaper]:not([data-wallpaper='none']) {
+    --dsw-specific-bubble: var(--dsw-alias-bg-base);
+  }
+}

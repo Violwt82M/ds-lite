@@ -5,6 +5,7 @@ import type { Session } from '../../services/chat/types.js'
 import { ChatInput } from '../chatInput/ChatInput.js'
 import { MessageList } from '../messages/MessageList.js'
 import { ContextBanner } from '../memory/ContextBanner.js'
+import { BalanceChip } from '../balance/BalanceChip.js'
 import { ContextMeter } from '../memory/ContextMeter.js'
 import { MemoryDrawer } from '../memory/MemoryDrawer.js'
 import { MobileHeader } from './MobileHeader.js'
@@ -34,6 +35,7 @@ export const SessionView = ({
             {title}
           </div>
           <div className={styles.headerActions}>
+            <BalanceChip />
             <PersonaButton sessionId={session.id} />
             <ContextMeter session={session} />
           </div>

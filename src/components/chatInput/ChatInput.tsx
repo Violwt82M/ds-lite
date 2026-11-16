@@ -1,3 +1,4 @@
+import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
 import clsx from 'clsx'
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -175,9 +176,21 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     return () => observer.disconnect()
   }, [t])
 
-  const acceptFiles = (files: File[]) => {
-    if (files.length === 0 || useChatStore.getState().importingHistory || !ensureApiKey()) {
+  const acceptFiles = (picked: File[]) => {
+    if (picked.length === 0 || useChatStore.getState().importingHistory || !ensureApiKey()) {
       return
+    }
+    // v4 pro 不支持图片输入：选图时直接拦下，别等发送失败
+    let files = picked
+    if (useSettings.getState().model === 'deepseek-v4-pro') {
+      const images = picked.filter((file) => file.type.startsWith('image/'))
+      if (images.length > 0) {
+        showToast({ key: 'modelProNoImage' })
+        files = picked.filter((file) => !file.type.startsWith('image/'))
+        if (files.length === 0) {
+          return
+        }
+      }
     }
     const error = addDraftFiles(sessionId, files, useSettings.getState().apiKey ?? '')
     if (error) {
@@ -422,7 +435,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             ref={fileInputRef}
             type="file"
             multiple
-            hidden
+            style={HIDDEN_FILE_INPUT_STYLE}
             accept={ACCEPT}
             onChange={(event) => {
               acceptFiles(Array.from(event.target.files ?? []))

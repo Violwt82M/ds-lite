@@ -201,9 +201,12 @@ const isUsableReply = (message: Message): message is AssistantMessage =>
   !message.blocks.some((block) => block.type === 'text' && block.isTemplate) &&
   getReplyText(message) !== ''
 
-/** 有文件时用内容块数组：先文件后文本，文件按 Files API 的 file_id 引用 */
-const toUserParam = ({ content, files }: UserMessage): MessageParam => {
-  const blocks = toFileBlocks(files)
+/**
+ * 有文件时用内容块数组：先文件后文本，文件按 Files API 的 file_id 引用。
+ * textOnly（v4 pro）时丢掉图片块：该模型不支持图像理解，带图会被服务端整轮拒绝。
+ */
+const toUserParam = ({ content, files }: UserMessage, textOnly = false): MessageParam => {
+  const blocks = toFileBlocks(textOnly ? files.filter((file) => !file.isImage) : files)
   return blocks.length === 0
     ? { role: 'user', content }
     : {
@@ -307,7 +310,9 @@ export const toRequestMessages = (
   thinking = prefix?.thinking ?? false,
   latestReminder?: string,
   /** 已折叠进记忆的回答消息 id：原文仍在本机，但不再进入请求上下文 */
-  folded?: ReadonlySet<string>
+  folded?: ReadonlySet<string>,
+  /** 只发文字附件（v4 pro 不支持图片） */
+  textOnly = false
 ): MessageParam[] => {
   const messages: MessageParam[] = []
   let previousReminder: string | undefined
@@ -323,14 +328,14 @@ export const toRequestMessages = (
       continue
     }
     // 历史提问没有文字、附件也都没有 serverId 时，提问为空，连同回答一起省略。
-    if (!user.content && toFileBlocks(user.files).length === 0) {
+    if (!user.content && toFileBlocks(textOnly ? user.files.filter((f) => !f.isImage) : user.files).length === 0) {
       continue
     }
     appendReminder(reply.latestReminder)
-    messages.push(toUserParam(user), toAssistantParam(reply))
+    messages.push(toUserParam(user, textOnly), toAssistantParam(reply))
   }
   appendReminder(latestReminder)
-  messages.push(toUserParam(question))
+  messages.push(toUserParam(question, textOnly))
   if (prefix?.prefix) {
     const assistant = toAssistantParam(prefix, true, thinking)
     // 没有非空白正文或有效思考时直接重发原问题，避免服务端拒绝空 Prefill。

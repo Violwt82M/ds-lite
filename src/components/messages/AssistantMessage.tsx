@@ -6,9 +6,7 @@ import { describeReply } from '../../services/chat/describe.js'
 import { canContinueReply } from '../../services/chat/reply.js'
 import { continueReply, regenerateReply } from '../../services/chat/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
-import type { ChatModel, MessageUsage } from '../../services/api/types.js'
 import type { AssistantMessage as AssistantMessageType } from '../../services/chat/types.js'
-import { estimateCost, formatUsageLine, readUsage } from '../../services/usage.js'
 
 import { openSettings } from '../settings/settingsDialogState.js'
 import { IconButton } from '../base/IconButton.js'
@@ -152,9 +150,7 @@ export const AssistantMessage = memo(function AssistantMessage({
       ) : null}
       {streaming ? null : (
         <div className={styles.bottom}>
-          {message.usage ? (
-            <UsageChip model={message.model} usage={message.usage} createdAt={message.createdAt} />
-          ) : null}
+
           <BranchSwitcher versions={versions} disabled={busy} onSelect={onSelectVersion} />
           <div className={clsx(styles.actions, isLast && styles.alwaysShow)}>
             {copyText ? <CopyButton text={copyText} /> : null}
@@ -193,22 +189,4 @@ export const AssistantMessage = memo(function AssistantMessage({
 })
 
 /** 本轮 token 用量与按官方峰谷价估算的费用；拿不到用量时不渲染 */
-const UsageChip = ({
-  model,
-  usage,
-  createdAt,
-}: {
-  model: ChatModel | null
-  usage: MessageUsage
-  createdAt: number
-}) => {
-  const parsed = readUsage(usage)
-  if (!parsed || parsed.inputTokens + parsed.outputTokens === 0) {
-    return null
-  }
-  return (
-    <span className={styles.usage}>
-      {formatUsageLine(parsed, estimateCost(model ?? 'deepseek-flash', parsed, createdAt))}
-    </span>
-  )
-}
+

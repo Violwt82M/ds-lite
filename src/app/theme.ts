@@ -60,9 +60,20 @@ const syncTheme = () => {
   }
 }
 
+/**
+ * 字号缩放：整页缩放而不是改每个 font-size，改动小、覆盖全。
+ * 用 body 上的 zoom（Chromium/WebKit 都支持），弹窗也挂在 body 下，一起缩放。
+ */
+const syncFontScale = () => {
+  const scale = useSettings.getState().fontScale
+  document.body.style.zoom = scale === 100 ? '' : String(scale / 100)
+}
+
 /** 首屏渲染前同步应用一次，之后随主题设置与系统深浅色变化更新 */
 export const setupTheme = () => {
   syncTheme()
+  syncFontScale()
+  useSettings.subscribe(syncFontScale)
   if (document.readyState !== 'complete') {
     window.addEventListener('load', syncPageBackground, { once: true })
   }

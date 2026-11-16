@@ -1,3 +1,4 @@
+import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
 import clsx from 'clsx'
 import { useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
@@ -132,7 +133,7 @@ export const PersonaSetting = () => {
               ref={inputRef}
               type="file"
               accept=".png,.json,image/png,application/json"
-              hidden
+              style={HIDDEN_FILE_INPUT_STYLE}
               onChange={(event) => {
                 const file = event.target.files?.[0]
                 event.target.value = ''

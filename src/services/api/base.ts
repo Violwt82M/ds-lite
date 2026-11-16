@@ -47,3 +47,25 @@ export const setApiOrigin = (value: string | null) => {
 }
 
 export const isCustomApiOrigin = () => getApiOrigin() !== OFFICIAL_API_ORIGIN
+
+/**
+ * 把用户填的地址拼成具体接口地址。
+ * 有人会把完整接口贴进来（`https://x.com/anthropic/v1` 甚至 `.../messages`），
+ * 直接再拼一遍就会变成 `/messages/anthropic/v1/messages`，服务端只会回 404/405。
+ */
+export const apiUrl = (path: string): string => {
+  let root = getApiOrigin()
+  for (const suffix of ['/messages', '/models']) {
+    if (root.endsWith(suffix)) {
+      root = root.slice(0, -suffix.length)
+    }
+  }
+  if (root.endsWith('/anthropic/v1')) {
+    // 已经到接口根，只补 /messages 这类尾巴
+    return `${root}${path.replace(/^\/anthropic\/v1/, '')}`
+  }
+  if (root.endsWith('/anthropic')) {
+    return `${root}/v1${path.replace(/^\/anthropic\/v1/, '')}`
+  }
+  return `${root}${path}`
+}

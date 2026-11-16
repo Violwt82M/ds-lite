@@ -125,6 +125,8 @@ export type SessionMemory = {
   foldedIds: string[]
   /** 已折叠的轮次数，仅用于展示 */
   foldedRounds: number
+  /** 用户对整理提出的自定义要求（例如「只留技术细节」），随会话保存 */
+  instruction?: string
   updatedAt: number
 }
 

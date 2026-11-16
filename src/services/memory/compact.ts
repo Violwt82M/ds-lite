@@ -40,6 +40,10 @@ const TRANSCRIPT_HEADER: Record<Locale, string> = {
   'en-US': '[Conversation to condense]',
 }
 const NONE_NOTE: Record<Locale, string> = { 'zh-CN': '（无）', 'en-US': '(none)' }
+const DEMAND_HEADER: Record<Locale, string> = {
+  'zh-CN': '【用户的整理要求】',
+  'en-US': '[What the user asked you to keep]',
+}
 
 const truncate = (text: string, limit: number) =>
   text.length <= limit ? text : `${text.slice(0, limit)}…`
@@ -80,12 +84,15 @@ export const summarizeRounds = async ({
   existingNotes,
   locale,
   signal,
+  instruction,
 }: {
   apiKey: string
   transcript: string
   existingNotes: string[]
   locale: Locale
   signal: AbortSignal
+  /** 用户对本次整理的自定义要求，空则按默认规则 */
+  instruction?: string
 }): Promise<string> => {
   const header = existingNotes.length
     ? `${LIST_HEADERS[locale]}\n${existingNotes.map((note) => `- ${note}`).join('\n')}`
@@ -98,7 +105,7 @@ export const summarizeRounds = async ({
       messages: [
         {
           role: 'user',
-          content: `${header}\n\n${TRANSCRIPT_HEADER[locale]}\n${transcript}`,
+          content: `${header}${instruction ? `\n\n${DEMAND_HEADER[locale]}\n${instruction}` : ''}\n\n${TRANSCRIPT_HEADER[locale]}\n${transcript}`,
         },
       ],
       // 整理不需要思考，关掉省钱也更快

@@ -1,5 +1,5 @@
 import { translate, type TranslationMessage } from '../../i18n/index.js'
-import { getApiOrigin, OFFICIAL_API_ORIGIN } from './base.js'
+import { apiUrl, OFFICIAL_API_ORIGIN } from './base.js'
 import { readMessageEvent } from './parseEvent.js'
 import { readServerSentEvents } from './sse.js'
 import type {
@@ -13,7 +13,7 @@ import type {
 /** 官方 API 地址，默认 https://api.deepseek.com；用户可在设置里换自定义地址 */
 export const API_ORIGIN = OFFICIAL_API_ORIGIN
 /** Anthropic 兼容接口的前缀（随自定义地址实时变化） */
-const anthropicBase = () => `${getApiOrigin()}/anthropic/v1`
+const anthropicBase = () => apiUrl('/anthropic/v1')
 /** 引用 Files API 上传的图片、调用 Anthropic 兼容 Files API 时必须携带 */
 const FILES_BETA = 'files-api-2025-04-14'
 
@@ -35,7 +35,9 @@ export class ApiError extends Error {
   constructor(
     readonly kind: ApiErrorKind,
     message: string | TranslationMessage,
-    readonly status?: number
+    readonly status?: number,
+    /** 出错的请求地址：排查「405 / 打到了别的服务」时靠它定位 */
+    readonly url?: string
   ) {
     super(typeof message === 'string' ? message : translate(message.key, message.params))
     this.name = 'ApiError'
@@ -52,7 +54,8 @@ const isErrorBody = (value: unknown): value is ApiErrorBody =>
 const readErrorResponse = async (
   response: Response,
   kind: 'http' | 'protocol' = 'http',
-  fallback = response.statusText
+  fallback = response.statusText,
+  url?: string
 ): Promise<ApiError> => {
   const text = await response.text().catch(() => '')
   let message = text || fallback
@@ -60,11 +63,14 @@ const readErrorResponse = async (
     const body: unknown = JSON.parse(text)
     if (isErrorBody(body)) {
       message = body.error.message
+    } else if (typeof (body as { detail?: unknown }).detail === 'string') {
+      // FastAPI 风格 { detail: "..." }：第三方兼容服务很常见，也要能读出来
+      message = (body as { detail: string }).detail
     }
   } catch {
     // 非 JSON 响应体直接展示原文
   }
-  return new ApiError(kind, message, response.status)
+  return new ApiError(kind, message, response.status, url)
 }
 
 export const request = async (url: string, init: RequestInit): Promise<Response> => {
@@ -78,7 +84,7 @@ export const request = async (url: string, init: RequestInit): Promise<Response>
     throw new ApiError('network', error instanceof Error ? error.message : String(error))
   }
   if (!response.ok) {
-    throw await readErrorResponse(response)
+    throw await readErrorResponse(response, 'http', response.statusText, url)
   }
   return response
 }
@@ -92,11 +98,64 @@ const anthropicHeaders = (apiKey: string, beta: boolean): Record<string, string>
 
 /** 用 GET /models 校验 API Key（不产生费用） */
 export const verifyApiKey = async (apiKey: string, signal?: AbortSignal): Promise<void> => {
-  await request(`${getApiOrigin()}/models`, {
+  await request(apiUrl('/models'), {
     method: 'GET',
     headers: { Authorization: `Bearer ${apiKey}` },
     signal,
   })
+}
+
+/** 余额里的一个币种条目（官方返回的是字符串金额） */
+export type BalanceInfo = {
+  currency: string
+  /** 总余额 */
+  total: string
+  /** 赠送部分 */
+  granted: string
+  /** 充值部分 */
+  toppedUp: string
+}
+
+export type BalanceResult = {
+  /** 账户是否可用：余额不足时官方返回 false */
+  available: boolean
+  infos: BalanceInfo[]
+}
+
+/**
+ * GET /user/balance：查真实余额（官方按次免费，不消耗 token）。
+ * 第三方兼容服务可能没实现这个接口，调用方要把失败当成「查不到」而不是致命错误。
+ */
+export const fetchBalance = async (
+  apiKey: string,
+  signal?: AbortSignal
+): Promise<BalanceResult> => {
+  const response = await request(apiUrl('/user/balance'), {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${apiKey}` },
+    signal,
+  })
+  const body: unknown = await response.json()
+  const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {}
+  const list = Array.isArray(record.balance_infos) ? record.balance_infos : []
+  const text = (value: unknown) => (typeof value === 'string' ? value : String(value ?? ''))
+  return {
+    available: record.is_available !== false,
+    infos: list.flatMap((item): BalanceInfo[] => {
+      if (typeof item !== 'object' || item === null) {
+        return []
+      }
+      const entry = item as Record<string, unknown>
+      return [
+        {
+          currency: text(entry.currency) || 'CNY',
+          total: text(entry.total_balance),
+          granted: text(entry.granted_balance),
+          toppedUp: text(entry.topped_up_balance),
+        },
+      ]
+    }),
+  }
 }
 
 /**
@@ -159,7 +218,7 @@ export async function* streamMessage(
   })
   const contentType = response.headers.get('Content-Type') ?? ''
   if (!response.body || !contentType.includes('text/event-stream')) {
-    throw await readErrorResponse(response, 'protocol', '')
+    throw await readErrorResponse(response, 'protocol', '', `${anthropicBase()}/messages`)
   }
   for await (const { event: eventName, data } of readServerSentEvents(response.body, signal)) {
     let payload: unknown

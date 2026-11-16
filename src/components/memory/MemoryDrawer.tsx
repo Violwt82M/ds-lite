@@ -8,6 +8,7 @@ import {
   getFoldedRounds,
   removeMemoryNote,
   saveMemoryNote,
+  setMemoryInstruction,
   useChatStore,
 } from '../../services/chat/store.js'
 import type { Session } from '../../services/chat/types.js'
@@ -45,6 +46,7 @@ const MemoryPanel = ({ session }: { session: Session }) => {
   // 手动整理保留最近 1 轮原文，其余折叠成笔记
   const foldable = Math.max(0, roundCount - 1)
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null)
+  const [instruction, setInstruction] = useState(session.memory?.instruction ?? '')
   const [confirmClear, setConfirmClear] = useState(false)
   const [confirmDisableAuto, setConfirmDisableAuto] = useState(false)
   const level = getContextLevel(usage.ratio)
@@ -232,6 +234,19 @@ const MemoryPanel = ({ session }: { session: Session }) => {
               {t(autoMemory ? 'personaTurnOff' : 'personaTurnOn')}
             </Button>
           )}
+        </div>
+        <div className={styles.instruction}>
+          <div className={styles.instructionLabel}>{t('memoryInstructionLabel')}</div>
+          <input
+            className={styles.instructionInput}
+            type="text"
+            maxLength={200}
+            placeholder={t('memoryInstructionPlaceholder')}
+            value={instruction}
+            onChange={(event) => setInstruction(event.target.value)}
+            onBlur={() => setMemoryInstruction(session.id, instruction)}
+          />
+          <div className={styles.hint}>{t('memoryInstructionHint')}</div>
         </div>
         <div className={styles.compactRow}>
           <Button size="m" disabled={blocked !== null} onClick={() => void onCompact()}>

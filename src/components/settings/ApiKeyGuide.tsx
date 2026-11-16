@@ -54,6 +54,13 @@ export const ApiKeyGuide = () => {
         </a>
       </p>
       <p className={styles.tip}>{t('apiKeyGuideTip')}</p>
+      <p className={styles.troubleTitle}>{t('apiKeyGuideTroubleTitle')}</p>
+      <ul className={styles.troubleList}>
+        <li>{t('apiKeyGuideTrouble1')}</li>
+        <li>{t('apiKeyGuideTrouble2')}</li>
+        <li>{t('apiKeyGuideTrouble3')}</li>
+        <li>{t('apiKeyGuideTrouble4')}</li>
+      </ul>
     </div>
   )
 }

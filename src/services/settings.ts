@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { ChatModel } from './api/types.js'
 import type { TtsVoice } from './api/speech.js'
 import { normalizeLocation, type UserLocation } from './location.js'
 
@@ -32,7 +33,16 @@ type Settings = {
   siderCollapsed: boolean
   /** 上下文变长后自动整理成记忆笔记（会产生一次极小的额外调用费用） */
   autoMemory: boolean
+  /** 顶栏显示账户余额（默认开，可在设置里关掉） */
+  showBalance: boolean
+  /** 对话用的模型；v4 pro 更强但不支持图片理解 */
+  model: ChatModel
+  /** 界面字号百分比：90 / 100 / 110 / 120 / 130 */
+  fontScale: number
 }
+
+/** 允许的字号档位（百分比） */
+export const FONT_SCALES: readonly number[] = [90, 100, 110, 120, 130]
 
 const KEYS = {
   apiKey: 'chat-demo:api-key',
@@ -46,6 +56,9 @@ const KEYS = {
   siderCollapsed: 'chat-demo:sider-collapsed',
   safety: 'chat-demo:safety',
   autoMemory: 'chat-demo:auto-memory',
+  showBalance: 'chat-demo:show-balance',
+  model: 'chat-demo:model',
+  fontScale: 'chat-demo:font-scale',
 } as const
 
 const read = (key: string) => {
@@ -123,6 +136,14 @@ export const useSettings = create<Settings>(() => ({
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
   // 默认开启：长对话自动整理，避免上下文越滚越大
   autoMemory: read(KEYS.autoMemory) !== 'false',
+  // 默认开启：顶栏显示余额，嫌碍眼可以关
+  showBalance: read(KEYS.showBalance) !== 'false',
+  fontScale: (() => {
+    const saved = Number(read(KEYS.fontScale))
+    return FONT_SCALES.includes(saved) ? saved : 100
+  })(),
+  // 默认 flash：更快更便宜，而且支持图片
+  model: read(KEYS.model) === 'deepseek-v4-pro' ? 'deepseek-v4-pro' : 'deepseek-flash',
 }))
 
 export const setLocale = (locale: Locale) => {
@@ -179,4 +200,20 @@ export const setSiderCollapsed = (siderCollapsed: boolean) => {
 export const setAutoMemory = (autoMemory: boolean) => {
   write(KEYS.autoMemory, String(autoMemory))
   useSettings.setState({ autoMemory })
+}
+
+export const setShowBalance = (showBalance: boolean) => {
+  write(KEYS.showBalance, String(showBalance))
+  useSettings.setState({ showBalance })
+}
+
+export const setModel = (model: ChatModel) => {
+  write(KEYS.model, model)
+  useSettings.setState({ model })
+}
+
+export const setFontScale = (fontScale: number) => {
+  const next = FONT_SCALES.includes(fontScale) ? fontScale : 100
+  write(KEYS.fontScale, String(next))
+  useSettings.setState({ fontScale: next })
 }

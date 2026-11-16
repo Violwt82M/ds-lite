@@ -22,6 +22,7 @@ import { useDisclaimer } from '../components/about/disclaimerState.js'
 import { Toast } from '../components/base/Toast.js'
 import { showToast } from '../components/base/toastState.js'
 import { onUploadNotice } from '../services/attachments.js'
+import { setupWallpaper } from '../services/wallpaper.js'
 import { Button } from '../components/base/Button.js'
 import { stopReadAloud } from '../services/speech/readAloud.js'
 import { CollapsedSider } from '../components/sider/CollapsedSider.js'
@@ -70,6 +71,9 @@ export const App = () => {
   // 移动端选中会话、切换布局后收起抽屉
   useEffect(closeMobileSider, [activeId, isMobile])
 
+  // 背景图：预设走 CSS，自定义图从 IndexedDB 读回来
+  useEffect(setupWallpaper, [])
+
   useEffect(() => {
     void initChat()
     // 首次打开先让用户看完免责声明，确认后再引导填 API Key，避免两个弹窗叠在一起
@@ -80,6 +84,7 @@ export const App = () => {
 
   return (
     <>
+      <div className="wallpaper-layer" aria-hidden />
       <div ref={frameRef} className={styles.frame}>
         {isMobile ? <MobileSider /> : siderCollapsed ? null : <Sider />}
         <main className={styles.main}>

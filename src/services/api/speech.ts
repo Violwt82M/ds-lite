@@ -1,4 +1,4 @@
-import { getApiOrigin } from './base.js'
+import { apiUrl } from './base.js'
 import { ApiError, request } from './client.js'
 
 /**
@@ -7,7 +7,7 @@ import { ApiError, request } from './client.js'
  * - TTS：POST /v1/tools/tts，返回音频字节流（产出首帧后即返回 200）
  * 鉴权都用 Authorization: Bearer。
  */
-const toolsBase = () => `${getApiOrigin()}/v1/tools`
+const toolsBase = () => apiUrl('/v1/tools')
 
 export type TtsVoice = 'stella' | 'tide'
 

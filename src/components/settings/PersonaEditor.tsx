@@ -1,3 +1,4 @@
+import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
 import { useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { cardToJsonText, emptyCard, type PersonaCard } from '../../services/persona/card.js'
@@ -133,7 +134,7 @@ export const PersonaEditor = ({
             ref={avatarInputRef}
             type="file"
             accept="image/*"
-            hidden
+            style={HIDDEN_FILE_INPUT_STYLE}
             onChange={(event) => {
               const file = event.target.files?.[0]
               event.target.value = ''
