@@ -6,7 +6,7 @@
   position: fixed;
   z-index: 2000;
   box-sizing: border-box;
-  max-width: calc(100vw - 28px);
+  max-width: calc(var(--app-vw) - 28px);
   padding: 4px 8px;
   border-radius: 10px;
   background-color: var(--dsw-alias-tooltip-bg);

@@ -66,7 +66,10 @@ const syncTheme = () => {
  */
 const syncFontScale = () => {
   const scale = useSettings.getState().fontScale
-  document.body.style.zoom = scale === 100 ? '' : String(scale / 100)
+  const zoom = scale === 100 ? 1 : scale / 100
+  // 视口单位（vh/vw）不会跟着 zoom 变，把比例挂到根节点上给 CSS 换算用
+  document.documentElement.style.setProperty('--app-zoom', String(zoom))
+  document.body.style.zoom = zoom === 1 ? '' : String(zoom)
 }
 
 /** 首屏渲染前同步应用一次，之后随主题设置与系统深浅色变化更新 */

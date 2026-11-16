@@ -22,7 +22,7 @@ import {
 } from '../../services/memory/context.js'
 import { closeMemoryPanel, useMemoryPanel } from '../../services/memory/state.js'
 import { saveFile } from '../../services/export/saveFile.js'
-import { setAutoMemory, useSettings } from '../../services/settings.js'
+import { setAutoMemory, setMemoryMode, useSettings } from '../../services/settings.js'
 import { Button } from '../base/Button.js'
 import { IconEditOutline16, IconNotebookOutline16, IconTrashOutline16 } from '../base/icons.js'
 import { Modal } from '../base/Modal.js'
@@ -43,6 +43,7 @@ const MemoryPanel = ({ session }: { session: Session }) => {
   const error = useMemoryPanel((state) => state.errors[session.id])
   const autoMemory = useSettings((state) => state.autoMemory)
   const hasApiKey = useSettings((state) => Boolean(state.apiKey))
+  const memoryMode = useSettings((state) => state.memoryMode)
   const streaming = useChatStore((state) => Boolean(state.streaming[session.id]))
   const notes = session.memory?.notes ?? []
   const roundCount = getUnfoldedRounds(session).length
@@ -256,6 +257,28 @@ const MemoryPanel = ({ session }: { session: Session }) => {
           />
           <div className={styles.hint}>{t('memoryInstructionHint')}</div>
         </div>
+        <div className={styles.modeRow}>
+          <span className={styles.modeLabel}>{t('memoryModeLabel')}</span>
+          <div className={styles.modeGroup}>
+            {(
+              [
+                ['auto', 'memoryModeAuto'],
+                ['rp', 'memoryModeRp'],
+                ['plain', 'memoryModePlain'],
+              ] as const
+            ).map(([value, key]) => (
+              <button
+                key={value}
+                type="button"
+                className={memoryMode === value ? styles.modeActive : styles.mode}
+                onClick={() => setMemoryMode(value)}
+              >
+                {t(key)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className={styles.hint}>{t('memoryModeHint')}</div>
         <div className={styles.compactRow}>
           <Button size="m" disabled={blocked !== null} onClick={() => void onCompact()}>
             {compacting && progress
@@ -276,6 +299,7 @@ const MemoryPanel = ({ session }: { session: Session }) => {
         {error ? (
           <div className={styles.error}>{t(error.key, error.params)}</div>
         ) : null}
+        <div className={styles.hint}>{t('memoryCompactKeeps')}</div>
       </div>
 
         <div className={styles.summaryCard}>
@@ -359,7 +383,7 @@ const MemoryPanel = ({ session }: { session: Session }) => {
                   <textarea
                     className={styles.textarea}
                     value={editing.text}
-                    rows={3}
+                    rows={12}
                     autoFocus
                     placeholder={t('memoryNotePlaceholder')}
                     onChange={(event) => setEditing({ id: note.id, text: event.target.value })}

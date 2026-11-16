@@ -947,7 +947,7 @@ const useHistoryImport = () => {
   }
 }
 
-/** 导入 = 覆盖：用选中文件替换本地全部会话与附件。 */
+/** 导入 = 追加：本机没有的会话加进来，本机已有的跳过，不覆盖本机记录。 */
 /** 导入教程：三步讲清「原版导出 → 下载 ZIP → 在这里上传」 */
 /** 教程里的 **重点** 渲染成红字 */
 const renderEmphasis = (text: string) =>
@@ -1040,6 +1040,7 @@ const ImportHistory = ({
           </>
         }
       />
+      <div className={styles.importShareTip}>{renderEmphasis(t('historyImportShareTip'))}</div>
       {guideOpen ? <ImportGuide onClose={() => setGuideOpen(false)} /> : null}
     </>
   )

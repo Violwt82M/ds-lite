@@ -68,11 +68,13 @@ export const useMobileViewport = (enabled: boolean) => {
         reset()
         return
       }
+      // 字号缩放用 body zoom 实现，视口读数是缩放前的值，这里按比例换算回去
+      const zoom = Number(getComputedStyle(document.documentElement).getPropertyValue('--app-zoom')) || 1
       frame.style.setProperty(
         '--app-viewport-height',
-        `${viewport?.height ?? window.innerHeight}px`
+        `${(viewport?.height ?? window.innerHeight) / zoom}px`
       )
-      frame.style.setProperty('--app-viewport-top', `${viewport?.offsetTop ?? 0}px`)
+      frame.style.setProperty('--app-viewport-top', `${(viewport?.offsetTop ?? 0) / zoom}px`)
     }
     const scheduleFrame = () => {
       cancelAnimationFrame(animationFrame)

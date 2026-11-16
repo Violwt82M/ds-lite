@@ -1,13 +1,13 @@
 /* 记忆面板：上下文占用 + 自动整理开关 + 笔记列表 */
 .dialog {
-  width: min(560px, calc(100vw - 32px));
+  width: min(560px, calc(var(--app-vw) - 32px));
 }
 
 .main {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-height: min(62vh, 560px);
+  max-height: min(calc(var(--app-vh) * 62 / 100), 560px);
   overflow-y: auto;
 }
 
@@ -254,6 +254,7 @@
 
 .textarea {
   width: 100%;
+  min-height: 280px;
   padding: 6px 8px;
   border: 1px solid var(--ds-border, rgba(128, 128, 128, 0.25));
   border-radius: 8px;
@@ -441,4 +442,51 @@
   color: var(--dsw-alias-brand-primary, #4d6bfe);
   font-size: 12px;
   cursor: pointer;
+}
+
+
+/* 笔记编辑：整块可拉伸，不用一行行滚 */
+.noteEdit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+
+/* 整理模式：三档小按钮 */
+.modeRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.modeLabel {
+  font-size: 13px;
+  color: var(--dsw-alias-label-secondary, #666);
+  flex: none;
+}
+
+.modeGroup {
+  display: flex;
+  gap: 6px;
+}
+
+.mode,
+.modeActive {
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ds-border, rgba(128, 128, 128, 0.3));
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #666);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.modeActive {
+  border-color: var(--dsw-alias-brand-primary, #4d6bfe);
+  background: rgba(77, 107, 254, 0.12);
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+  font-weight: 600;
 }

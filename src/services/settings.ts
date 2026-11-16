@@ -39,9 +39,14 @@ type Settings = {
   model: ChatModel
   /** 界面字号百分比：90 / 100 / 110 / 120 / 130 */
   fontScale: number
+  /** 记忆整理模式：自动判断 / 强制角色扮演 / 强制普通对话 */
+  memoryMode: MemoryMode
   /** 生成「记录」用的模型（默认 flash，花钱少） */
   recordModel: ChatModel
 }
+
+/** 记忆整理模式：auto 让模型自己判断对话类型 */
+export type MemoryMode = 'auto' | 'rp' | 'plain'
 
 /** 允许的字号档位（百分比） */
 export const FONT_SCALES: readonly number[] = [90, 100, 110, 120, 130]
@@ -62,6 +67,7 @@ const KEYS = {
   model: 'chat-demo:model',
   fontScale: 'chat-demo:font-scale',
   recordModel: 'chat-demo:record-model',
+  memoryMode: 'chat-demo:memory-mode',
 } as const
 
 const read = (key: string) => {
@@ -145,6 +151,10 @@ export const useSettings = create<Settings>(() => ({
     const saved = Number(read(KEYS.fontScale))
     return FONT_SCALES.includes(saved) ? saved : 100
   })(),
+  memoryMode: ((): MemoryMode => {
+    const saved = read(KEYS.memoryMode)
+    return saved === 'rp' || saved === 'plain' ? saved : 'auto'
+  })(),
   recordModel: read(KEYS.recordModel) === 'deepseek-v4-pro' ? 'deepseek-v4-pro' : 'deepseek-flash',
   // 默认 flash：更快更便宜，而且支持图片
   model: read(KEYS.model) === 'deepseek-v4-pro' ? 'deepseek-v4-pro' : 'deepseek-flash',
@@ -219,6 +229,11 @@ export const setModel = (model: ChatModel) => {
 export const setRecordModel = (recordModel: ChatModel) => {
   write(KEYS.recordModel, recordModel)
   useSettings.setState({ recordModel })
+}
+
+export const setMemoryMode = (memoryMode: MemoryMode) => {
+  write(KEYS.memoryMode, memoryMode)
+  useSettings.setState({ memoryMode })
 }
 
 export const setFontScale = (fontScale: number) => {

@@ -2,6 +2,9 @@
 .overlay {
   position: fixed;
   inset: 0;
+  /* 字号缩放补偿：fixed 元素按未放大的视口布局，这里收回到缩放后的视口 */
+  width: var(--app-vw, 100vw);
+  height: var(--app-vh, 100vh);
   z-index: 1100;
   display: flex;
   align-items: center;

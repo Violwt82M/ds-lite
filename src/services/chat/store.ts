@@ -21,12 +21,16 @@ import { bindPersonaForNewSession, resolveSessionPersona } from '../persona/scop
 import { usePersona } from '../persona/store.js'
 import {
   buildTranscript,
-  parseMemoryNotes,
+  MAX_BIG_NOTE_CHARS,
+  bigNoteLimit,
+  parseBigNote,
   roundsChars,
   SEGMENT_CHARS,
   splitRounds,
   renderMemorySection,
   rewriteNotes,
+  summarizeOverview,
+  mergeOverview,
   summarizeRounds,
 } from '../memory/compact.js'
 import {
@@ -65,10 +69,21 @@ import {
 const currentModel = (): ChatModel =>
   isCustomApiOrigin() ? 'deepseek-flash' : useSettings.getState().model
 /** 一次整理最多处理多少段，剩下的留给下次运行 */
-const MAX_COMPACT_SEGMENTS = 12
-/** 单段最多送多少字：再大就慢且容易超时，不如多跑一段 */
-const MAX_SEGMENT_CHARS = 90_000
+const MAX_COMPACT_SEGMENTS = 30
+/** 单段最多送多少字：先按大段试，服务端拒收时自动对半降级 */
+const MAX_SEGMENT_CHARS = 120_000
+/** 理想分段数：1M 字按 8 段算，每段 12 万字左右，跑得比 30 段快得多 */
+const TARGET_SEGMENTS = 8
+/** 长期概览在笔记里的标题，用来区分两层记忆 */
+const OVERVIEW_TITLE = '【长期概览】'
+/** 最近多少字保留详细笔记，更早的只压概览 */
+const RECENT_CHARS = 120_000
+/** 老内容每段送多少字再压概览：输出很短，段可以开大点 */
+const OVERVIEW_SEGMENT_CHARS = 60_000
 /** 所有生成请求统一携带的助手身份说明 */
+/** 手动生成笔记只防跑飞，篇幅听用户的 */
+const MAX_MANUAL_NOTE_CHARS = 20_000
+
 const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const SESSION_CACHE_LIMIT = 5
@@ -954,7 +969,7 @@ export const generateSessionRecord = async (
         text += event.delta.text
       }
     }
-    const trimmed = text.trim()
+    const trimmed = parseBigNote(text, MAX_MANUAL_NOTE_CHARS)
     if (trimmed === '') {
       return { ok: false, reason: 'empty' }
     }
@@ -983,6 +998,7 @@ export const generateMemoryNote = async (
     return { ok: false, reason: 'nokey' }
   }
   const notes = (session.memory?.notes ?? []).map((note) => `- ${note.text}`).join('\n')
+  const personaEntry = resolveSessionPersona(sessionId).entry
   const transcript = getVisibleMessages(session)
     .slice(-RECORD_SOURCE_MESSAGES)
     .map((message) => `${message.role === 'user' ? '用户' : 'AI'}：${recordText(message)}`)
@@ -992,12 +1008,16 @@ export const generateMemoryNote = async (
     model: 'deepseek-flash',
     system:
       '你把对话压缩成供后续对话使用的记忆笔记：只写事实、结论、偏好和待办，不写寒暄和过程。' +
-      '输出若干条短句，每行一条，不要编号以外的修饰。',
+      '输出一份笔记，用「【关键事实】【用户偏好】【约定与进展】【待办】【文风样本】」分段；前四段每条以「· 」开头；【文风样本】里原样摘抄 2~4 句角色台词，不要改写；只输出笔记正文。' +
+      '篇幅由用户的要求决定：用户说要多长就写多长，没有说明时保持精简（约 600 字）。',
     messages: [
       {
         role: 'user',
         content: [
           instruction.trim() ? `【整理要求】\n${instruction.trim()}` : '',
+          personaEntry
+            ? `【角色扮演背景】\n你在扮演「${personaEntry.card.name}」${personaEntry.card.style ? `，说话风格：${personaEntry.card.style}` : ''}。务必留下角色状态、关系与原话摘录。`
+            : '',
           notes ? `【已有笔记】\n${notes}` : '',
           `【最近的对话】\n${transcript}`,
         ]
@@ -1094,51 +1114,158 @@ const runCompaction = async (
   memoryControllers.set(sessionId, controller)
   setCompacting(sessionId, true)
   try {
-    // 分段整理：一次请求只送一段，前一段的笔记作为下一段的「已有记忆」，
-    // 长会话不会被截断丢掉前半部分。
-    // 段大小自适应：尽量一次点击跑完全部内容，但单段不超过 MAX_SEGMENT_CHARS。
+    // 两层记忆：
+    //   老内容 → 只压成概览（越老越简，像人回忆很久以前的事，跑得也快）
+    //   最近内容 → 详细笔记（含角色状态、关系、文风样本）
+    // 每次整理都会把「上一次的概览」一起重新概括，只留下主线。
     const total = roundsChars(candidates)
-    const budget = Math.min(
+    const initialBudget = Math.min(
       MAX_SEGMENT_CHARS,
-      Math.max(SEGMENT_CHARS, Math.ceil(total / MAX_COMPACT_SEGMENTS))
+      Math.max(SEGMENT_CHARS, Math.ceil(total / TARGET_SEGMENTS))
     )
-    const chunks = splitRounds(candidates, budget)
-    const segments = chunks.slice(0, MAX_COMPACT_SEGMENTS)
-    const folded = segments.flat()
-    let notes = (session.memory?.notes ?? []).map((note) => note.text)
-    setCompactProgress(sessionId, { done: 0, total: segments.length })
-    for (const [index, chunk] of segments.entries()) {
-      // 段越大越慢，超时按段长度放宽，最长 10 分钟
+    const noteLimit = bigNoteLimit(total)
+    const personaEntry = resolveSessionPersona(sessionId).entry
+    const persona = personaEntry
+      ? { name: personaEntry.card.name, style: personaEntry.card.style }
+      : undefined
+
+    // 最近一段保留细节：按字数切出 RECENT_CHARS 的内容
+    let recentStart = candidates.length
+    let recentChars = 0
+    while (recentStart > 0 && recentChars < RECENT_CHARS) {
+      recentStart -= 1
+      recentChars += roundsChars([candidates[recentStart]])
+    }
+    const oldRounds = candidates.slice(0, recentStart)
+    const recentRounds = candidates.slice(recentStart)
+
+    const previousOverview = (session.memory?.notes ?? [])
+      .map((note) => note.text)
+      .find((noteText) => noteText.startsWith(OVERVIEW_TITLE)) ?? ''
+    const overviewLines: string[] = []
+    const oldChunks = oldRounds.length > 0 ? splitRounds(oldRounds, OVERVIEW_SEGMENT_CHARS) : []
+    const recentQueue = splitRounds(recentRounds, initialBudget).slice(0, MAX_COMPACT_SEGMENTS)
+    const folded: [UserMessage, AssistantMessage][] = []
+    let notes = (session.memory?.notes ?? [])
+      .map((note) => note.text)
+      .filter((noteText) => !noteText.startsWith(OVERVIEW_TITLE))
+    let done = 0
+    let totalSegments = oldChunks.length + recentQueue.length + (oldChunks.length > 0 ? 1 : 0)
+    let splits = 0
+    let effectiveBudget = initialBudget
+    setCompactProgress(sessionId, { done, total: totalSegments })
+
+    // ---- 第一层：老内容压概览 ----
+    for (const chunk of oldChunks) {
+      const timeout = setTimeout(() => controller.abort(), 180_000)
+      try {
+        const line = await summarizeOverview({
+          apiKey,
+          transcript: buildTranscript(chunk, locale, OVERVIEW_SEGMENT_CHARS),
+          locale,
+          signal: controller.signal,
+        })
+        if (line !== '') {
+          overviewLines.push(line)
+        }
+      } catch (error) {
+        if (!isTooLongError(error) || chunk.length < 2) {
+          throw error
+        }
+        // 太长就拆一半再试，概览本来就不要求一次读完
+        const half = Math.ceil(chunk.length / 2)
+        const parts = [chunk.slice(0, half), chunk.slice(half)]
+        for (const part of parts) {
+          const line = await summarizeOverview({
+            apiKey,
+            transcript: buildTranscript(part, locale, OVERVIEW_SEGMENT_CHARS),
+            locale,
+            signal: controller.signal,
+          })
+          if (line !== '') {
+            overviewLines.push(line)
+          }
+        }
+      } finally {
+        clearTimeout(timeout)
+      }
+      folded.push(...chunk)
+      done += 1
+      setCompactProgress(sessionId, { done, total: totalSegments })
+    }
+
+    // 把「上一次的概览」和新概览合并成一条，越老越简
+    let overview = previousOverview
+    if (overviewLines.length > 0) {
+      overview = await mergeOverview({
+        apiKey,
+        prev: previousOverview,
+        lines: overviewLines,
+        locale,
+        signal: controller.signal,
+      })
+      done += 1
+      setCompactProgress(sessionId, { done, total: totalSegments })
+    }
+
+    // ---- 第二层：最近内容写详细笔记 ----
+    const queue = [...recentQueue]
+    while (queue.length > 0) {
+      const chunk = queue.shift()
+      if (!chunk) {
+        break
+      }
+      const transcript = buildTranscript(chunk, locale, effectiveBudget)
       const timeout = setTimeout(
         () => controller.abort(),
-        Math.min(600_000, 120_000 + buildTranscript(chunk, locale, budget).length * 2)
+        Math.min(600_000, 120_000 + transcript.length * 2)
       )
-      let text: string
+      let reply: string
       try {
-        text = await summarizeRounds({
+        reply = await summarizeRounds({
           apiKey,
-          transcript: buildTranscript(chunk, locale, budget),
+          transcript,
           existingNotes: notes,
           locale,
           signal: controller.signal,
           instruction: session.memory?.instruction,
+          noteLimit,
+          persona,
         })
+      } catch (error) {
+        // 400 且提示超长：把这一段对半砍开重试，并把后续段预算压下来
+        if (isTooLongError(error) && chunk.length > 1 && splits < 20) {
+          splits += 1
+          effectiveBudget = Math.max(SEGMENT_CHARS, Math.floor(effectiveBudget / 2))
+          const half = Math.ceil(chunk.length / 2)
+          queue.unshift(chunk.slice(half))
+          queue.unshift(chunk.slice(0, half))
+          totalSegments += 1
+          setCompactProgress(sessionId, { done, total: totalSegments })
+          continue
+        }
+        throw error
       } finally {
         clearTimeout(timeout)
       }
-      const parsed = parseMemoryNotes(text)
-      if (parsed.length === 0) {
+      const parsed = parseBigNote(reply, noteLimit)
+      if (parsed === '') {
         setMemoryError(sessionId, { key: 'memoryCompactEmpty' })
         return false
       }
-      notes = parsed
-      setCompactProgress(sessionId, { done: index + 1, total: segments.length })
+      notes = [parsed]
+      folded.push(...chunk)
+      done += 1
+      setCompactProgress(sessionId, { done, total: totalSegments })
+    }
+    if (overview !== '') {
+      notes = [`${OVERVIEW_TITLE}\n${overview}`, ...notes]
     }
     const now = Date.now()
     const foldedIds = folded.map(([, reply]) => reply.id)
     updateMemory(sessionId, (memory) => ({
       // 覆盖式：模型输出的就是最新一版笔记，旧笔记被整体替换
-      notes: rewriteNotes(memory, notes, now),
+      notes: rewriteNotes(memory, notes, now, MAX_BIG_NOTE_CHARS),
       foldedIds: [...memory.foldedIds, ...foldedIds],
       foldedRounds: memory.foldedRounds + foldedIds.length,
       updatedAt: now,
@@ -1160,6 +1287,12 @@ const runCompaction = async (
     setCompacting(sessionId, false)
   }
 }
+
+/** 服务端因为输入过长拒收：各渠道文案不同，按关键词加状态码判断 */
+const isTooLongError = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  error.status === 400 &&
+  /too long|exceeds (max|the maximum)|context length|maximum context|tokens/i.test(error.message)
 
 /** 整理失败时把「哪个服务、什么状态码」一起说出来，405 单独给提示 */
 const describeCompactFailure = (error: unknown): TranslationMessage => {

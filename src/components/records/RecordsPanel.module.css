@@ -1,12 +1,12 @@
 .dialog {
-  width: min(560px, calc(100vw - 32px));
+  width: min(560px, calc(var(--app-vw) - 32px));
 }
 
 .main {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: min(70vh, 640px);
+  max-height: min(calc(var(--app-vh) * 70 / 100), 640px);
 }
 
 .generate {
