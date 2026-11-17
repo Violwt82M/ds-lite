@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import clsx from 'clsx'
 import { useTranslate } from '../../i18n/index.js'
 import { Button } from '../base/Button.js'
@@ -6,6 +7,7 @@ import { Tutorials } from './Tutorials.js'
 import { Changelog } from './Changelog.js'
 import { openSponsor } from './sponsorState.js'
 import { UpdateRow } from './UpdateRow.js'
+import { EasterEggDialog } from './EasterEggDialog.js'
 import { APP_VERSION, UPSTREAM_VERSION } from '../../version.js'
 import settingsStyles from '../settings/Settings.module.css'
 
@@ -13,7 +15,7 @@ import settingsStyles from '../settings/Settings.module.css'
  * 问题反馈入口。用户还没给最终链接，先留空：空值时关于页不显示这一行，
  * 不会出现点了没反应的按钮或「素材待补」。拿到链接后只改这一行。
  */
-export const FEEDBACK_URL = ''
+export const FEEDBACK_URL = 'https://docs.qq.com/form/page/DTENxZkVYWVFwVE9y'
 
 /** 上游开源项目与版本信息：二次开发必须保留出处 */
 export const OFFICIAL_REPO = 'https://github.com/deepseek-ai/chat-demo'
@@ -23,6 +25,8 @@ export { APP_VERSION, UPSTREAM_VERSION } from '../../version.js'
 /** 设置里的「关于」分组：非官方声明、开源许可、上游仓库 */
 export const AboutPanel = () => {
   const t = useTranslate()
+  // 小彩蛋：关于页单独一行「彩蛋」+「查看」，明着引导用户点（连点版本号/贝壳图标都太难发现）
+  const [eggOpen, setEggOpen] = useState(false)
 
   return (
     <>
@@ -36,6 +40,21 @@ export const AboutPanel = () => {
           </div>
         </div>
       </div>
+      <div className={clsx(settingsStyles.cell, settingsStyles.row)}>
+        <div className={settingsStyles.text}>
+          <div className={settingsStyles.label}>🥚 {t('aboutEasterEgg')}</div>
+          <div className={settingsStyles.description}>{t('aboutEasterEggDescription')}</div>
+        </div>
+        <Button
+          variant="outlined"
+          size="m"
+          className={settingsStyles.cellButton}
+          onClick={() => setEggOpen(true)}
+        >
+          {t('aboutView')}
+        </Button>
+      </div>
+      <EasterEggDialog open={eggOpen} onClose={() => setEggOpen(false)} />
       <UpdateRow />
       {FEEDBACK_URL ? (
         <div className={clsx(settingsStyles.cell, settingsStyles.row)}>

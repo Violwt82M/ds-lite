@@ -395,6 +395,10 @@ export const zh = {
   changelogTitle: '更新日志',
   changelogHint: '最近 8 个版本的改动，完整记录在 GitHub 仓库的 CHANGELOG.md',
   changelogCurrent: '当前版本',
+  aboutEasterEgg: '彩蛋',
+  aboutEasterEggDescription: '点右边看看：服务器里那条鲸鱼。',
+  aboutEasterEggCaption: '感谢你翻到这里。服务器很贵，余额只剩 ¥1.49 了。',
+  aboutEasterEggClose: '收下彩蛋',
   aboutFeedback: '问题反馈',
   aboutFeedbackDescription:
     '遇到问题或想提建议，点右边按钮提交。请附上版本号和界面上看到的提示，方便定位。',

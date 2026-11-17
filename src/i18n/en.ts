@@ -411,6 +411,10 @@ export const en = {
   changelogTitle: 'Changelog',
   changelogHint: 'Changes in the last 8 versions; the full history lives in CHANGELOG.md',
   changelogCurrent: 'Current',
+  aboutEasterEgg: 'Easter egg',
+  aboutEasterEggDescription: 'Take a look: the whale in the server room.',
+  aboutEasterEggCaption: 'Thanks for scrolling this far. Servers are expensive; the balance is down to ¥1.49.',
+  aboutEasterEggClose: 'Keep it',
   aboutFeedback: 'Feedback',
   aboutFeedbackDescription:
     'Report a problem or send a suggestion. Include the version and the message you saw so it can be traced.',
