@@ -1067,8 +1067,8 @@ export const generateMemoryNote = async (
   const { body } = buildInternalRequest({
     model: 'deepseek-flash',
     system:
-      '你把对话压缩成供后续对话使用的记忆笔记：只写事实、结论、偏好和待办，不写寒暄和过程。' +
-      '输出一份笔记，用「【关键事实】【用户偏好】【约定与进展】【待办】」分段，每条以「· 」开头；不要抄台词，语气由后续的近期原文维持；只输出笔记正文。' +
+      '你把对话压缩成供后续对话使用的记忆笔记：只写事实、结论、偏好和待办，不写寒暄和过程；它是被省略原文的替代索引，不是当前剧情，也不写场景描写。' +
+      '输出一份笔记，用「【关键事实】【用户偏好】【约定与未决】【待办】」分段，每条以「· 」开头；不要抄台词，语气由后续的近期原文维持；只输出笔记正文。' +
       '篇幅由用户的要求决定：用户说要多长就写多长，没有说明时保持精简（约 600 字）。',
     messages: [
       {
@@ -1076,7 +1076,7 @@ export const generateMemoryNote = async (
         content: [
           instruction.trim() ? `【整理要求】\n${instruction.trim()}` : '',
           personaEntry
-            ? `【角色扮演背景】\n你在扮演「${personaEntry.card.name}」${personaEntry.card.style ? `，说话风格：${personaEntry.card.style}` : ''}。务必留下角色状态、关系与情节进展。`
+            ? `【角色扮演背景】\n你在扮演「${personaEntry.card.name}」${personaEntry.card.style ? `，说话风格：${personaEntry.card.style}` : ''}。务必留下角色的当前状态与关系，以及这段对话里发生过的关键事件（只记事件与结果，不写场景过程）。`
             : '',
           notes ? `【已有笔记】\n${notes}` : '',
           `【最近的对话】\n${transcript}`,

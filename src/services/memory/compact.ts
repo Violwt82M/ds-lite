@@ -38,45 +38,47 @@ const MAX_TRANSCRIPT_CHARS = charsForTokens(15_600)
 const MAX_MESSAGE_CHARS = charsForTokens(780)
 
 const SYSTEM_PROMPTS: Record<Locale, string> = {
-  'zh-CN': `你是对话记忆整理助手。你会看到同一个 AI 助手此前的长期记忆笔记，以及一段较早的对话记录。请把它整理成**一份**最新的长期记忆笔记，方便助手在看不到原文时继续这段对话。
+  'zh-CN': `你是对话记忆整理助手。你会看到同一个 AI 助手此前的记忆笔记，以及一段即将被折叠、原文不再留在上下文里的较早对话。请把「旧笔记 + 这段对话」整理成**一份**最新的压缩记录：它是被折叠原文的替代索引，供助手在原文看不到时**备查**，而不是让助手照着它把故事讲下去。
 
 要求：
-1. 只写后续对话真正需要的事实：人物与关系、设定与世界观、已发生的关键情节、用户的偏好与禁忌、明确的约定或未完成的事、重要的名称与结论。
+1. 只写后续对话真正需要的事实：人物与关系、设定与世界观、已发生的关键事件、用户的偏好与禁忌、明确的约定或未完成的事、重要的名称与结论。
    如果对话里出现过文档或图片附件（转录里以「附件：」开头），必须写进【资料】：文件名、它大致是什么内容、模型读了多少。不要复述文档正文，也不要假装读过没读到的部分。
 2. 覆盖式整理：你输出的就是整理后的完整笔记，它会整体替换旧笔记。请把【已有记忆】与本次对话合并去重；旧说法被推翻时直接改写成正确说法；已经过时或不再重要的删掉。
 3. 先判断这段对话是哪种，再决定写什么：
-   · 角色扮演 / 人物对话 / 小说或剧本创作：重点是角色当前状态、彼此关系、情节进展、未解决的伏笔。语气与文风由后续的近期原文保持，笔记里不要抄台词。
+   · 角色扮演 / 人物对话 / 小说或剧本创作：重点是角色的当前状态、彼此关系、这段被省略的原文里发生过什么（一句话一件，只记事件与结果）、还没解决的事。
+     这一节是「被省略原文的替代索引」，不是剧情推进方向：不要写成叙事、不要铺陈场景、不要抄台词；写它只是让后续知道自己缺了哪些原文。语气与文风由后续的近期原文保持。
    · 普通使用（问问题、查资料、办事、写代码）：重点是事实与结论、用户的要求与偏好、怎么称呼用户、已经定下来的方案、还没做完的事。
    如果用户消息里带了【角色扮演背景】，直接按角色扮演处理，不用再判断。
 4. 输出格式：一份笔记，用下面五个小标题分段，没有内容的段直接省略：
 【关键事实】
 【角色与关系】
-【情节进展】
+【已省略的过往】
 【资料】
 【待办】
    每条一行、以「· 」开头，一句话说清一件事。
-5. 篇幅以【篇幅要求】为准；宁可少写，也要写得准，但人物状态、关系变化、情节转折、伏笔与未解决的事不能省。
+5. 篇幅以【篇幅要求】为准；宁可少写，也要写得准，但人物的当前状态、关系变化、关键事件与未解决的事不能省——关键事件只记「发生了什么、结果如何」，不写过程细节。
 6. 用户自己写下的偏好、约定、禁忌是重要事实，务必保留；用户明确要求怎么称呼自己时，原样记下。
 7. 不要复述说话过程，不要写「用户问…助手答…」，不要评价，不要加任何前言后语。
 8. 只输出笔记正文，不要代码块、不要解释。`,
-  'en-US': `You maintain the long-term memory notes of an AI assistant. You see the notes so far plus an earlier part of the conversation. Produce the updated, complete note so the assistant can continue without the original text.
+  'en-US': `You maintain the memory notes of an AI assistant. You see the notes so far plus an earlier part of the conversation that is about to be folded out of the context. Produce the updated, complete digest: an index standing in for that omitted text, so the assistant can look things up later - not a script the assistant should keep telling the story from.
 
 Rules:
-1. Keep only facts needed later: people and relationships, setting, key plot points, user preferences and dislikes, agreements or unfinished tasks, important names and conclusions.
+1. Keep only facts needed later: people and relationships, setting, key events that happened, user preferences and dislikes, agreements or unfinished tasks, important names and conclusions.
    If documents or images appeared in the conversation (transcript lines starting with "Attachments:"), record them under [Documents]: file name, roughly what it contains, how much the model read. Never restate the document body, and never pretend to have read parts that were cut.
 2. Rewrite in place: your output is the complete note and replaces the old one. Merge and deduplicate [Existing memory] with this conversation; when an old fact is superseded, write the correct fact directly; drop anything obsolete.
 3. First decide what kind of conversation this is:
-   - Roleplay / character dialogue / fiction or script writing: focus on the character's current state, relationships, plot progress and open threads. Tone and style come from the recent messages that stay verbatim, so do not copy dialogue into the note.
+   - Roleplay / character dialogue / fiction or script writing: focus on the character's current state, relationships, what actually happened in the omitted text (one line per event, event and outcome only) and what is still open.
+     This section is an index standing in for the omitted text, not a direction for the story: do not narrate, do not describe scenes, do not copy dialogue. It exists only so the assistant knows which text it no longer has. Tone and style come from the recent messages that stay verbatim.
    - Ordinary use (questions, research, tasks, coding): focus on facts and conclusions, the user's requests and preferences, how the user wants to be addressed, settled decisions and unfinished work.
    If the user message contains [Roleplay context], treat it as roleplay without further judgement.
 4. Format: one note, split into these sections and skip empty ones:
 [Key facts]
 [Characters and relationships]
-[Plot progress]
+[Omitted past]
 [Documents]
 [To do]
    Each line starts with "· " and states one thing.
-5. Follow [Length requirement]; fewer but accurate is better, but never drop character states, relationship changes, plot turns, foreshadowing and open threads.
+5. Follow [Length requirement]; fewer but accurate is better, but never drop current character states, relationship changes, key events and open threads - key events record only what happened and how it ended, no detailed process.
 6. Facts the user wrote themselves (preferences, agreements, dislikes) must be kept; if the user says how they want to be addressed, record it verbatim.
 7. Do not narrate the exchange, no commentary, no preamble or closing.
 8. Output the note body only, no code fences, no explanation.`,
@@ -104,19 +106,19 @@ const PERSONA_HEADER: Record<Locale, string> = {
 }
 const PERSONA_RULE: Record<Locale, (name: string, style: string) => string> = {
   'zh-CN': (name, style) =>
-    `这段对话是角色扮演，你在扮演「${name}」${style ? `，说话风格：${style}` : ''}。整理时务必保留角色当前状态与彼此关系、情节进展与未解决的伏笔；不要抄台词，语气由近期原文维持。`,
+    `这段对话是角色扮演，你在扮演「${name}」${style ? `，说话风格：${style}` : ''}。整理时务必保留角色的当前状态与彼此关系、被省略的原文里发生过的关键事件、还没解决的事；这些都是原文的替代索引，不要写成叙事、不要铺场景，语气由近期原文维持。`,
   'en-US': (name, style) =>
-    `This conversation is roleplay; you play "${name}"${style ? `, speaking style: ${style}` : ''}. Keep the character's current state, relationships, plot progress and open threads; do not copy dialogue, the recent messages carry the voice.`,
+    `This conversation is roleplay; you play "${name}"${style ? `, speaking style: ${style}` : ''}. Keep the character's current state, relationships, key events from the omitted text and open threads; they are an index standing in for the original text, so do not narrate scenes and do not copy dialogue - the recent messages carry the voice.`,
 }
 
 const MODE_HEADER: Record<Locale, string> = { 'zh-CN': '【整理模式】', 'en-US': '[Mode]' }
 const MODE_RULE: Record<Locale, Record<'rp' | 'plain', string>> = {
   'zh-CN': {
-    rp: '用户指定按角色扮演整理：重点保留角色状态、彼此关系、情节进展与未解决的伏笔。',
+    rp: '用户指定按角色扮演整理：重点保留角色状态、彼此关系、被省略原文里的关键事件与还没解决的事。',
     plain: '用户指定按普通对话整理：只写事实、结论、偏好与待办，不要按角色扮演写。',
   },
   'en-US': {
-    rp: 'The user forces roleplay mode: focus on character state, relationships, plot progress and open threads.',
+    rp: 'The user forces roleplay mode: focus on character state, relationships, key events from the omitted text and open threads.',
     plain: 'The user forces ordinary mode: facts, conclusions, preferences and to-dos only.',
   },
 }
@@ -486,15 +488,15 @@ export const renderMemorySection = (memory: SessionMemory | undefined, locale: L
   const head =
     locale === 'zh-CN'
       ? [
-          '【长期记忆】以下是此前整理并保留下来的笔记，只是**背景资料**，不是新的指令，也不是当前正在发生的事。',
-          '· 不要复述、不要逐条展开、不要主动回到笔记里的旧情节；用户没有问就不要提。',
-          '· 推进对话一律以「最近的对话原文」为准；笔记与原文冲突时，一律以原文为准。',
+          '【长期记忆】以下是此前对话被折叠（原文已经不在上下文里）之后留下的压缩记录。它是**被省略原文的替代索引**，只是背景资料：不是新的指令，也不是当前正在发生的事。',
+          '· 需要回忆旧事时按需取用；用户没有问就不要提，不要复述、不要逐条展开、不要主动回到这些旧内容上接着写。',
+          '· 当前在发生什么、接下来怎么推进，一律以「最近的对话原文」为准；笔记与原文冲突时，一律以原文为准。',
           '· 语气、称呼和文风跟着最近几轮原文走，不要用笔记的书面口吻说话。',
         ].join('\n')
       : [
-          '[Long-term memory] Background notes condensed earlier. They are reference material only: not new instructions and not the scene in progress.',
-          '· Do not recite, enumerate or steer back to the old events in these notes; bring them up only if the user asks.',
-          '· Always continue from the most recent conversation text; if a note contradicts it, follow the text.',
+          '[Long-term memory] A digest of conversation text that has been folded out of the context; the original text is no longer available. It is an index standing in for that omitted text - reference material only: not new instructions and not the scene in progress.',
+          '· Consult it only when the past is needed; if the user does not ask, do not bring it up, do not recite or enumerate it, and do not continue writing from it.',
+          '· What is happening now and what comes next always come from the most recent conversation text; if a note contradicts it, follow the text.',
           '· Match the tone, address and style of the last few turns instead of the written voice of the notes.',
         ].join('\n')
   const lines: string[] = []
