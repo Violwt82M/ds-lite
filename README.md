@@ -89,11 +89,36 @@ cd android
 
 发布签名：在 `android/keystore.properties` 填写 `storeFile / storePassword / keyAlias / keyPassword`，并把 keystore 放到 `android/keystore/`（这两个路径已在 .gitignore 里，**不要提交**）。没有该文件时 `assembleRelease` 会退化为未签名包。
 
+### 构建鸿蒙 HAP（可选）
+
+仓库内 `harmonyos/` 是一个 HarmonyOS 原生外壳：用 ArkWeb 加载随 HAP 打包的同一套 React 前端，复用原有聊天与本地数据逻辑，不是用 ArkUI 重写的官方客户端，也不是华为或 DeepSeek 官方产品。
+
+要求：DevEco Studio / HarmonyOS SDK **API 26**（本工程 `targetSdkVersion` / `compatibleSdkVersion` 为 `26.0.0`）。需要能被 `hdc` 识别的设备（已在一台 OpenHarmony / HarmonyOS API 26 的平板上由开发者自行签名安装做过部分手工验证）。**HarmonyOS 4.x 等仍走 ADB、不能被当前 `hdc` 列出的设备不适用于这个包。**
+
+```sh
+pnpm install
+pnpm build:harmonyos
+# 然后在 harmonyos/ 目录用 DevEco 或 hvigor 构建 debug HAP
+# Windows 示例（仅当前终端设置 JDK，勿写入系统环境变量）：
+#   $env:JAVA_HOME = "<DevEco Studio 的 jbr 目录>"
+#   $env:DEVECO_SDK_HOME = "<DevEco Studio 的 sdk 目录>"
+#   $env:PATH = "$env:JAVA_HOME\bin;" + $env:PATH
+#   hvigorw --no-daemon assembleHap -p product=default -p buildMode=debug
+```
+
+前端资源由 `pnpm build:harmonyos` 同步到 `harmonyos/entry/src/main/resources/rawfile/web/`（该目录已忽略，勿提交构建产物）。未配置签名时产物为 unsigned debug HAP。
+
+本机调试签名：若你在 DevEco 里配置过签名，完整配置会备份在已忽略的 `harmonyos/build-profile.local.json5`。仓库里提交的 `harmonyos/build-profile.json5` **不含**签名材料。需要本机签名打包时，将该备份复制回 `harmonyos/build-profile.json5`（不要把备份或 `.p12` / `.p7b` / 证书密码提交到公开仓库）。签名与安装请自行在本机完成。
+
+更完整的实现说明、验证命令和未验证项见 [harmonyos/说明.md](harmonyos/说明.md)。
+
+**已验证 / 尚未验证（请勿扩大理解）：** 仓库维护者在真机上自行签名安装后，口头反馈聊天、主题、字号、图库选择、API 输入、模型切换、思考强度、预览/刷新/关于/更新页面可用。这是用户报告，不是自动化测试，也**不能**等同于 HAP 升级测试或全部模型/接口的请求测试。导入、角色扮演、持久化、导出与系统分享尚未完整验证。AI 流式与 CORS 在个别设备上的表现仍取决于该设备 Web 内核与接口跨域策略。
+
 ## 与上游 chat-demo 的差异
 
 | | 上游 chat-demo | DS Lite |
 |---|---|---|
-| 形态 | 纯静态网页 | 安卓 APK（Capacitor 外壳）+ 网页 |
+| 形态 | 纯静态网页 | 安卓 APK（Capacitor 外壳）+ 网页 + 可选鸿蒙 HAP（ArkWeb 外壳） |
 | 上下文占用 | 无提示 | 四档常驻提示 + 一键整理 |
 | 长期记忆 | 无 | 覆盖式自动笔记（可手写） |
 | 角色卡 | 无 | 支持酒馆 v2 角色卡 |

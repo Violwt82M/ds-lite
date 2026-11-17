@@ -1,0 +1,20 @@
+/node_modules
+/oh_modules
+/local.properties
+/.idea
+**/build
+/.hvigor
+.cxx
+/.clangd
+/.clang-format
+/.clang-tidy
+**/.test
+/.appanalyzer
+
+# 本机签名配置备份（含证书路径与密码字段），禁止提交
+/build-profile.local.json5
+/signing/
+
+# 随包前端静态资源由 pnpm build:harmonyos 生成，不提交构建产物
+/entry/src/main/resources/rawfile/web/**
+!/entry/src/main/resources/rawfile/web/.gitkeep
