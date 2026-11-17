@@ -411,6 +411,8 @@ export const en = {
   changelogTitle: 'Changelog',
   changelogHint: 'Changes in the last 8 versions; the full history lives in CHANGELOG.md',
   changelogCurrent: 'Current',
+  aboutBetaBadge: 'Public beta',
+  aboutBetaHint: 'This is a public beta; things may break. Please report issues with the feedback form below.',
   aboutEasterEgg: 'Easter egg',
   aboutEasterEggDescription: 'Take a look: the whale in the server room.',
   aboutEasterEggCaption: 'Thanks for scrolling this far. Servers are expensive; the balance is down to ¥1.49.',

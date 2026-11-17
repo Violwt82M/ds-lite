@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useTranslate } from '../../i18n/index.js'
-import { APP_VERSION } from '../../version.js'
+import { APP_CHANNEL, APP_VERSION } from '../../version.js'
 import { useSettings } from '../../services/settings.js'
 import { useDisclaimer } from './disclaimerState.js'
 import { Button } from '../base/Button.js'
@@ -38,7 +38,9 @@ export const ChangelogDialog = () => {
   }
   return (
     <Modal
-      title={t('changelogDialogTitle', { version: APP_VERSION })}
+      title={t('changelogDialogTitle', {
+        version: APP_CHANNEL === 'beta' ? `${APP_VERSION}（${t('aboutBetaBadge')}）` : APP_VERSION,
+      })}
       closable
       onClose={markChangelogSeen}
       footer={

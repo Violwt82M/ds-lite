@@ -8,7 +8,7 @@ import { Changelog } from './Changelog.js'
 import { openSponsor } from './sponsorState.js'
 import { UpdateRow } from './UpdateRow.js'
 import { EasterEggDialog } from './EasterEggDialog.js'
-import { APP_VERSION, UPSTREAM_VERSION } from '../../version.js'
+import { APP_CHANNEL, APP_VERSION, UPSTREAM_VERSION } from '../../version.js'
 import settingsStyles from '../settings/Settings.module.css'
 
 /**
@@ -36,8 +36,13 @@ export const AboutPanel = () => {
         <div className={settingsStyles.text}>
           <div className={settingsStyles.label}>{t('aboutVersion')}</div>
           <div className={settingsStyles.description}>
-            DS Lite {APP_VERSION} · upstream chat-demo {UPSTREAM_VERSION}
+            DS Lite {APP_VERSION}
+            {APP_CHANNEL === 'beta' ? ` · ${t('aboutBetaBadge')}` : ''} · upstream chat-demo{' '}
+            {UPSTREAM_VERSION}
           </div>
+          {APP_CHANNEL === 'beta' ? (
+            <div className={settingsStyles.description}>{t('aboutBetaHint')}</div>
+          ) : null}
         </div>
       </div>
       <div className={clsx(settingsStyles.cell, settingsStyles.row)}>

@@ -9,5 +9,11 @@
  */
 export const APP_VERSION = '0.9.38'
 
+/**
+ * 发布渠道：beta = 公开测试版（关于页/更新内容弹窗带标记，提示可能有问题、请走反馈），
+ * release = 正式版。只影响界面文案与标记，不参与版本比较（更新检测仍用 APP_VERSION）。
+ */
+export const APP_CHANNEL: 'beta' | 'release' = 'beta'
+
 /** 上游开源项目 chat-demo 的版本，展示用；不参与更新比较 */
 export const UPSTREAM_VERSION = '0.1.1'
