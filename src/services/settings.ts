@@ -136,6 +136,17 @@ const initialThemePreference = (): ThemePreference => {
 /** 未保存过时使用服务端默认音色 stella（海星） */
 const initialTtsVoice = (): TtsVoice => (read(KEYS.ttsVoice) === 'tide' ? 'tide' : 'stella')
 
+/**
+ * 预算夹到允许区间并对齐步长：脏数据（手改 localStorage）不会把截断逻辑搞坏。
+ * 必须定义在 useSettings 之前 —— zustand 的 initializer 是同步执行的，
+ * 写成后面的 const 会在「存过文档上限」的机器上直接 TDZ（Cannot access before initialization）
+ * 导致启动白屏（0.9.38 真机反馈，Chromium 150 也一样）。
+ */
+const clampDocumentBudget = (value: number) => {
+  const stepped = Math.round(value / DOCUMENT_BUDGET_STEP) * DOCUMENT_BUDGET_STEP
+  return Math.min(DOCUMENT_BUDGET_MAX, Math.max(DOCUMENT_BUDGET_MIN, stepped))
+}
+
 export const useSettings = create<Settings>(() => ({
   apiKey: read(KEYS.apiKey),
   locale: initialLocale(),
@@ -175,12 +186,6 @@ export const useSettings = create<Settings>(() => ({
   // 默认 flash：更快更便宜，而且支持图片
   model: read(KEYS.model) === 'deepseek-v4-pro' ? 'deepseek-v4-pro' : 'deepseek-flash',
 }))
-
-/** 预算夹到允许区间并对齐步长：脏数据（手改 localStorage）不会把截断逻辑搞坏 */
-const clampDocumentBudget = (value: number) => {
-  const stepped = Math.round(value / DOCUMENT_BUDGET_STEP) * DOCUMENT_BUDGET_STEP
-  return Math.min(DOCUMENT_BUDGET_MAX, Math.max(DOCUMENT_BUDGET_MIN, stepped))
-}
 
 export const setDocumentBudget = (value: number) => {
   const next = clampDocumentBudget(value)
