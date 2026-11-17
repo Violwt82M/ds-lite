@@ -223,6 +223,8 @@ export const zh = {
   historyImportFailed:
     '文件导入失败，可能是文件格式错误或使用了旧版的对话导出 ZIP 文件，请前往 DeepSeek 重新导出历史对话文件后再次导入。',
   historyImportFailedWithReason: '导入失败：{message}',
+  historyImportStorageFailed:
+    '本机存储写不下了，导入中途失败。可以勾选「跳过图片」只导文字、分几次导入较小的归档，或清理这个网站的存储后再试。（原始错误：{message}）',
   historyImportFailedAt: '{reason}（失败位置：{detail}）',
   importProgressTitle: '正在导入历史对话',
   importProgressFile: '{name}（{size} MB）',

@@ -26,6 +26,7 @@ import { onUploadNotice } from '../services/attachments.js'
 import { setupWallpaper } from '../services/wallpaper.js'
 import { initSharedArchive, useSharedArchive } from '../services/chat/history/sharedArchive.js'
 import { warmSearchIndex } from '../services/chat/searchIndex.js'
+import { requestPersistentStorage } from '../services/storage.js'
 import { Button } from '../components/base/Button.js'
 import { stopReadAloud } from '../services/speech/readAloud.js'
 import { CollapsedSider } from '../components/sider/CollapsedSider.js'
@@ -79,6 +80,11 @@ export const App = () => {
 
   // 背景图：预设走 CSS，自定义图从 IndexedDB 读回来
   useEffect(setupWallpaper, [])
+
+  // 申请持久化存储：网页版的对话/附件都在浏览器里，别让系统清理时把数据一起收走
+  useEffect(() => {
+    void requestPersistentStorage()
+  }, [])
 
   // 系统分享 / 打开方式传进来归档：直接跳到「数据管理 → 导入历史对话」
   useEffect(() => {

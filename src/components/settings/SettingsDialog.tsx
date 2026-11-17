@@ -12,6 +12,7 @@ import {
   IconThinkOutline16,
   IconUploadOutline14,
 } from '../base/icons.js'
+import { isStorageWriteError } from '../../services/storage.js'
 import {
   BackupError,
   clearHistory,
@@ -809,8 +810,13 @@ const SettingCell = ({
   )
 }
 
-/** 导入失败的原因：归档错误用对应文案，其他错误把信息带出来，方便用户反馈。 */
+/** 导入失败的原因：归档错误用对应文案，存储写不下单独提示，其他错误把信息带出来，方便用户反馈。 */
 const importFailure = (error: unknown): TranslationMessage => {
+  if (isStorageWriteError(error)) {
+    // 浏览器没地方放附件原件了（配额不足 / 无痕模式 / 系统清理）：Chromium 的英文原文用户看不懂
+    const message = error instanceof Error ? error.message : String(error)
+    return { key: 'historyImportStorageFailed', params: { message } }
+  }
   if (error instanceof BackupError) {
     return error.detail
       ? { key: 'historyImportFailedAt', params: { reason: translate(error.key), detail: error.detail } }
