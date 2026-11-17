@@ -211,6 +211,29 @@
   cursor: pointer;
 }
 
+/* 正文命中行：片段占满，日期贴到这一行的右下角（原版搜索显示日期，0.9.38） */
+.hitBody {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.hitBody .hitSnippet {
+  flex: 1;
+  min-width: 0;
+}
+
+.hitDate {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* 正文片段最多两行：搜索结果的上下文够看即可，不把列表撑高 */
 .hitSnippet {
   display: -webkit-box;

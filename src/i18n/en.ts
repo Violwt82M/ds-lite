@@ -411,6 +411,10 @@ export const en = {
   changelogTitle: 'Changelog',
   changelogHint: 'Changes in the last 8 versions; the full history lives in CHANGELOG.md',
   changelogCurrent: 'Current',
+  aboutFeedback: 'Feedback',
+  aboutFeedbackDescription:
+    'Report a problem or send a suggestion. Include the version and the message you saw so it can be traced.',
+  aboutFeedbackOpen: 'Send feedback',
   aboutSponsor: 'Support',
   aboutSponsorDescription:
     'The app is completely free, with no ads and no in-app purchases. Tips only support development and unlock nothing.',

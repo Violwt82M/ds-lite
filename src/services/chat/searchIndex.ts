@@ -38,11 +38,19 @@ const PREVIEW_PER_SESSION = 5
 const MAX_HITS_PER_SESSION = 1000
 /** 保存后多久重建该会话的索引：流式回复期间 persist 很频繁，攒一下再写 */
 const REINDEX_DELAY_MS = 1200
+/**
+ * 索引格式版本，与 db.ts 的 SessionSearchDocs.v 对应。
+ * 2：SearchDoc 增加 at（消息时间），搜索结果右下角要显示日期。旧索引没有这个字段，
+ * 靠 updatedAt 比对发现不了（会话没变），必须用版本号强制重建一次。
+ */
+const DOC_VERSION = 2
 
 /** 一条正文命中：只带消息 id、角色和片段，会话信息在 SearchGroup 上 */
 export type SearchHit = {
   messageId: string
   role: Message['role']
+  /** 这条消息的创建时间，结果行右下角的日期用它 */
+  at: number
   snippet: SearchSnippet | null
 }
 
@@ -101,7 +109,7 @@ const buildDocs = (session: Session): SearchDoc[] => {
   for (const message of getVisibleMessages(session)) {
     const text = messageText(message)
     if (text) {
-      docs.push({ id: message.id, role: message.role, text })
+      docs.push({ id: message.id, role: message.role, text, at: message.createdAt })
     }
   }
   return docs
@@ -110,6 +118,7 @@ const buildDocs = (session: Session): SearchDoc[] => {
 const toRecord = (session: Session): SessionSearchDocs => ({
   id: session.id,
   updatedAt: session.updatedAt,
+  v: DOC_VERSION,
   docs: buildDocs(session),
 })
 
@@ -158,7 +167,8 @@ export const warmSearchIndex = (onProgress?: (progress: IndexProgress) => void):
     const summaries = await loadSessionSummaries()
     const stale = summaries.filter((summary) => {
       const record = map.get(summary.id)
-      return !record || record.updatedAt !== summary.updatedAt
+      // v 对不上说明是旧格式索引（例如还没有 at 字段）：会话内容没变也得重建
+      return !record || record.v !== DOC_VERSION || record.updatedAt !== summary.updatedAt
     })
     if (stale.length === 0) {
       onProgress?.({ done: 0, total: 0 })
@@ -250,6 +260,7 @@ export const searchAll = async (
         hits.push({
           messageId: doc.id,
           role: doc.role,
+          at: doc.at,
           snippet: buildSnippet(doc.text, keyword, index, CONTEXT_CHARS),
         })
       }
@@ -297,6 +308,7 @@ export const searchSessionHits = async (
     hits.push({
       messageId: doc.id,
       role: doc.role,
+      at: doc.at,
       snippet: buildSnippet(doc.text, keyword, index, CONTEXT_CHARS),
     })
     if (hits.length >= MAX_HITS_PER_SESSION) {

@@ -7,7 +7,7 @@
  *
  * 以后要改版本，只改这里 + android/app/build.gradle（Gradle 读不到 TS，必须手动同步）。
  */
-export const APP_VERSION = '0.9.37'
+export const APP_VERSION = '0.9.38'
 
 /** 上游开源项目 chat-demo 的版本，展示用；不参与更新比较 */
 export const UPSTREAM_VERSION = '0.1.1'

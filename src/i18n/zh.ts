@@ -395,6 +395,10 @@ export const zh = {
   changelogTitle: '更新日志',
   changelogHint: '最近 8 个版本的改动，完整记录在 GitHub 仓库的 CHANGELOG.md',
   changelogCurrent: '当前版本',
+  aboutFeedback: '问题反馈',
+  aboutFeedbackDescription:
+    '遇到问题或想提建议，点右边按钮提交。请附上版本号和界面上看到的提示，方便定位。',
+  aboutFeedbackOpen: '提交反馈',
   aboutSponsor: '赞助支持',
   aboutSponsorDescription: '应用完全免费、无广告、无内购。赞助只是支持开发，不会解锁任何功能。',
   sponsorTitle: '赞助支持',

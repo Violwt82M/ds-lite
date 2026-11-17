@@ -10,6 +10,7 @@ import {
   type SearchResult,
 } from '../../services/chat/searchIndex.js'
 import { splitByRanges, type SearchRange } from '../../services/chat/searchText.js'
+import { formatDate } from '../../utils/format.js'
 import { selectSession, useChatStore } from '../../services/chat/store.js'
 import { requestJump } from '../../services/chat/jumpTarget.js'
 import { IconCloseOutline16, IconSearchOutline16 } from '../base/icons.js'
@@ -299,22 +300,29 @@ export const SessionSearch = ({
                     </span>
                   ) : null}
                 </button>
-                {visible.map((hit) => (
-                  <button
-                    key={hit.messageId}
-                    type="button"
-                    className={styles.hit}
-                    onClick={() => pick(group.sessionId, hit.messageId)}
-                  >
-                    <span className={styles.hitSnippet}>
-                      {hit.snippet?.clippedStart ? '…' : null}
-                      {hit.snippet ? (
-                        <Highlighted text={hit.snippet.text} ranges={hit.snippet.ranges} />
-                      ) : null}
-                      {hit.snippet?.clippedEnd ? '…' : null}
-                    </span>
-                  </button>
-                ))}
+                {visible.map((hit) => {
+                  // 每行右下角显示这条消息的日期（原版搜索也是这样）；旧索引还没重建时没有 at，就不显示
+                  const date = formatDate(hit.at)
+                  return (
+                    <button
+                      key={hit.messageId}
+                      type="button"
+                      className={styles.hit}
+                      onClick={() => pick(group.sessionId, hit.messageId)}
+                    >
+                      <span className={styles.hitBody}>
+                        <span className={styles.hitSnippet}>
+                          {hit.snippet?.clippedStart ? '…' : null}
+                          {hit.snippet ? (
+                            <Highlighted text={hit.snippet.text} ranges={hit.snippet.ranges} />
+                          ) : null}
+                          {hit.snippet?.clippedEnd ? '…' : null}
+                        </span>
+                        {date ? <span className={styles.hitDate}>{date}</span> : null}
+                      </span>
+                    </button>
+                  )
+                })}
                 {isExpanded && loaded === 'loading' ? (
                   <div className={styles.empty}>{t('sessionSearching')}</div>
                 ) : null}

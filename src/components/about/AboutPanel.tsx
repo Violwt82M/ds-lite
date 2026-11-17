@@ -9,6 +9,12 @@ import { UpdateRow } from './UpdateRow.js'
 import { APP_VERSION, UPSTREAM_VERSION } from '../../version.js'
 import settingsStyles from '../settings/Settings.module.css'
 
+/**
+ * 问题反馈入口。用户还没给最终链接，先留空：空值时关于页不显示这一行，
+ * 不会出现点了没反应的按钮或「素材待补」。拿到链接后只改这一行。
+ */
+export const FEEDBACK_URL = ''
+
 /** 上游开源项目与版本信息：二次开发必须保留出处 */
 export const OFFICIAL_REPO = 'https://github.com/deepseek-ai/chat-demo'
 export const OFFICIAL_LICENSE = 'https://github.com/deepseek-ai/chat-demo/blob/main/LICENSE'
@@ -31,6 +37,22 @@ export const AboutPanel = () => {
         </div>
       </div>
       <UpdateRow />
+      {FEEDBACK_URL ? (
+        <div className={clsx(settingsStyles.cell, settingsStyles.row)}>
+          <div className={settingsStyles.text}>
+            <div className={settingsStyles.label}>{t('aboutFeedback')}</div>
+            <div className={settingsStyles.description}>{t('aboutFeedbackDescription')}</div>
+          </div>
+          <Button
+            variant="outlined"
+            size="m"
+            className={settingsStyles.cellButton}
+            onClick={() => window.open(FEEDBACK_URL, '_blank', 'noopener')}
+          >
+            {t('aboutFeedbackOpen')}
+          </Button>
+        </div>
+      ) : null}
       <div className={clsx(settingsStyles.cell, settingsStyles.row)}>
         <div className={settingsStyles.text}>
           <div className={settingsStyles.label}>{t('aboutSponsor')}</div>

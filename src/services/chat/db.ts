@@ -23,6 +23,8 @@ export type SearchDoc = {
   role: 'user' | 'assistant'
   /** 已折叠空白、已 trim 的正文；没有正文的消息不入索引 */
   text: string
+  /** 消息创建时间：搜索结果每行右下角要显示日期（旧索引没有这个字段，靠 v 版本号整体重建） */
+  at: number
 }
 
 /**
@@ -33,6 +35,11 @@ export type SearchDoc = {
 export type SessionSearchDocs = {
   id: string
   updatedAt: number
+  /**
+   * 索引格式版本，必须等于 searchIndex.ts 的 DOC_VERSION。
+   * 给 SearchDoc 加字段时递增：旧记录没有新字段，只能整条重建（updatedAt 比较发现不了）。
+   */
+  v: number
   /** 按消息顺序排列 */
   docs: SearchDoc[]
 }
