@@ -13,6 +13,8 @@ import { showToast } from '../base/toastState.js'
 import { openSettings } from '../settings/settingsDialogState.js'
 import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
 import { SessionItem } from './SessionItem.js'
+import { SessionSearch } from './SessionSearch.js'
+import { openSearchPage } from './searchPageState.js'
 import styles from './Sider.module.css'
 
 /** 展开的侧边栏：名称与收起按钮、开启新对话、按时间分组的会话列表、底部设置；移动端放在抽屉里，收起按钮关闭抽屉 */
@@ -20,9 +22,24 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
   const t = useTranslate()
   const sessions = useChatStore((state) => state.sessions)
   const activeId = useChatStore((state) => state.activeId)
+  const pins = useChatStore((state) => state.pins)
   const [now, setNow] = useState(Date.now)
-  const groups = useMemo(() => groupSessions(sessions, now, t), [sessions, now, t])
+  // 置顶单独成一组排在最前，其余照旧按时间分组（否则钉了三个月的会话会插进「今天」里）
+  const groups = useMemo(() => {
+    const pinned = sessions
+      .filter((session) => pins[session.id])
+      .sort((a, b) => (pins[b.id] ?? 0) - (pins[a.id] ?? 0))
+    const rest = sessions.filter((session) => !pins[session.id])
+    return [
+      ...(pinned.length > 0
+        ? [{ key: 'pinned', label: t('sessionGroupPinned'), sessions: pinned }]
+        : []),
+      ...groupSessions(rest, now, t),
+    ]
+  }, [sessions, pins, now, t])
   const [deleting, setDeleting] = useState<SessionSummary | null>(null)
+  // 搜索时把普通列表藏起来，只留结果区
+  const [searchActive, setSearchActive] = useState(false)
   const [deletePending, setDeletePending] = useState(false)
 
   useEffect(() => {
@@ -61,21 +78,31 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
           onClick={() => (mobile ? closeMobileSider() : setSiderCollapsed(true))}
         />
       </div>
-      <button
-        type="button"
-        className={styles.newChat}
-        onClick={() => {
-          newChat()
-          closeMobileSider()
-        }}
-      >
-        <span className={styles.newChatIcon}>
-          <NewChatIcon />
-        </span>
-        {t('newChat')}
-      </button>
+      {/* 有对话时官方不显示这个入口：新建走聊天页顶栏的 +，列表只留搜索和会话。
+          必须条件渲染而不是 hidden：.newChat 自带 display:flex，会盖掉 hidden 的 display:none */}
+      {sessions.length === 0 ? (
+        <button
+          type="button"
+          className={styles.newChat}
+          onClick={() => {
+            newChat()
+            closeMobileSider()
+          }}
+        >
+          <span className={styles.newChatIcon}>
+            <NewChatIcon />
+          </span>
+          {t('newChat')}
+        </button>
+      ) : null}
+      <SessionSearch
+        onPick={() => setSearchActive(false)}
+        onActiveChange={setSearchActive}
+        onRequestPage={mobile ? openSearchPage : undefined}
+      />
+      {/* 搜索时只把里面的列表藏起来，外层仍占着 flex:1，底部「设置」才不会浮上去 */}
       <div className={styles.listWrap}>
-        <div className={styles.list}>
+        <div className={styles.list} hidden={searchActive}>
           {groups.map((group) => (
             <div key={group.key} className={styles.section}>
               <div className={styles.sectionHeader}>{group.label}</div>
@@ -84,6 +111,7 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
                   key={session.id}
                   session={session}
                   active={session.id === activeId}
+                  pinned={Boolean(pins[session.id])}
                   onDelete={() => setDeleting(session)}
                 />
               ))}
@@ -140,16 +168,48 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
   )
 }
 
-/** 移动端抽屉：浮在页面上方，点空白区域关闭。 */
+/** 抽屉宽度与 CSS 保持一致（.mobile 的 width / max-width），拖动换算进度要用它 */
+export const MOBILE_SIDER_WIDTH = () => Math.min(300, window.innerWidth - 48)
+
+/**
+ * 移动端抽屉：可以点菜单按钮弹出，也可以从正文任意位置向右拖出来。
+ * 拖动时去掉过渡让抽屉跟手，松手后按进度吸附——官方那种"弹簧感"就是这么来的。
+ */
 export const MobileSider = () => {
   const open = useMobileSider((state) => state.open)
-  if (!open) {
+  const progress = useMobileSider((state) => state.progress)
+  const dragging = useMobileSider((state) => state.dragging)
+  // 关的时候要留在 DOM 里把动画放完，不然抽屉会"啪"地消失
+  const [rendered, setRendered] = useState(open || progress > 0)
+  useEffect(() => {
+    if (open || progress > 0) {
+      setRendered(true)
+      return
+    }
+    const timer = window.setTimeout(() => setRendered(false), 240)
+    return () => window.clearTimeout(timer)
+  }, [open, progress])
+  if (!rendered) {
     return null
   }
+  const shown = open ? 1 : progress
   return (
     <>
-      <div className={styles.drawerMask} onClick={closeMobileSider} />
-      <div className={styles.drawer}>
+      <div
+        className={styles.drawerMask}
+        onClick={closeMobileSider}
+        style={{
+          opacity: shown,
+          transition: dragging ? 'none' : 'opacity 220ms ease',
+        }}
+      />
+      <div
+        className={styles.drawer}
+        style={{
+          transform: `translateX(${(shown - 1) * 100}%)`,
+          transition: dragging ? 'none' : 'transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1)',
+        }}
+      >
         <Sider mobile />
       </div>
     </>

@@ -1,3 +1,4 @@
+import clsx from 'clsx'
 import { IconMenuOutline20, IconNewChatOutline20 } from '../base/icons.js'
 import { useTranslate } from '../../i18n/index.js'
 import type { Session } from '../../services/chat/types.js'
@@ -15,7 +16,7 @@ import styles from './MobileHeader.module.css'
 export const MobileHeader = ({ title, session }: { title?: string; session?: Session }) => {
   const t = useTranslate()
   return (
-    <div className={styles.header}>
+    <div className={clsx(styles.header, 'ds-top-bar')}>
       <IconButton
         size="xl"
         tone="primary"

@@ -1,4 +1,34 @@
+.jumpDown {
+  /* 贴在滚动区底部的右下角：负 margin 让它压在最后一条消息上，不额外占高度，
+     也不会再和输入框重叠（之前 absolute 定位在 112px，正好压在输入框上）。
+     水平方向用 margin-left:auto 推右：.column 是块级容器，align-self:flex-end 无效，
+     之前按钮就贴到了左边。 */
+  position: sticky;
+  bottom: 10px;
+  margin: -30px 6px 6px auto;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.12));
+  border-radius: 50%;
+  /* 之前写的 --dsw-alias-bg-elevated 这个变量根本不存在：白底靠兜底值出图，
+     再叠上深色主题里接近白色的 label-primary，就成了「只有个白色圆形、看不到箭头」 */
+  background: var(--dsw-alias-bg-layer-3, #fff);
+  color: var(--dsw-alias-label-primary, #2b2f36);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.16);
+  cursor: pointer;
+}
+
+.jumpDown svg {
+  display: block;
+}
+
 .container {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;

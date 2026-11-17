@@ -204,11 +204,22 @@
   position: absolute;
   inset: 0;
   z-index: 799;
+  background: rgba(0, 0, 0, 0.32);
+}
+
+/* 深色主题下"灰一档"要往亮的方向走，否则和聊天背景糊成一片 */
+[data-ds-dark-theme] .mobile {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.06));
+  box-shadow: 2px 0 18px rgba(0, 0, 0, 0.5);
 }
 
 .mobile {
   width: 300px;
   max-width: calc(var(--app-vw) - 48px);
+  /* 抽屉比聊天界面"灰一档"，拖动时才有浮在上面的感觉（用叠色，避免改主题变量） */
+  background-image: linear-gradient(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.05));
+  border-right: none;
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.14);
 
   .listWrap {
     margin-top: 16px;

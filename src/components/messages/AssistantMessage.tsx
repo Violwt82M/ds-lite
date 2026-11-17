@@ -60,7 +60,10 @@ export const AssistantMessage = memo(function AssistantMessage({
   const waiting = streaming && view.steps.length === 0 && !view.answer && !message.thinking
   const summaryEntry = `${message.id}-summary`
   return (
-    <div className={clsx(styles.message, avatar && styles.withAvatar)}>
+    <div
+      className={clsx(styles.message, avatar && styles.withAvatar)}
+      data-message-id={message.id}
+    >
       {avatar ? (
         avatar.src ? (
           <img className={styles.avatar} src={avatar.src} alt="" />

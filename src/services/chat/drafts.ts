@@ -6,7 +6,9 @@ import {
   isImage,
   resolveMimeType,
   uploadAttachment,
+  truncateTextFile,
   validateFiles,
+  type TextTruncation,
   type UploadTask,
 } from '../attachments.js'
 import type { FileAttachment } from './types.js'
@@ -17,6 +19,12 @@ export type DraftAttachment = {
   file: File
   isImage: boolean
   previewUrl: string | null
+  /** 超过单份文档预算被本地截断时记录比例，用于卡片文案「模型仅阅读了 xx%」 */
+  truncated?: TextTruncation
+  /** 本地估算的 token：水位条与护栏用，避免按体积猜得离谱 */
+  tokens?: number
+  /** 截断前的原文件体积：卡片上仍显示原文大小 */
+  originalSize?: number
 }
 
 type Draft = { text: string; attachments: DraftAttachment[] }
@@ -58,11 +66,11 @@ const upload = (attachment: DraftAttachment, apiKey: string) => {
 }
 
 /** 整批校验通过后才创建预览和开始上传。 */
-export const addDraftFiles = (
+export const addDraftFiles = async (
   sessionId: string | null,
   files: File[],
   apiKey: string
-): TranslationMessage | null => {
+): Promise<TranslationMessage | null> => {
   if (files.length === 0) {
     return null
   }
@@ -70,13 +78,18 @@ export const addDraftFiles = (
   if (error) {
     return error
   }
-  const added = files.map((file): DraftAttachment => {
+  // 纯文本类超过单份文档预算时本地截断：服务端不会替你截，超了直接 400
+  const prepared = await Promise.all(files.map((file) => truncateTextFile(file)))
+  const added = prepared.map(({ file, truncated, tokens, originalSize }): DraftAttachment => {
     const image = isImage(resolveMimeType(file))
     return {
       id: createId(),
       file,
       isImage: image,
       previewUrl: image ? URL.createObjectURL(file) : null,
+      ...(truncated ? { truncated } : {}),
+      ...(typeof tokens === 'number' ? { tokens } : {}),
+      ...(typeof originalSize === 'number' ? { originalSize } : {}),
     }
   })
   updateDraft(sessionId, (draft) => ({ ...draft, attachments: [...draft.attachments, ...added] }))
@@ -111,10 +124,12 @@ export const prepareDraftMessage = (draft: Draft, tasks: Record<string, UploadTa
       id: attachment.id,
       serverId: task.serverId,
       name: attachment.file.name,
-      size: attachment.file.size,
+      size: attachment.originalSize ?? attachment.file.size,
       isImage: attachment.isImage,
       mimeType: resolveMimeType(attachment.file),
       blob: attachment.file,
+      ...(attachment.truncated ? { truncated: attachment.truncated } : {}),
+      ...(typeof attachment.tokens === 'number' ? { tokens: attachment.tokens } : {}),
     })
   }
   return { text, files }

@@ -4,6 +4,9 @@ import { ApiError, uploadFile } from './api/client.js'
 import { classifyApiError, getUploadErrorInfo, isRetryableApiError } from './api/errors.js'
 import type { FilePurpose } from './api/types.js'
 import { ACCEPT_FILE_EXTS } from './uploadExts.js'
+import { safeSlice } from '../utils/safeText.js'
+import { decodeTextBytes } from '../utils/textDecode.js'
+import { estimateTextTokens } from '../utils/textTokens.js'
 
 /** 允许上传的扩展名，按扩展名白名单过滤，清单见 uploadExts.ts */
 export const ACCEPTED_EXTS = ACCEPT_FILE_EXTS
@@ -14,6 +17,78 @@ export const MAX_SIZE_MB = 64
 /** 按 user_data 上传的文件（纯文本、代码、表格、电子书）原文件上限更小 */
 export const MAX_USER_DATA_SIZE_MB = 32
 export const MAX_COUNT = 50
+/**
+ * 单份文档最多占多少 token —— 服务端不会替你截（超了直接 400），
+ * 所以必须本地截：截完把「模型实际读了多少」按官方口径告诉用户（仅阅读 xx%）。
+ */
+export const DOCUMENT_TOKEN_BUDGET = 350_000
+/** 切点回溯窗口：在预算前这么多字符里找段落、句末 */
+const CUT_WINDOW = 20_000
+
+/** 本地能读文本的附件类型（其余如 PDF/Word 要服务端解析，拆不了） */
+const TEXT_EXTS = new Set([
+  'txt', 'md', 'markdown', 'csv', 'json', 'jsonl', 'log', 'xml', 'yaml', 'yml',
+  'js', 'jsx', 'ts', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cc', 'cpp', 'h', 'hpp',
+  'sql', 'sh', 'html', 'css', 'vue', 'php', 'rb', 'kt', 'swift',
+])
+
+export const isTextFile = (name: string) => TEXT_EXTS.has(getFileExt(name))
+
+export type TextTruncation = {
+  /** 实际发给模型的字符数 */
+  kept: number
+  /** 原文字符数 */
+  total: number
+  /** 保留部分的估算 token */
+  keptTokens: number
+  /** 原文的估算 token */
+  totalTokens: number
+}
+
+/** 在预算附近找一个段落/句末断点，找不到就硬切 */
+const findCut = (text: string, budget: number): number => {
+  const windowStart = Math.max(0, budget - CUT_WINDOW)
+  const window = text.slice(windowStart, budget)
+  for (const separator of ['\n\n', '\n', '。', '！', '？', '. ']) {
+    const at = window.lastIndexOf(separator)
+    if (at >= 0) {
+      return windowStart + at + separator.length
+    }
+  }
+  return budget
+}
+
+/**
+ * 按 token 预算切分纯文本附件。
+ * 判定与切点都基于字符和 token，不再拿字节数当字符数（GBK 的 1.3MB 是 65 万字，不是 1.3M 字）。
+ * 解码走 decodeTextBytes：GBK 的 TXT 先按 UTF-8 严格解，失败再按 GB18030，
+ * 否则切出来的全是 U+FFFD。切点用 safeSlice，避免把 emoji 切成半个（孤立代理会让服务端 400）。
+ * 未超预算时原样上传（服务端自己认 GBK），只返回估算 token 供水位条使用。
+ */
+export const truncateTextFile = async (
+  file: File
+): Promise<{ file: File; truncated?: TextTruncation; tokens?: number; originalSize?: number }> => {
+  if (!isTextFile(file.name)) {
+    return { file }
+  }
+  const { text } = decodeTextBytes(new Uint8Array(await file.arrayBuffer()))
+  if (text === '') {
+    return { file }
+  }
+  const totalTokens = estimateTextTokens(text)
+  if (totalTokens <= DOCUMENT_TOKEN_BUDGET) {
+    return { file, tokens: totalTokens }
+  }
+  const charBudget = Math.max(1, Math.floor(text.length * (DOCUMENT_TOKEN_BUDGET / totalTokens)))
+  const kept = safeSlice(text, 0, findCut(text, charBudget))
+  const keptTokens = estimateTextTokens(kept)
+  return {
+    file: new File([kept], file.name, { type: 'text/plain' }),
+    truncated: { kept: kept.length, total: text.length, keptTokens, totalTokens },
+    tokens: keptTokens,
+    originalSize: file.size,
+  }
+}
 /** 同时上传的文件数 */
 const MAX_CONCURRENT = 3
 

@@ -1,14 +1,17 @@
 import { create } from 'zustand'
 import type { TranslationMessage } from '../../i18n/index.js'
 import { createId } from '../../utils/id.js'
+import { safeTail } from '../../utils/safeText.js'
 import { ApiError, streamMessage } from '../api/client.js'
-import type { ChatModel, CreateMessageRequest } from '../api/types.js'
+import type { ChatModel } from '../api/types.js'
 import { isCustomApiOrigin } from '../api/base.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
 import { useSettings } from '../settings.js'
+import { showToast } from '../../components/base/toastState.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
+import { flushSearchIndex, scheduleSessionIndex } from './searchIndex.js'
 import {
   clearAllDrafts,
   clearDraft,
@@ -21,6 +24,7 @@ import { bindPersonaForNewSession, resolveSessionPersona } from '../persona/scop
 import { usePersona } from '../persona/store.js'
 import {
   buildTranscript,
+  charsForTokens,
   MAX_BIG_NOTE_CHARS,
   bigNoteLimit,
   parseBigNote,
@@ -34,14 +38,19 @@ import {
   summarizeRounds,
 } from '../memory/compact.js'
 import {
-  estimateTextTokens,
+  estimateMessageTokens,
+  formatCharCount,
   getContextUsage,
+  MANUAL_KEEP_TOKENS,
+  MEMORY_KEEP_TOKENS,
+  splitFoldableRounds,
   getFoldedIds,
   getUnfoldedRounds,
   type ContextUsage,
 } from '../memory/context.js'
 import { setCompactProgress, setCompacting, setMemoryError, setMemoryNotice } from '../memory/state.js'
 import { createLatestReminder } from './latestReminder.js'
+import { buildInternalRequest, buildRequest } from './request.js'
 import {
   applyEvent,
   canContinueReply,
@@ -87,14 +96,12 @@ const MAX_MANUAL_NOTE_CHARS = 20_000
 const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const SESSION_CACHE_LIMIT = 5
-/** 内容审查等级来自设置：默认 low（官方 API 默认行为），可选 high（额外复检） */
-const safetyCheck = () => ({ level: useSettings.getState().safety }) as const
 /** 服务端判定 file_id 失效后，重新补传并重发的最多次数（不含首次请求） */
 const FILE_RETRY_LIMIT = 2
 /** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
 const FILE_RETRY_BASE_DELAY = 1000
-/** 自动整理记忆后仍保留原文的最近轮数，保证模型还能看到最近聊了什么 */
-const MEMORY_KEEP_ROUNDS = 4
+/** 喂给整理调用当「只读参考」的最近原文上限：只用来判断旧笔记哪句过期了 */
+const RECENT_REF_TOKENS = 4_000
 /** 自动整理至少要有这么多可折叠轮次，避免每轮都触发一次额外调用 */
 const MEMORY_MIN_FOLD_ROUNDS = 2
 /**
@@ -107,18 +114,9 @@ const AUTO_COMPACT_TOKENS = 450_000
  * 自动整理开着时的兜底护栏：可折叠轮次不够（比如最近几轮自带超大附件）时，
  * 到 900K 仍然先整理一次再发，避免请求被服务端直接拒绝。
  */
-const CONTEXT_GUARD_TOKENS = 900_000
-
-/** 阅读链接始终开启，智能搜索开关控制是否另行声明搜索工具（含边想边搜）。 */
-const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
-  const tools: CreateMessageRequest['tools'] = [
-    { type: 'deepseek_read_url', name: 'deepseek_read_url' },
-  ]
-  if (search) {
-    tools.push({ type: 'deepseek_web_search', name: 'deepseek_web_search' })
-  }
-  return tools
-}
+const CONTEXT_GUARD_TOKENS = 850_000
+/** 服务端上下文 1,048,576；留 4 万给输出与估算误差，超过就拦下而不是发出去被拒 */
+const CONTEXT_BLOCK_TOKENS = 1_000_000
 
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
 const titleRequests = new Set<AbortController>()
@@ -137,6 +135,29 @@ type ChatState = {
   activeId: string | null
   /** 正在生成回复的会话 */
   streaming: Record<string, AbortController>
+  /** 置顶：会话 id → 置顶时间。纯本地列表偏好，不写进会话数据，也不随导出备份 */
+  pins: Record<string, number>
+}
+
+const PINS_KEY = 'ds-lite.pinnedSessions'
+
+/** 读本机记住的置顶；坏数据一律当没置顶 */
+const readPins = (): Record<string, number> => {
+  try {
+    const raw = window.localStorage.getItem(PINS_KEY)
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, number>) : {}
+  } catch {
+    return {}
+  }
+}
+
+const writePins = (pins: Record<string, number>) => {
+  try {
+    window.localStorage.setItem(PINS_KEY, JSON.stringify(pins))
+  } catch {
+    // 隐私模式写不进去就只在本次运行里生效
+  }
 }
 
 export const useChatStore = create<ChatState>(() => ({
@@ -149,12 +170,16 @@ export const useChatStore = create<ChatState>(() => ({
   sessionSaveErrors: {},
   activeId: null,
   streaming: {},
+  pins: readPins(),
 }))
 
 const { getState: get, setState: set } = useChatStore
 
-const sortSessions = (sessions: SessionSummary[]) =>
-  [...sessions].sort((a, b) => b.updatedAt - a.updatedAt)
+/** 置顶的排在最前（后置顶的更前），其余按最后更新时间 */
+const sortSessions = (sessions: SessionSummary[], pins: Record<string, number> = get().pins) =>
+  [...sessions].sort(
+    (a, b) => (pins[b.id] ?? 0) - (pins[a.id] ?? 0) || b.updatedAt - a.updatedAt
+  )
 
 const getSession = (id: string) => {
   const cache = get().sessionCache
@@ -258,6 +283,8 @@ const persist = (sessionId: string) => {
         if (epoch !== historyEpoch || !getSession(sessionId)) {
           return
         }
+        // 正文搜索索引跟着数据走：会话存进库后顺手重建它那一条（防抖，流式期间不会反复写）
+        scheduleSessionIndex(session)
         if (pendingFiles.get(sessionId) === files) {
           pendingFiles.delete(sessionId)
         }
@@ -303,6 +330,8 @@ export const bindChatPersistence = () => {
         persist(id)
       }
     }
+    // 待写的搜索索引也落盘：不然刚聊完就关页面，下次搜不到最后一轮
+    flushSearchIndex()
   }
   const onVisibilityChange = () => {
     if (document.visibilityState === 'hidden') {
@@ -535,6 +564,21 @@ export const selectSession = (id: string) => {
   }
 }
 
+/** 置顶：没置顶过的排到最前；已经置顶的再点一次也排到最前（按置顶时间排） */
+export const pinSession = (id: string) => {
+  const pins = { ...get().pins, [id]: Date.now() }
+  writePins(pins)
+  set((state) => ({ pins, sessions: sortSessions(state.sessions, pins) }))
+}
+
+export const unpinSession = (id: string) => {
+  const pins = Object.fromEntries(
+    Object.entries(get().pins).filter(([key]) => key !== id)
+  ) as Record<string, number>
+  writePins(pins)
+  set((state) => ({ pins, sessions: sortSessions(state.sessions, pins) }))
+}
+
 export const renameSession = (id: string, title: string) => {
   if (get().importingHistory || deletingSessions.has(id)) {
     return
@@ -668,13 +712,15 @@ export const sendMessage = (targetSessionId: string | null) => {
     id: createId(),
     role: 'user',
     content: text,
-    files: files.map(({ id, serverId, name, size, isImage, mimeType }) => ({
+    files: files.map(({ id, serverId, name, size, isImage, mimeType, truncated, tokens }) => ({
       id,
       serverId,
       name,
       size,
       isImage,
       mimeType,
+      ...(truncated ? { truncated } : {}),
+      ...(typeof tokens === 'number' ? { tokens } : {}),
     })),
     createdAt: now,
   }
@@ -691,6 +737,19 @@ export const sendMessage = (targetSessionId: string | null) => {
   }
   persist(sessionId)
   clearSentDraft(targetSessionId)
+  // 官方口径：文档过大时照样发，但明确告诉用户模型只读了多少
+  const sliced = files.find((file) => file.truncated)
+  if (sliced?.truncated) {
+    showToast({
+      key: 'attachmentTruncatedNotice',
+      params: {
+        name: sliced.name,
+        percent: Math.round((sliced.truncated.kept / sliced.truncated.total) * 100),
+        kept: formatCharCount(sliced.truncated.keptTokens),
+        total: formatCharCount(sliced.truncated.totalTokens),
+      },
+    })
+  }
   void streamReply(sessionId, reply, { history, question })
   return true
 }
@@ -924,10 +983,12 @@ export const generateSessionRecord = async (
   const persona = resolveSessionPersona(sessionId).entry
   const notes = (session.memory?.notes ?? []).map((note) => `- ${note.text}`).join('\n')
   const recent = getVisibleMessages(session).slice(-RECORD_SOURCE_MESSAGES)
-  const transcript = recent
-    .map((message) => `${message.role === 'user' ? '用户' : (persona ? persona.card.name : 'AI')}：${recordText(message)}`)
-    .join('\n')
-    .slice(-RECORD_SOURCE_CHARS)
+  const transcript = safeTail(
+    recent
+      .map((message) => `${message.role === 'user' ? '用户' : (persona ? persona.card.name : 'AI')}：${recordText(message)}`)
+      .join('\n'),
+    RECORD_SOURCE_CHARS
+  )
   const english = locale === 'en-US'
   const system = [
     persona
@@ -941,7 +1002,7 @@ export const generateSessionRecord = async (
   ]
     .filter(Boolean)
     .join('\n')
-  const body: CreateMessageRequest = {
+  const { body } = buildInternalRequest({
     model: isCustomApiOrigin() ? 'deepseek-flash' : useSettings.getState().recordModel,
     system,
     messages: [
@@ -956,10 +1017,7 @@ export const generateSessionRecord = async (
           .join('\n\n'),
       },
     ],
-    thinking: { type: 'disabled' },
-    safety_check: safetyCheck(),
-    tools: [],
-  }
+  })
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 120_000)
   try {
@@ -999,16 +1057,18 @@ export const generateMemoryNote = async (
   }
   const notes = (session.memory?.notes ?? []).map((note) => `- ${note.text}`).join('\n')
   const personaEntry = resolveSessionPersona(sessionId).entry
-  const transcript = getVisibleMessages(session)
-    .slice(-RECORD_SOURCE_MESSAGES)
-    .map((message) => `${message.role === 'user' ? '用户' : 'AI'}：${recordText(message)}`)
-    .join('\n')
-    .slice(-RECORD_SOURCE_CHARS)
-  const body: CreateMessageRequest = {
+  const transcript = safeTail(
+    getVisibleMessages(session)
+      .slice(-RECORD_SOURCE_MESSAGES)
+      .map((message) => `${message.role === 'user' ? '用户' : 'AI'}：${recordText(message)}`)
+      .join('\n'),
+    RECORD_SOURCE_CHARS
+  )
+  const { body } = buildInternalRequest({
     model: 'deepseek-flash',
     system:
       '你把对话压缩成供后续对话使用的记忆笔记：只写事实、结论、偏好和待办，不写寒暄和过程。' +
-      '输出一份笔记，用「【关键事实】【用户偏好】【约定与进展】【待办】【文风样本】」分段；前四段每条以「· 」开头；【文风样本】里原样摘抄 2~4 句角色台词，不要改写；只输出笔记正文。' +
+      '输出一份笔记，用「【关键事实】【用户偏好】【约定与进展】【待办】」分段，每条以「· 」开头；不要抄台词，语气由后续的近期原文维持；只输出笔记正文。' +
       '篇幅由用户的要求决定：用户说要多长就写多长，没有说明时保持精简（约 600 字）。',
     messages: [
       {
@@ -1016,7 +1076,7 @@ export const generateMemoryNote = async (
         content: [
           instruction.trim() ? `【整理要求】\n${instruction.trim()}` : '',
           personaEntry
-            ? `【角色扮演背景】\n你在扮演「${personaEntry.card.name}」${personaEntry.card.style ? `，说话风格：${personaEntry.card.style}` : ''}。务必留下角色状态、关系与原话摘录。`
+            ? `【角色扮演背景】\n你在扮演「${personaEntry.card.name}」${personaEntry.card.style ? `，说话风格：${personaEntry.card.style}` : ''}。务必留下角色状态、关系与情节进展。`
             : '',
           notes ? `【已有笔记】\n${notes}` : '',
           `【最近的对话】\n${transcript}`,
@@ -1025,10 +1085,7 @@ export const generateMemoryNote = async (
           .join('\n\n'),
       },
     ],
-    thinking: { type: 'disabled' },
-    safety_check: safetyCheck(),
-    tools: [],
-  }
+  })
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 120_000)
   try {
@@ -1102,14 +1159,25 @@ const runCompaction = async (
   if (!options.duringStream && getStreamController(sessionId)) {
     return false
   }
-  // 手动整理保留最近 1 轮；自动整理留 4 轮，模型才不会丢掉刚刚发生的事情
-  const keep = options.keep ?? (source === 'manual' ? 1 : MEMORY_KEEP_ROUNDS)
   const rounds = getUnfoldedRounds(session)
-  const candidates = rounds.slice(0, Math.max(0, rounds.length - keep))
+  // 近期原文按 token 保底，不按轮数：同一轮可以是 200 字也可以是 3000 字。
+  // 切法与横幅、面板共用 splitFoldableRounds，界面上说「能整理」就一定能整理。
+  const { kept, foldable: candidates } = splitFoldableRounds(
+    rounds,
+    source === 'manual' ? MANUAL_KEEP_TOKENS : MEMORY_KEEP_TOKENS,
+    options.keep
+  )
   const minimum = options.minimum ?? (source === 'manual' ? 1 : MEMORY_MIN_FOLD_ROUNDS)
   if (candidates.length < minimum) {
+    // 近期窗口按 token 保底，短对话整段都在窗口里：点「立即整理」不该毫无反应
+    if (source === 'manual' && rounds.length > 0) {
+      setMemoryError(sessionId, { key: 'memoryCompactTooShort' })
+    }
     return false
   }
+  // 这次不折叠、会原样留在上下文里的最近对话：给整理调用当只读参考，
+  // 否则摘要只描述「整理那一刻」的状态，和近期原文里已经发生的事打架。
+  const recentTranscript = buildTranscript(kept, locale, charsForTokens(RECENT_REF_TOKENS))
   const controller = new AbortController()
   memoryControllers.set(sessionId, controller)
   setCompacting(sessionId, true)
@@ -1231,6 +1299,7 @@ const runCompaction = async (
           instruction: session.memory?.instruction,
           noteLimit,
           persona,
+          recent: recentTranscript,
         })
       } catch (error) {
         // 400 且提示超长：把这一段对半砍开重试，并把后续段预算压下来
@@ -1618,6 +1687,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   }
   streamFlushes.set(sessionId, flush)
 
+  /** 撞上扩展模式的 32768 token 上限后，本轮改用标准模式重发一次（估算可能偏小） */
+  let standardForced = false
   try {
     for (let attempt = 0; ; attempt += 1) {
       /** 附件补齐前出错属于上传失败，请求还没有发出 */
@@ -1635,21 +1706,39 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         persist(sessionId)
         // 上下文快满（比如刚导入的超长会话）时先整理一轮再发，否则服务端必然拒绝
         const snapshot = getSession(sessionId)
-        if (
-          // 用户关掉自动整理就不再自动触发，改由界面上的黄黑警告提示手动整理
-          useSettings.getState().autoMemory &&
-          snapshot &&
-          getContextUsage(snapshot).usedTokens +
-            estimateTextTokens(prepared.question.content) >
-            CONTEXT_GUARD_TOKENS
-        ) {
-          await compactSessionMemory(sessionId, 'auto', {
-            duringStream: true,
-            keep: 1,
-            minimum: 1,
-          })
+        // 护栏估算必须含附件：一份 785 KB 的 txt 就是 17 万 token，
+        // 只算文字会让「堆了几份文档」的会话悄悄冲过 104.8 万的上限。
+        const guardTokens = snapshot
+          ? getContextUsage(snapshot).usedTokens + estimateMessageTokens(prepared.question)
+          : estimateMessageTokens(prepared.question)
+        if (snapshot && guardTokens > CONTEXT_GUARD_TOKENS) {
+          // 用户关掉自动整理时不再替他整理，直接说明；开着就先自动整一轮再发
+          if (useSettings.getState().autoMemory) {
+            await compactSessionMemory(sessionId, 'auto', {
+              duringStream: true,
+              keep: 1,
+              minimum: 1,
+            })
+          }
+          const after =
+            getContextUsage(getSession(sessionId) ?? snapshot).usedTokens +
+            estimateMessageTokens(prepared.question)
+          if (after > CONTEXT_BLOCK_TOKENS) {
+            reply = settleReply(reply, 'error', Date.now(), {
+              kind: 'protocol',
+              message: '',
+              localMessage: { key: 'replyContextFull', params: { tokens: after } },
+            })
+            break
+          }
         }
         const activeSession = getSession(sessionId)
+        const prefs = useSettings.getState()
+        // getContextUsage 只统计「提问 + 有回答」的成对轮次，本轮提问还没成形，
+        // 得单独加上，否则带附件的长文档会被算成 0，永远触发不了降级判断。
+        const requestTokens =
+          (activeSession ? getContextUsage(activeSession).usedTokens : 0) +
+          estimateMessageTokens(prepared.question)
         const messages = toRequestMessages(
           prepared.history,
           prepared.question,
@@ -1660,31 +1749,48 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           // v4 pro 不支持图片：历史里的图片块直接不发（用户选择「发得出去但看不见图」）
           initial.model === 'deepseek-v4-pro'
         )
-        const events = streamMessage(
-          useSettings.getState().apiKey ?? '',
-          {
-            model: initial.model ?? currentModel(),
-            system: buildSystemPrompt(
-              SYSTEM_PROMPT,
-              renderMemorySection(activeSession?.memory, useSettings.getState().locale),
-              (() => {
-                const entry = resolveSessionPersona(sessionId).entry
-                return entry === null
-                  ? null
-                  : { card: entry.card, userName: usePersona.getState().userName }
-              })()
-            ),
-            messages,
-            thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
-            ...(initial.thinking
-              ? { output_config: { effort: useSettings.getState().thinkingEffort } }
-              : {}),
-            safety_check: safetyCheck(),
-            tools: serverTools(initial.search ?? false),
-            ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
-          },
-          controller.signal
-        )
+        // 请求体只从这里出去：扩展模式的四道闸门（工具 / 严格审查 / 标题 / 长输入）
+        // 全在 buildRequest 里统一判定，别再往这里加字段。
+        const built = buildRequest({
+          model: initial.model ?? currentModel(),
+          system: buildSystemPrompt(
+            SYSTEM_PROMPT,
+            renderMemorySection(activeSession?.memory, prefs.locale),
+            (() => {
+              const entry = resolveSessionPersona(sessionId).entry
+              return entry === null
+                ? null
+                : { card: entry.card, userName: usePersona.getState().userName }
+            })()
+          ),
+          messages,
+          questionText: prepared.question.content,
+          search: initial.search ?? false,
+          safety: prefs.safety,
+          thinking: initial.thinking ?? false,
+          effort: prefs.thinkingEffort,
+          wantTitle: titleRequests.has(controller),
+          inputTokens: requestTokens,
+          forceStandard: standardForced,
+        })
+        if (built.degraded) {
+          // 自动降级要说得清楚：用户可能刚点了联网，不能悄悄当没点
+          showToast({
+            key: 'replyExtendedDowngraded',
+            params: { chars: Math.max(1, Math.round(requestTokens / 7_500)) },
+          })
+        }
+        // 没要到服务端标题时本地兜一个，免得会话一直叫「新对话」
+        if (titleRequests.has(controller) && !built.titleRequested) {
+          titleRequests.delete(controller)
+          const fallback = prepared.question.content.trim().replace(/\s+/g, ' ')
+          if (fallback) {
+            updateSession(sessionId, (session) =>
+              session.title ? session : { ...session, title: fallback.slice(0, 20) }
+            )
+          }
+        }
+        const events = streamMessage(prefs.apiKey ?? '', built.body, controller.signal)
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {
           receivedContent ||= event.type === 'content_block_start'
@@ -1722,6 +1828,17 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             retryable: isRetryableApiError(error),
           })
           break
+        }
+        // 扩展模式的 32768 输入上限：报这个错时本轮退回标准模式重发一次，别让用户看到红字
+        if (
+          !standardForced &&
+          !receivedContent &&
+          error instanceof ApiError &&
+          error.status === 400 &&
+          /user input too long/i.test(error.message)
+        ) {
+          standardForced = true
+          continue
         }
         // 附件失效：重新补传后重发。收到过内容块（含丢弃的客户端工具）后不自动重发。
         if (

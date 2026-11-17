@@ -1,5 +1,6 @@
 import { openDB, type IDBPDatabase } from 'idb'
 import { create } from 'zustand'
+import { setStatusBarIconsDark, setThemeColor } from './nativeTheme.js'
 
 /**
  * 聊天背景：预设用 CSS 渐变（不占存储），自定义图片压缩后存 IndexedDB
@@ -24,7 +25,41 @@ const open = () =>
     },
   }))
 
-export const useWallpaper = create<{ preset: WallpaperPreset; customUrl: string | null }>(() => {
+/** 深色背景预设：顶栏与系统状态栏要换成浅色字 */
+const DARK_PRESETS: readonly WallpaperPreset[] = ['dusk']
+
+/** 背景够不够深：按平均亮度判断（0~255 取 110 为界），深色背景下白字才看得清 */
+const measureDark = async (blob: Blob): Promise<boolean> => {
+  try {
+    const bitmap = await decode(new File([blob], 'wallpaper', { type: blob.type || 'image/jpeg' }))
+    const canvas = document.createElement('canvas')
+    canvas.width = 16
+    canvas.height = 16
+    const context = canvas.getContext('2d', { willReadFrequently: true })
+    if (!context) {
+      return false
+    }
+    context.drawImage(bitmap, 0, 0, 16, 16)
+    if ('close' in bitmap) {
+      bitmap.close()
+    }
+    const { data } = context.getImageData(0, 0, 16, 16)
+    let sum = 0
+    for (let i = 0; i < data.length; i += 4) {
+      sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
+    }
+    return sum / (data.length / 4) < 110
+  } catch {
+    return false
+  }
+}
+
+export const useWallpaper = create<{
+  preset: WallpaperPreset
+  customUrl: string | null
+  /** 当前背景是不是深色：决定顶栏和系统状态栏用浅色还是深色 */
+  dark: boolean
+}>(() => {
   let preset: WallpaperPreset = 'none'
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
@@ -34,7 +69,7 @@ export const useWallpaper = create<{ preset: WallpaperPreset; customUrl: string 
   } catch {
     // 存储不可用就用默认
   }
-  return { preset, customUrl: null }
+  return { preset, customUrl: null, dark: DARK_PRESETS.includes(preset) }
 })
 
 let objectUrl: string | null = null
@@ -105,6 +140,8 @@ export const setCustomWallpaperBlob = async (blob: Blob): Promise<void> => {
   const db = await open()
   await db.put(STORE, blob, IMAGE_KEY)
   setObjectUrl(blob)
+  const dark = await measureDark(blob)
+  useWallpaper.setState({ dark })
   setWallpaper('custom')
 }
 
@@ -115,7 +152,10 @@ export const setCustomWallpaper = async (file: File): Promise<void> => {
 }
 
 export const setWallpaper = (preset: WallpaperPreset) => {
-  useWallpaper.setState({ preset })
+  // 自定义图沿用测出来的深浅；预设图按预设判断
+  useWallpaper.setState(
+    preset === 'custom' ? { preset } : { preset, dark: DARK_PRESETS.includes(preset) }
+  )
   try {
     localStorage.setItem(STORAGE_KEY, preset)
   } catch {
@@ -134,6 +174,7 @@ export const loadWallpaper = async (): Promise<void> => {
     const blob = (await db.get(STORE, IMAGE_KEY)) as Blob | undefined
     if (blob) {
       setObjectUrl(blob)
+      useWallpaper.setState({ dark: await measureDark(blob) })
     } else {
       // 图丢了就退回无背景，别留一片空
       setWallpaper('none')
@@ -145,9 +186,14 @@ export const loadWallpaper = async (): Promise<void> => {
 
 /** 把当前背景写到 body 上：预设走 CSS 选择器，自定义图注入 CSS 变量 */
 const applyWallpaper = () => {
-  const { preset, customUrl } = useWallpaper.getState()
+  const { preset, customUrl, dark } = useWallpaper.getState()
   const body = document.body
   body.dataset.wallpaper = preset
+  // 深色背景：顶栏换成浅色字，系统状态栏图标也跟着反过来
+  const darkBackdrop = preset !== 'none' && dark
+  body.dataset.wallpaperDark = darkBackdrop ? '1' : '0'
+  setStatusBarIconsDark(darkBackdrop)
+  setThemeColor(darkBackdrop ? '#14161c' : '#ffffff')
   if (preset === 'custom' && customUrl !== null) {
     body.style.setProperty('--ds-wallpaper-image', `url("${customUrl}")`)
   } else {

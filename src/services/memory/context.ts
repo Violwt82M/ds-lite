@@ -1,6 +1,9 @@
+import { CJK_CHAR_COST, estimateTextTokens } from '../../utils/textTokens.js'
 import { getVisibleMessages } from '../chat/branches.js'
 import { getContextRounds } from '../chat/reply.js'
-import type { Message, Session } from '../chat/types.js'
+import type { AssistantMessage, Message, Session, UserMessage } from '../chat/types.js'
+
+export { estimateTextTokens }
 
 /** 官方模型上下文上限：deepseek-flash / deepseek-v4-pro 均为 1M（输出上限 384K） */
 export const CONTEXT_LIMIT_TOKENS = 1_000_000
@@ -25,35 +28,47 @@ export const getContextLevel = (ratio: number): ContextLevel => {
 
 /** 自动整理线：45%（红色区间内），到这条线就把较早的轮次压缩成记忆笔记 */
 export const AUTO_COMPACT_RATIO = 0.45
+/**
+ * 整理后仍保留原文的最近内容（token）。风格靠这段原文，不靠笔记里抄的台词：
+ * 24k token 约 3.7 万字；手动整理也至少留 12k。
+ */
+export const MEMORY_KEEP_TOKENS = 24_000
+export const MANUAL_KEEP_TOKENS = 12_000
+/** 不管正文多长都至少保留的轮数，避免一条超长消息把整个窗口吃光 */
+export const MEMORY_MIN_KEEP_ROUNDS = 3
+/**
+ * 值得为它跑一次整理的最小量：低于这个数，整理一次要发好几个请求，
+ * 换来的空间却很有限，界面不该在这种时候催「立即整理」。
+ */
+export const MIN_FOLDABLE_TOKENS = 50_000
 /** 系统提示词、角色卡、记忆笔记与协议头的粗估占用 */
 const SYSTEM_OVERHEAD_TOKENS = 500
-/**
- * 一个汉字按 0.75 token 估（偏保守：宁可高估用量，也不要让用户以为还有空间）。
- * ASCII 约 0.3 token。只用于展示和阈值判断，不进入请求。
- */
-const CJK_CHAR_COST = 0.75
-const ASCII_CHAR_COST = 0.3
 /** 每条消息的角色标记与分隔符开销 */
 const MESSAGE_OVERHEAD_TOKENS = 8
-/** 图片按官方惯例折算；文档无法得知页数，取中庸值 */
+/** 图片按官方惯例折算；文档按原文件体积估（见 DOCUMENT_BYTES_PER_TOKEN） */
 const IMAGE_TOKENS = 1024
+/** 文档最小折算值，避免小文件被估成 0 */
 const DOCUMENT_TOKENS = 2048
+/**
+ * 文档按原文件体积估 token：中文 UTF-8 约 3 字节/字、约 4 字节/token。
+ * 实测 785 KB 的 txt 服务端算出 170,791 token，约 4.6 字节/token，
+ * 取 4 略偏保守即可 —— 关键是别再拿 2048 打发，否则水位条显示 0% 却在发送时炸。
+ */
+const DOCUMENT_BYTES_PER_TOKEN = 4
 
-const isCjk = (codePoint: number) =>
-  (codePoint >= 0x2e80 && codePoint <= 0x9fff) ||
-  (codePoint >= 0xac00 && codePoint <= 0xd7af) ||
-  (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-  (codePoint >= 0xfe30 && codePoint <= 0xfe4f) ||
-  (codePoint >= 0xff00 && codePoint <= 0xffef) ||
-  (codePoint >= 0x3000 && codePoint <= 0x303f)
-
-/** 本地粗估文本 token 数：不调用任何接口，允许有 10%~20% 误差。 */
-export const estimateTextTokens = (text: string): number => {
-  let tokens = 0
-  for (const char of text) {
-    tokens += isCjk(char.codePointAt(0) ?? 0) ? CJK_CHAR_COST : ASCII_CHAR_COST
+/** 单个附件的粗估：图片按官方惯例；文档有实测/估算 token 就用它，否则按体积折算 */
+export const estimateFileTokens = (file: {
+  isImage: boolean
+  size: number
+  tokens?: number
+}): number => {
+  if (file.isImage) {
+    return IMAGE_TOKENS
   }
-  return Math.ceil(tokens)
+  if (typeof file.tokens === 'number' && file.tokens > 0) {
+    return file.tokens
+  }
+  return Math.max(DOCUMENT_TOKENS, Math.ceil(file.size / DOCUMENT_BYTES_PER_TOKEN))
 }
 
 /** 单条消息的粗估；历史思考块服务端会丢弃，不计入。 */
@@ -61,7 +76,7 @@ export const estimateMessageTokens = (message: Message): number => {
   if (message.role === 'user') {
     let tokens = estimateTextTokens(message.content) + MESSAGE_OVERHEAD_TOKENS
     for (const file of message.files) {
-      tokens += file.isImage ? IMAGE_TOKENS : DOCUMENT_TOKENS
+      tokens += estimateFileTokens(file)
     }
     return tokens
   }
@@ -72,6 +87,51 @@ export const estimateMessageTokens = (message: Message): number => {
     }
   }
   return tokens
+}
+
+/**
+ * 把未折叠轮次切成「保留原文」与「可以折叠」两堆，规则与真正整理时完全一致：
+ * 从尾部往前累加到 keepTokens 为止（至少 MEMORY_MIN_KEEP_ROUNDS 轮）；
+ * 带附件的轮次只要不是最后一轮就优先折叠（附件块会跟着轮次每轮重发）。
+ */
+export const splitFoldableRounds = (
+  rounds: [UserMessage, AssistantMessage][],
+  keepTokens: number,
+  keepCountOverride?: number
+): { kept: [UserMessage, AssistantMessage][]; foldable: [UserMessage, AssistantMessage][] } => {
+  let keepCount = keepCountOverride ?? 0
+  if (keepCountOverride === undefined) {
+    let used = 0
+    for (let i = rounds.length - 1; i >= 0; i--) {
+      const [user, reply] = rounds[i]
+      used += estimateMessageTokens(user) + estimateMessageTokens(reply)
+      keepCount += 1
+      if (used >= keepTokens && keepCount >= MEMORY_MIN_KEEP_ROUNDS) {
+        break
+      }
+    }
+  }
+  const keepFrom = Math.max(0, rounds.length - keepCount)
+  const kept: [UserMessage, AssistantMessage][] = []
+  const foldable: [UserMessage, AssistantMessage][] = []
+  rounds.forEach((round, index) => {
+    const hasFiles = round[0].files.length > 0 && index < rounds.length - 1
+    if (index < keepFrom || hasFiles) {
+      foldable.push(round)
+    } else {
+      kept.push(round)
+    }
+  })
+  return { kept, foldable }
+}
+
+/** 这次整理大概能腾出多少 token：横幅与面板据此决定要不要劝用户整理 */
+export const getFoldableTokens = (session: Session, keepTokens = MEMORY_KEEP_TOKENS): number => {
+  const { foldable } = splitFoldableRounds(getUnfoldedRounds(session), keepTokens)
+  return foldable.reduce(
+    (sum, [user, reply]) => sum + estimateMessageTokens(user) + estimateMessageTokens(reply),
+    0
+  )
 }
 
 /** 已被折叠、不再进入请求上下文的回答消息 id */

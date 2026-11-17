@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useTranslate } from '../i18n/index.js'
 import { useSettings } from '../services/settings.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
+import { useSwipeSider } from './swipeSider.js'
 import {
   bindChatPersistence,
   initChat,
@@ -24,11 +25,13 @@ import { showToast } from '../components/base/toastState.js'
 import { onUploadNotice } from '../services/attachments.js'
 import { setupWallpaper } from '../services/wallpaper.js'
 import { initSharedArchive, useSharedArchive } from '../services/chat/history/sharedArchive.js'
+import { warmSearchIndex } from '../services/chat/searchIndex.js'
 import { Button } from '../components/base/Button.js'
 import { stopReadAloud } from '../services/speech/readAloud.js'
 import { CollapsedSider } from '../components/sider/CollapsedSider.js'
 import { closeMobileSider } from '../components/sider/mobileSiderState.js'
 import { MobileSider, Sider } from '../components/sider/Sider.js'
+import { SearchPage } from '../components/sider/SearchPage.js'
 import styles from './App.module.css'
 
 export const App = () => {
@@ -50,6 +53,8 @@ export const App = () => {
     state.activeId === null ? false : state.sessionLoadErrors[state.activeId] === true
   )
   const frameRef = useMobileViewport(isMobile)
+  // 正文任意位置右滑拉出会话列表（跟手 + 松手吸附）
+  useSwipeSider(frameRef, isMobile)
   const streaming = useChatStore((state) =>
     state.activeId === null ? false : Object.hasOwn(state.streaming, state.activeId)
   )
@@ -93,10 +98,33 @@ export const App = () => {
     }
   }, [])
 
+  // 会话列表就绪后，空闲时补齐正文搜索索引（新装/刚导入的库在这里一次建好，
+  // 之后搜索只扫内存，不会出现「点开搜索先卡两秒」）
+  useEffect(() => {
+    let cancelled = false
+    const run = () => {
+      if (!cancelled) {
+        void warmSearchIndex()
+      }
+    }
+    const timer = window.setTimeout(() => {
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(run, { timeout: 3000 })
+      } else {
+        run()
+      }
+    }, 800)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [])
+
   return (
     <>
       <div ref={frameRef} className={`${styles.frame} app-frame`}>
         {isMobile ? <MobileSider /> : siderCollapsed ? null : <Sider />}
+        <SearchPage />
         <main className={styles.main}>
           {saveError ? (
             <div className={styles.saveError} role="alert">

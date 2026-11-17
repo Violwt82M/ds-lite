@@ -1,8 +1,18 @@
 import clsx from 'clsx'
 import { memo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
-import { IconEditOutline16, IconEllipsisOutline16, IconTrashOutline16 } from '../base/icons.js'
-import { renameSession, selectSession } from '../../services/chat/store.js'
+import {
+  IconEditOutline16,
+  IconEllipsisOutline16,
+  IconPinOutline16,
+  IconTrashOutline16,
+} from '../base/icons.js'
+import {
+  pinSession,
+  renameSession,
+  selectSession,
+  unpinSession,
+} from '../../services/chat/store.js'
 import type { SessionSummary } from '../../services/chat/types.js'
 import { IconButton } from '../base/IconButton.js'
 import { Menu } from '../base/Menu.js'
@@ -12,10 +22,13 @@ import styles from './SessionItem.module.css'
 export const SessionItem = memo(function SessionItem({
   session,
   active,
+  pinned,
   onDelete,
 }: {
   session: SessionSummary
   active: boolean
+  /** 已置顶：列表里靠「置顶」分组体现，菜单里多一个「取消置顶」（列表不再画图钉） */
+  pinned: boolean
   onDelete: () => void
 }) {
   const t = useTranslate()
@@ -59,6 +72,22 @@ export const SessionItem = memo(function SessionItem({
       <div className={styles.action} onClick={(event) => event.stopPropagation()}>
         <Menu
           options={[
+            {
+              key: 'pin',
+              label: t(pinned ? 'sessionItemMenuPinTop' : 'sessionItemMenuPin'),
+              icon: <IconPinOutline16 />,
+              onSelect: () => pinSession(session.id),
+            },
+            ...(pinned
+              ? [
+                  {
+                    key: 'unpin',
+                    label: t('sessionItemMenuUnpin'),
+                    icon: <IconPinOutline16 />,
+                    onSelect: () => unpinSession(session.id),
+                  },
+                ]
+              : []),
             {
               key: 'rename',
               label: t('sessionItemMenuRenameOption'),

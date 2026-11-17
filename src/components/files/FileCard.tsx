@@ -19,9 +19,12 @@ export const FileCard = ({
   onRetry,
   onRemove,
   onOpen,
+  note,
 }: {
   name: string
   size: number
+  /** 追加在「扩展名 大小」后面的说明（如已截取比例） */
+  note?: string
   status?: 'uploading' | 'done' | 'error'
   error?: string
   onRetry?: () => void
@@ -31,7 +34,7 @@ export const FileCard = ({
   const t = useTranslate()
   const ext = getExtension(name)
   let icon: ReactNode = <FileIcon ext={ext} />
-  let description = [ext, formatSize(size)].filter(Boolean).join(' ')
+  let description = [ext, formatSize(size), note].filter(Boolean).join(' ')
   if (status === 'uploading') {
     icon = <span className={styles.spinner} />
     description = t('uploadFileStatusUploading')

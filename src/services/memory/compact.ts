@@ -1,6 +1,9 @@
 import { streamMessage } from '../api/client.js'
 import type { AssistantMessage, MemoryNote, SessionMemory, UserMessage } from '../chat/types.js'
 import type { Locale } from '../settings.js'
+import { safeSlice, safeTail, safeTruncate } from '../../utils/safeText.js'
+import { formatSize, getExtension } from '../attachments.js'
+import { STANDARD_MODE } from '../chat/request.js'
 
 /** 单条笔记的长度上限，避免模型把整段对话抄进记忆 */
 export const MAX_NOTE_CHARS = 400
@@ -28,53 +31,55 @@ export const bigNoteLimit = (foldedChars: number): number => {
 /** 一次覆盖式整理最多保留的笔记条数（提示词与解析共用） */
 export const MAX_OUTPUT_NOTES = 30
 /** 送进整理调用的对话原文上限（字符数）；超出只保留最近的 */
-const MAX_TRANSCRIPT_CHARS = 24_000
+/** 中文实测 0.59~0.70 token/字符，取 0.65 折算：预算用 token 表达，别按字符猜 */
+export const charsForTokens = (tokens: number) => Math.floor(tokens / 0.65)
+const MAX_TRANSCRIPT_CHARS = charsForTokens(15_600)
 /** 单条消息在整理原文里的截断长度 */
-const MAX_MESSAGE_CHARS = 1200
+const MAX_MESSAGE_CHARS = charsForTokens(780)
 
 const SYSTEM_PROMPTS: Record<Locale, string> = {
   'zh-CN': `你是对话记忆整理助手。你会看到同一个 AI 助手此前的长期记忆笔记，以及一段较早的对话记录。请把它整理成**一份**最新的长期记忆笔记，方便助手在看不到原文时继续这段对话。
 
 要求：
 1. 只写后续对话真正需要的事实：人物与关系、设定与世界观、已发生的关键情节、用户的偏好与禁忌、明确的约定或未完成的事、重要的名称与结论。
+   如果对话里出现过文档或图片附件（转录里以「附件：」开头），必须写进【资料】：文件名、它大致是什么内容、模型读了多少。不要复述文档正文，也不要假装读过没读到的部分。
 2. 覆盖式整理：你输出的就是整理后的完整笔记，它会整体替换旧笔记。请把【已有记忆】与本次对话合并去重；旧说法被推翻时直接改写成正确说法；已经过时或不再重要的删掉。
 3. 先判断这段对话是哪种，再决定写什么：
-   · 角色扮演 / 人物对话 / 小说或剧本创作：重点是角色当前状态、彼此关系、情节进展、未解决的伏笔，并且必须摘录原话当语气锚点。
-   · 普通使用（问问题、查资料、办事、写代码）：重点是事实与结论、用户的要求与偏好、怎么称呼用户、已经定下来的方案、还没做完的事，**不要写文风样本**。
+   · 角色扮演 / 人物对话 / 小说或剧本创作：重点是角色当前状态、彼此关系、情节进展、未解决的伏笔。语气与文风由后续的近期原文保持，笔记里不要抄台词。
+   · 普通使用（问问题、查资料、办事、写代码）：重点是事实与结论、用户的要求与偏好、怎么称呼用户、已经定下来的方案、还没做完的事。
    如果用户消息里带了【角色扮演背景】，直接按角色扮演处理，不用再判断。
 4. 输出格式：一份笔记，用下面五个小标题分段，没有内容的段直接省略：
 【关键事实】
 【角色与关系】
 【情节进展】
+【资料】
 【待办】
-【文风样本】
-   前四段每条一行、以「· 」开头，一句话说清一件事。
-5. 【文风样本】用于防止语气走样：从对话里**原样摘抄** 2~4 句角色自己的台词（不要改写、不要总结、保持原有的口头禅、称呼、标点和语气词），每句一行，前面不要加「· 」。判断为普通对话时整段省略。
-6. 篇幅以【篇幅要求】为准；宁可少写，也要写得准，但人物状态、关系变化、情节转折、伏笔与未解决的事不能省。
-7. 用户自己写下的偏好、约定、禁忌是重要事实，务必保留；用户明确要求怎么称呼自己时，原样记下。
-8. 不要复述说话过程，不要写「用户问…助手答…」，不要评价，不要加任何前言后语。
-9. 只输出笔记正文，不要代码块、不要解释。`,
+   每条一行、以「· 」开头，一句话说清一件事。
+5. 篇幅以【篇幅要求】为准；宁可少写，也要写得准，但人物状态、关系变化、情节转折、伏笔与未解决的事不能省。
+6. 用户自己写下的偏好、约定、禁忌是重要事实，务必保留；用户明确要求怎么称呼自己时，原样记下。
+7. 不要复述说话过程，不要写「用户问…助手答…」，不要评价，不要加任何前言后语。
+8. 只输出笔记正文，不要代码块、不要解释。`,
   'en-US': `You maintain the long-term memory notes of an AI assistant. You see the notes so far plus an earlier part of the conversation. Produce the updated, complete note so the assistant can continue without the original text.
 
 Rules:
 1. Keep only facts needed later: people and relationships, setting, key plot points, user preferences and dislikes, agreements or unfinished tasks, important names and conclusions.
+   If documents or images appeared in the conversation (transcript lines starting with "Attachments:"), record them under [Documents]: file name, roughly what it contains, how much the model read. Never restate the document body, and never pretend to have read parts that were cut.
 2. Rewrite in place: your output is the complete note and replaces the old one. Merge and deduplicate [Existing memory] with this conversation; when an old fact is superseded, write the correct fact directly; drop anything obsolete.
 3. First decide what kind of conversation this is:
-   - Roleplay / character dialogue / fiction or script writing: focus on the character's current state, relationships, plot progress and open threads, and always quote lines verbatim as a voice anchor.
-   - Ordinary use (questions, research, tasks, coding): focus on facts and conclusions, the user's requests and preferences, how the user wants to be addressed, settled decisions and unfinished work. **Do not write voice samples.**
+   - Roleplay / character dialogue / fiction or script writing: focus on the character's current state, relationships, plot progress and open threads. Tone and style come from the recent messages that stay verbatim, so do not copy dialogue into the note.
+   - Ordinary use (questions, research, tasks, coding): focus on facts and conclusions, the user's requests and preferences, how the user wants to be addressed, settled decisions and unfinished work.
    If the user message contains [Roleplay context], treat it as roleplay without further judgement.
 4. Format: one note, split into these sections and skip empty ones:
 [Key facts]
 [Characters and relationships]
 [Plot progress]
+[Documents]
 [To do]
-[Voice samples]
-   In the first four sections each line starts with "· ".
-5. [Voice samples] stops the voice from drifting: copy 2-4 lines of the character's own dialogue **verbatim** (no rewriting, no summarizing, keep catchphrases, forms of address, punctuation and interjections), one line each, no "· " prefix. Omit the section for ordinary conversations.
-6. Follow [Length requirement]; fewer but accurate is better, but never drop character states, relationship changes, plot turns, foreshadowing and open threads.
-7. Facts the user wrote themselves (preferences, agreements, dislikes) must be kept; if the user says how they want to be addressed, record it verbatim.
-8. Do not narrate the exchange, no commentary, no preamble or closing.
-9. Output the note body only, no code fences, no explanation.`,
+   Each line starts with "· " and states one thing.
+5. Follow [Length requirement]; fewer but accurate is better, but never drop character states, relationship changes, plot turns, foreshadowing and open threads.
+6. Facts the user wrote themselves (preferences, agreements, dislikes) must be kept; if the user says how they want to be addressed, record it verbatim.
+7. Do not narrate the exchange, no commentary, no preamble or closing.
+8. Output the note body only, no code fences, no explanation.`,
 }
 
 const LIST_HEADERS: Record<Locale, string> = { 'zh-CN': '【已有记忆】', 'en-US': '[Existing memory]' }
@@ -83,26 +88,36 @@ const TRANSCRIPT_HEADER: Record<Locale, string> = {
   'en-US': '[Conversation to condense]',
 }
 const NONE_NOTE: Record<Locale, string> = { 'zh-CN': '（无）', 'en-US': '(none)' }
+const RECENT_HEADER: Record<Locale, string> = {
+  'zh-CN': '【最近对话（只读参考）】',
+  'en-US': '[Recent messages (read-only reference)]',
+}
+const RECENT_RULE: Record<Locale, string> = {
+  'zh-CN':
+    '以下是这次**不参与整理**、会原样留在上下文里的最近几轮。它们用来判断旧笔记里哪些说法已经过时：冲突时以它们为准，把旧说法改对。不要把它们的细节抄进笔记。',
+  'en-US':
+    'The rounds below are NOT being condensed; they stay in the context verbatim. Use them only to spot outdated statements in the old notes and correct them. Do not copy their details into the note.',
+}
 const PERSONA_HEADER: Record<Locale, string> = {
   'zh-CN': '【角色扮演背景】',
   'en-US': '[Roleplay context]',
 }
 const PERSONA_RULE: Record<Locale, (name: string, style: string) => string> = {
   'zh-CN': (name, style) =>
-    `这段对话是角色扮演，你在扮演「${name}」${style ? `，说话风格：${style}` : ''}。整理时务必保留角色当前状态与彼此关系，并原样摘录 2~4 句角色台词放进【文风样本】。`,
+    `这段对话是角色扮演，你在扮演「${name}」${style ? `，说话风格：${style}` : ''}。整理时务必保留角色当前状态与彼此关系、情节进展与未解决的伏笔；不要抄台词，语气由近期原文维持。`,
   'en-US': (name, style) =>
-    `This conversation is roleplay; you play "${name}"${style ? `, speaking style: ${style}` : ''}. Keep the character's current state and relationships, and copy 2-4 lines of the character's dialogue verbatim into [Voice samples].`,
+    `This conversation is roleplay; you play "${name}"${style ? `, speaking style: ${style}` : ''}. Keep the character's current state, relationships, plot progress and open threads; do not copy dialogue, the recent messages carry the voice.`,
 }
 
 const MODE_HEADER: Record<Locale, string> = { 'zh-CN': '【整理模式】', 'en-US': '[Mode]' }
 const MODE_RULE: Record<Locale, Record<'rp' | 'plain', string>> = {
   'zh-CN': {
-    rp: '用户指定按角色扮演整理：必须输出【文风样本】，原样摘抄 2~4 句角色台词。',
-    plain: '用户指定按普通对话整理：省略【文风样本】，不要自己判断这段像角色扮演。',
+    rp: '用户指定按角色扮演整理：重点保留角色状态、彼此关系、情节进展与未解决的伏笔。',
+    plain: '用户指定按普通对话整理：只写事实、结论、偏好与待办，不要按角色扮演写。',
   },
   'en-US': {
-    rp: 'The user forces roleplay mode: you must emit [Voice samples] with 2-4 verbatim lines.',
-    plain: 'The user forces ordinary mode: omit [Voice samples] and do not guess otherwise.',
+    rp: 'The user forces roleplay mode: focus on character state, relationships, plot progress and open threads.',
+    plain: 'The user forces ordinary mode: facts, conclusions, preferences and to-dos only.',
   },
 }
 
@@ -120,8 +135,7 @@ const DEMAND_HEADER: Record<Locale, string> = {
   'en-US': '[What the user asked you to keep]',
 }
 
-const truncate = (text: string, limit: number) =>
-  text.length <= limit ? text : `${text.slice(0, limit)}…`
+const truncate = (text: string, limit: number) => safeTruncate(text, limit)
 
 /**
  * 分段整理：把待折叠的轮次按字符预算切成若干段。
@@ -170,7 +184,15 @@ export const splitRounds = (
   return chunks
 }
 
-/** 把待折叠的轮次拼成整理原文：按时间顺序，单条与总量都有上限，防止整理调用本身爆上下文 */
+const FILE_LABEL: Record<Locale, string> = { 'zh-CN': '附件', 'en-US': 'Attachments' }
+const IMAGE_LABEL: Record<Locale, string> = { 'zh-CN': '图片', 'en-US': 'image' }
+const READ_LABEL: Record<Locale, string> = { 'zh-CN': '模型只读了前 ', 'en-US': 'model read only the first ' }
+
+/**
+ * 把待折叠的轮次拼成整理原文：按时间顺序，单条与总量都有上限，防止整理调用本身爆上下文。
+ * 附件只写「名称 / 类型 / 体积 / 读了多少」——正文本来就不在文本里，
+ * 但不写这一行，整理完的笔记里连「读过一份文档」都不会留下。
+ */
 export const buildTranscript = (
   rounds: [UserMessage, AssistantMessage][],
   locale: Locale,
@@ -189,13 +211,23 @@ export const buildTranscript = (
       roundLabel.replace('{n}', String(index + 1)),
       `${userLabel}：${truncate(user.content.trim(), MAX_MESSAGE_CHARS)}`,
     ]
+    if (user.files.length > 0) {
+      const listed = user.files.map((file) => {
+        const kind = file.isImage ? IMAGE_LABEL[locale] : getExtension(file.name) || FILE_LABEL[locale]
+        const read = file.truncated
+          ? `，${READ_LABEL[locale]}${Math.round((file.truncated.kept / file.truncated.total) * 100)}%`
+          : ''
+        return `${file.name}（${kind}，${formatSize(file.size)}${read}）`
+      })
+      parts.push(`${FILE_LABEL[locale]}：${listed.join(locale === 'zh-CN' ? '；' : '; ')}`)
+    }
     if (answer) {
       parts.push(`${assistantLabel}：${truncate(answer, MAX_MESSAGE_CHARS)}`)
     }
     lines.push(parts.join('\n'))
   }
   const text = lines.join('\n\n')
-  return text.length <= maxChars ? text : `…${text.slice(text.length - maxChars)}`
+  return safeTail(text, maxChars)
 }
 
 /** 由已有笔记与新对话整理出新的笔记列表；只读流式文本，落库由调用方负责。 */
@@ -230,9 +262,7 @@ export const summarizeOverview = async ({
       model: 'deepseek-flash',
       system: OVERVIEW_PROMPTS[locale],
       messages: [{ role: 'user', content: transcript }],
-      thinking: { type: 'disabled' },
-      tools: [],
-      safety_check: { level: 'low' },
+      ...STANDARD_MODE,
     },
     signal
   )
@@ -246,7 +276,7 @@ export const summarizeOverview = async ({
       text += event.delta.text
     }
   }
-  return text.replace(/\s+/g, ' ').trim().slice(0, 200)
+  return safeSlice(text.replace(/\s+/g, ' ').trim(), 0, 200)
 }
 
 /** 把上一次的概览和新压出来的几段合并：越老越简，只留主线 */
@@ -283,9 +313,7 @@ export const mergeOverview = async ({
             .join('\n\n'),
         },
       ],
-      thinking: { type: 'disabled' },
-      tools: [],
-      safety_check: { level: 'low' },
+      ...STANDARD_MODE,
     },
     signal
   )
@@ -299,7 +327,7 @@ export const mergeOverview = async ({
       text += event.delta.text
     }
   }
-  return text.trim().slice(0, 600)
+  return safeSlice(text.trim(), 0, 600)
 }
 
 export const summarizeRounds = async ({
@@ -312,9 +340,12 @@ export const summarizeRounds = async ({
   noteLimit,
   persona,
   mode,
+  recent,
 }: {
   apiKey: string
   transcript: string
+  /** 本次不折叠、会原样留在上下文里的最近对话：只读参考，用来对齐现状 */
+  recent?: string
   existingNotes: string[]
   locale: Locale
   signal: AbortSignal
@@ -338,14 +369,12 @@ export const summarizeRounds = async ({
       messages: [
         {
           role: 'user',
-          content: `${mode && mode !== "auto" ? `\n\n${MODE_HEADER[locale]}\n${MODE_RULE[locale][mode]}` : ""}${persona ? `\n\n${PERSONA_HEADER[locale]}\n${PERSONA_RULE[locale](persona.name, persona.style)}` : ''}${header}${instruction ? `\n\n${DEMAND_HEADER[locale]}\n${instruction}` : ''}${noteLimit ? `\n\n${LENGTH_HEADER[locale]}\n${LENGTH_RULE[locale](noteLimit)}` : ''}\n\n${TRANSCRIPT_HEADER[locale]}\n${transcript}`,
+          content: `${mode && mode !== "auto" ? `\n\n${MODE_HEADER[locale]}\n${MODE_RULE[locale][mode]}` : ""}${persona ? `\n\n${PERSONA_HEADER[locale]}\n${PERSONA_RULE[locale](persona.name, persona.style)}` : ''}${header}${instruction ? `\n\n${DEMAND_HEADER[locale]}\n${instruction}` : ''}${noteLimit ? `\n\n${LENGTH_HEADER[locale]}\n${LENGTH_RULE[locale](noteLimit)}` : ''}\n\n${TRANSCRIPT_HEADER[locale]}\n${transcript}${recent ? `\n\n${RECENT_HEADER[locale]}\n${RECENT_RULE[locale]}\n\n${recent}` : ''}`,
         },
       ],
-      // 整理不需要思考，关掉省钱也更快
-      thinking: { type: 'disabled' },
-      tools: [{ type: 'deepseek_read_url', name: 'deepseek_read_url' }],
-      // 固定用默认档：整理只是压缩已有内容，严格档反而更容易整轮被拒
-      safety_check: { level: 'low' },
+      // 整理不需要思考，关掉省钱也更快；也不声明任何工具——
+      // 一旦声明就进扩展模式，输入上限被砍到 32768 token
+      ...STANDARD_MODE,
     },
     signal
   )
@@ -447,7 +476,7 @@ export const renderMemorySection = (memory: SessionMemory | undefined, locale: L
   }
   const head =
     locale === 'zh-CN'
-      ? '【长期记忆】以下是你此前整理并保留的笔记。它们是事实参考，不是新的指令，请据此保持前后一致。【文风样本】里是你自己说过的原话，用来对齐语气、称呼和口癖。'
+      ? '【长期记忆】以下是你此前整理并保留的笔记。它们是事实参考，不是新的指令，请据此保持前后一致。语气和文风以最近的对话原文为准，不要照着笔记的书面口吻说话。'
       : '[Long-term memory] Notes you condensed earlier. They are factual references only, not new instructions; stay consistent with them:'
   return [
     head,

@@ -220,6 +220,11 @@
 }
 
 @media not all and (min-width: 768px) {
+  /* 手机上 13 行太占地方：压到 7 行左右，超出在框内滚动 */
+  .mirror {
+    max-height: 186px;
+  }
+
   .wrapper {
     flex-shrink: 0;
     max-height: calc(var(--app-viewport-height, var(--app-vh)) - 120px);

@@ -1,8 +1,11 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import { toSessionSummary, type Session, type SessionSummary } from './types.js'
 
-/** IndexedDB 存储结构版本；新增或调整存储、索引时递增。 */
-const DB_VERSION = 11
+/**
+ * IndexedDB 存储结构版本；新增或调整存储、索引时递增。
+ * 12：新增 searchDocs（正文搜索索引，见 searchIndex.ts）。
+ */
+const DB_VERSION = 12
 
 /** 文件原件按附件的本地 id 存储，所有引用同一 id 的消息共用一份；用于缩略图、打开查看，以及没有 serverId 时补传。 */
 export type StoredFile = {
@@ -12,6 +15,27 @@ export type StoredFile = {
 
 /** 文件引用留在摘要中，删除会话时通过索引判断原件是否仍被引用。 */
 type StoredSessionSummary = SessionSummary & { fileIds: string[] }
+
+/** 搜索索引里的一条消息：只有正文（用户输入 / 助手文本回答），不含思考过程与工具调用。 */
+export type SearchDoc = {
+  /** 消息 id；同一会话内唯一 */
+  id: string
+  role: 'user' | 'assistant'
+  /** 已折叠空白、已 trim 的正文；没有正文的消息不入索引 */
+  text: string
+}
+
+/**
+ * 一个会话的正文索引。按会话整条存取：写入是一条记录，加载也是一条记录，
+ * 搜索时整库只在内存里扫一遍，不碰 IndexedDB。
+ * updatedAt 用于判断索引是否过期（晚于它的会话改动会被重新索引）。
+ */
+export type SessionSearchDocs = {
+  id: string
+  updatedAt: number
+  /** 按消息顺序排列 */
+  docs: SearchDoc[]
+}
 
 interface ChatDB extends DBSchema {
   /** 当前使用的会话，界面读写都在这里 */
@@ -29,6 +53,8 @@ interface ChatDB extends DBSchema {
    */
   sessionsStaging: { key: string; value: Session }
   filesStaging: { key: string; value: StoredFile }
+  /** 正文搜索索引：一个会话一条，搜索时整库读进内存（见 searchIndex.ts） */
+  searchDocs: { key: string; value: SessionSearchDocs }
 }
 
 let dbPromise: Promise<IDBPDatabase<ChatDB>> | null = null
@@ -57,7 +83,13 @@ const getDB = () =>
   (dbPromise ??= openDB<ChatDB>('chat-demo', DB_VERSION, {
     upgrade(db, _oldVersion, _newVersion, tx) {
       // 初始化当前格式需要的存储与索引，不迁移旧消息。
-      for (const name of ['sessions', 'files', 'sessionsStaging', 'filesStaging'] as const) {
+      for (const name of [
+        'sessions',
+        'files',
+        'sessionsStaging',
+        'filesStaging',
+        'searchDocs',
+      ] as const) {
         if (!db.objectStoreNames.contains(name)) {
           db.createObjectStore(name, { keyPath: 'id' })
         }
@@ -101,6 +133,15 @@ export const saveSession = async (session: Session, files: StoredFile[] = []): P
   ])
 }
 
+/** 读取整库正文索引；搜索时一次性读进内存，之后不再碰 IndexedDB。 */
+export const loadAllSearchDocs = async (): Promise<SessionSearchDocs[]> =>
+  (await getDB()).getAll('searchDocs')
+
+/** 写入一个会话的正文索引（整条覆盖）。 */
+export const saveSearchDocs = async (docs: SessionSearchDocs): Promise<void> => {
+  await (await getDB()).put('searchDocs', docs)
+}
+
 /** 未打开的会话也可重命名，只读取该会话，原子更新详情和列表。 */
 export const renameSession = async (id: string, title: string): Promise<void> => {
   const tx = (await getDB()).transaction(['sessions', 'sessionSummaries'], 'readwrite')
@@ -125,7 +166,10 @@ export const renameSession = async (id: string, title: string): Promise<void> =>
 
 /** 删除会话，仅清理已无会话引用的本地原件；远端文件不删。 */
 export const deleteSession = async (sessionId: string): Promise<void> => {
-  const tx = (await getDB()).transaction(['sessions', 'sessionSummaries', 'files'], 'readwrite')
+  const tx = (await getDB()).transaction(
+    ['sessions', 'sessionSummaries', 'files', 'searchDocs'],
+    'readwrite'
+  )
   await Promise.all([
     (async () => {
       try {
@@ -133,6 +177,7 @@ export const deleteSession = async (sessionId: string): Promise<void> => {
         const summary = await summaries.get(sessionId)
         await tx.objectStore('sessions').delete(sessionId)
         await summaries.delete(sessionId)
+        await tx.objectStore('searchDocs').delete(sessionId)
         for (const id of summary?.fileIds ?? []) {
           if ((await summaries.index('fileIds').count(id)) === 0) {
             await tx.objectStore('files').delete(id)
@@ -216,7 +261,7 @@ export const commitStaging = async (
   const { merge = false } = options
   const summaries: SessionSummary[] = []
   const tx = (await getDB()).transaction(
-    ['sessions', 'sessionSummaries', 'files', 'sessionsStaging', 'filesStaging'],
+    ['sessions', 'sessionSummaries', 'files', 'sessionsStaging', 'filesStaging', 'searchDocs'],
     'readwrite'
   )
   const move = async (from: 'sessionsStaging' | 'filesStaging', to: 'sessions' | 'files') => {
@@ -226,6 +271,7 @@ export const commitStaging = async (
         await target.clear()
         if (to === 'sessions') {
           await tx.objectStore('sessionSummaries').clear()
+          await tx.objectStore('searchDocs').clear()
         }
       }
       for (

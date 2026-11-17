@@ -88,9 +88,14 @@
         });
         window.addEventListener('load', function () {
           setTimeout(function () {
+            if (window.__dsLiteBooted) {
+              return;
+            }
             var root = document.getElementById('root');
-            if (!window.__dsLiteBooted && (!root || root.children.length === 0)) {
-              show('界面没有渲染出来（可能是内核版本过低）');
+            var height = root ? Math.round(root.getBoundingClientRect().height) : 0;
+            // 渲染了但高度为 0 也算没起来：老内核 CSS 变量失效时就是这个样子
+            if (!root || root.children.length === 0 || height < 120) {
+              show('界面没有渲染出来（内核 ' + (chromiumMajor() || '未知') + '，根节点高度 ' + height + 'px）');
             }
           }, 8000);
         });

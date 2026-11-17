@@ -1,5 +1,8 @@
 .dialog {
-  width: 520px;
+  /* 这是 Modal 内容区里的一个 div：写死 520px 会溢出父容器，
+     在 390px 屏上右边文字直接被切掉。跟随父容器宽度即可。 */
+  width: 100%;
+  min-width: 0;
 }
 
 .body {
@@ -8,6 +11,7 @@
   gap: 10px;
   max-height: min(calc(var(--app-vh) * 60 / 100), 560px);
   overflow-y: auto;
+  overflow-wrap: anywhere;
 }
 
 .lead {

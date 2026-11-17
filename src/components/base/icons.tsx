@@ -113,6 +113,15 @@ export const IconEditOutline16 = () => (
   </svg>
 )
 
+export const IconPinOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M9.879 1.879a1.5 1.5 0 0 1 2.121 0l2.121 2.121a1.5 1.5 0 0 1 0 2.121l-1.06 1.061a1.5 1.5 0 0 1-1.4.41l-2.55 2.55.35 2.1a.5.5 0 0 1-.85.44L5.5 10.5l-3.15 3.15-.7-.7L4.8 9.8 2.05 7.05a.5.5 0 0 1 .44-.85l2.1.35 2.55-2.55a1.5 1.5 0 0 1 .41-1.4z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
 export const IconEllipsisOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path

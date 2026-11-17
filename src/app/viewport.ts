@@ -58,7 +58,20 @@ export const useMobileViewport = (enabled: boolean) => {
       frame.style.removeProperty('--app-viewport-height')
       frame.style.removeProperty('--app-viewport-top')
     }
+    /**
+     * 兜底：老内核里 CSS 变量可能整条失效，.frame 的高度塌成 0（整页白屏）。
+     * 一旦量到高度为 0，就在这个元素上把视口变量补成真实高度，宁可少几像素也不白屏。
+     */
+    const guardHeight = () => {
+      if (frame.clientHeight > 0 || window.innerHeight <= 0) {
+        return
+      }
+      const height = `${window.innerHeight}px`
+      frame.style.setProperty('--app-vh', height)
+      frame.style.setProperty('--app-dvh', height)
+    }
     const update = () => {
+      guardHeight()
       // 双指缩放由浏览器处理，保持当前布局尺寸。
       if (viewport && viewport.scale !== 1) {
         return
@@ -92,6 +105,7 @@ export const useMobileViewport = (enabled: boolean) => {
     }
 
     update()
+    guardHeight()
     viewport?.addEventListener('resize', schedule)
     viewport?.addEventListener('scroll', schedule)
     window.addEventListener('resize', schedule)

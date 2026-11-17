@@ -1,0 +1,189 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* 全屏搜索页：输入框那行在上，结果区吃满剩下的高度 */
+.pageRoot {
+  flex: 1;
+  min-height: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+
+  & .field {
+    flex: 1;
+  }
+}
+
+.pageRoot .list {
+  max-height: none;
+  flex: 1;
+  min-height: 0;
+}
+
+.pageRoot .results {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 胶囊输入框：和侧边栏「新对话」按钮同一套视觉语言，深色主题靠变量自动切换 */
+.field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 100px;
+  background: var(--dsw-alias-bg-layer-2);
+  transition: border-color 0.2s ease;
+
+  &:focus-within {
+    border-color: var(--dsw-alias-brand-primary);
+  }
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+
+  &::placeholder {
+    color: var(--dsw-alias-label-tertiary);
+  }
+}
+
+.clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+/* 结果区只在有关键词时挂载；不给固定高度，让侧边栏列表在它下面继续正常滚动 */
+.results {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.status {
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.list {
+  max-height: min(40vh, 320px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.hit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--dsw-alias-button-primary-fill);
+  }
+}
+
+.hitTitle {
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 正文片段最多两行：搜索结果的上下文够看即可，不把列表撑高 */
+.hitSnippet {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  word-break: break-word;
+}
+
+.empty {
+  padding: 4px 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* 移动端（抽屉里）触摸目标高一点、输入字号 16px：小于 16px 部分内核会在聚焦时放大页面 */
+@media (max-width: 768px) {
+  .field {
+    height: 40px;
+  }
+
+  .input {
+    font-size: 16px;
+  }
+}
+
+/* mark 自带黄色背景，必须清掉，否则深色主题下刺眼；高亮颜色跟主题走 */
+.match {
+  background: none;
+  color: var(--dsw-alias-brand-text);
+  font-weight: 600;
+}

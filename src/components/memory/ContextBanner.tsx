@@ -3,10 +3,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { compactSessionMemory, useChatStore } from '../../services/chat/store.js'
 import type { Session } from '../../services/chat/types.js'
+import { useDrafts } from '../../services/chat/drafts.js'
 import {
+  estimateFileTokens,
+  estimateTextTokens,
   formatCharCount,
   getContextLevel,
   getContextUsage,
+  getFoldableTokens,
+  MANUAL_KEEP_TOKENS,
+  MIN_FOLDABLE_TOKENS,
 } from '../../services/memory/context.js'
 import { openMemoryPanel, useMemoryPanel } from '../../services/memory/state.js'
 import { useSettings } from '../../services/settings.js'
@@ -56,7 +62,20 @@ const writeDismissed = (sessionId: string, level: string) => {
 export const ContextBanner = ({ session }: { session: Session }) => {
   const t = useTranslate()
   const usage = useMemo(() => getContextUsage(session), [session])
-  const level = getContextLevel(usage.ratio)
+  // 已经在输入框里、还没发出去的提问和附件也算数：不然显示 0%，
+  // 一发出去就发现十几万 token（用户对此完全没预期）
+  const draft = useDrafts((state) => state.drafts.get(session.id))
+  const pendingTokens = draft
+    ? estimateTextTokens(draft.text) +
+      draft.attachments.reduce(
+        (sum, item) =>
+          sum + estimateFileTokens({ isImage: item.isImage, size: item.file.size, tokens: item.tokens }),
+        0
+      )
+    : 0
+  const usedTokens = usage.usedTokens + pendingTokens
+  const ratio = usedTokens / usage.limitTokens
+  const level = getContextLevel(ratio)
   const compacting = useMemoryPanel((state) => Boolean(state.compacting[session.id]))
   const notice = useMemoryPanel((state) => state.notices[session.id])
   const streaming = useChatStore((state) => Boolean(state.streaming[session.id]))
@@ -80,16 +99,25 @@ export const ContextBanner = ({ session }: { session: Session }) => {
     return () => window.clearTimeout(timer)
   }, [notice?.at, notice])
 
-  const used = formatCharCount(usage.usedTokens)
-  const percent = Math.min(100, Math.round(usage.ratio * 100))
+  const used = formatCharCount(usedTokens)
+  const percent = Math.min(100, Math.round(ratio * 100))
+  // 只按「有多少是可折叠的」决定要不要劝整理：刚聊两句、或者只是挂了个大附件，
+  // 这时候点整理要么没得整理，要么会把它刚要用的文档折掉，劝了也是白劝。
+  const foldableTokens = useMemo(
+    () => getFoldableTokens(session, MANUAL_KEEP_TOKENS),
+    [session]
+  )
+  const canCompact = foldableTokens >= MIN_FOLDABLE_TOKENS
   const levelText =
-    level === 'low'
-      ? t('contextBannerLow', { used, percent })
-      : level === 'mid'
-        ? t('contextBannerMid', { used, percent })
-        : level === 'high'
-          ? t(autoMemory ? 'contextBannerHighAuto' : 'contextBannerHigh', { used, percent })
-          : t('contextBannerCritical', { used, percent })
+    level === 'critical'
+      ? t('contextBannerCritical', { used, percent })
+      : !canCompact
+        ? t('contextBannerIdle', { used, percent })
+        : level === 'low'
+          ? t('contextBannerLow', { used, percent })
+          : level === 'mid'
+            ? t('contextBannerMid', { used, percent })
+            : t(autoMemory ? 'contextBannerHighAuto' : 'contextBannerHigh', { used, percent })
   const showNotice = Boolean(notice) && noticeVisible && !compacting
   const text = compacting
     ? t('contextBannerCompacting')
@@ -116,7 +144,7 @@ export const ContextBanner = ({ session }: { session: Session }) => {
         <button type="button" className={styles.link} onClick={openMemoryPanel}>
           {t('contextBannerView')}
         </button>
-        {compacting ? null : (
+        {compacting || !canCompact ? null : (
           <button
             type="button"
             className={clsx(

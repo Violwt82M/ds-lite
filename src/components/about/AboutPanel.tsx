@@ -9,7 +9,7 @@ import settingsStyles from '../settings/Settings.module.css'
 /** 上游开源项目与版本信息：二次开发必须保留出处 */
 export const OFFICIAL_REPO = 'https://github.com/deepseek-ai/chat-demo'
 export const OFFICIAL_LICENSE = 'https://github.com/deepseek-ai/chat-demo/blob/main/LICENSE'
-export const APP_VERSION = '0.9.26'
+export const APP_VERSION = '0.9.29'
 export const UPSTREAM_VERSION = '0.1.1'
 
 /** 设置里的「关于」分组：非官方声明、开源许可、上游仓库 */

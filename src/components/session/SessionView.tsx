@@ -34,7 +34,7 @@ export const SessionView = ({
       {isMobile ? (
         <MobileHeader title={title} session={session} />
       ) : (
-        <div className={styles.header}>
+        <div className={clsx(styles.header, 'ds-top-bar')}>
           <div className={clsx(styles.title, siderCollapsed && styles.withCollapsedSider)}>
             {title}
           </div>

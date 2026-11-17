@@ -2,6 +2,7 @@ import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
 import { useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { cardToJsonText, emptyCard, type PersonaCard } from '../../services/persona/card.js'
+import { saveFile } from '../../services/export/saveFile.js'
 import { savePersonaCard, setPersonaAvatar } from '../../services/persona/store.js'
 import { toAvatarDataUrl } from '../../utils/image.js'
 import { ImageCropDialog } from '../base/ImageCropDialog.js'
@@ -67,14 +68,12 @@ export const PersonaEditor = ({
     onClose()
   }
 
+  // 安卓 WebView 没有下载监听，<a download> 点了没反应；统一走 saveFile（APK 里是系统分享面板）
   const exportJson = () => {
     const blob = new Blob([cardToJsonText(draft)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${draft.name || 'persona'}.json`
-    link.click()
-    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+    void saveFile(blob, `${draft.name || 'persona'}.json`).catch(() => {
+      showToast({ key: 'personaExportFailed' })
+    })
   }
 
   const fields: { key: FieldKey; label: string; hint: string }[] = [

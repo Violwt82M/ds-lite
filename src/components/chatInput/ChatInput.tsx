@@ -192,10 +192,11 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         }
       }
     }
-    const error = addDraftFiles(sessionId, files, useSettings.getState().apiKey ?? '')
-    if (error) {
-      showToast(error)
-    }
+    void addDraftFiles(sessionId, files, useSettings.getState().apiKey ?? '').then((error) => {
+      if (error) {
+        showToast(error)
+      }
+    })
   }
   const retryFile = useCallback(
     (id: string) => {

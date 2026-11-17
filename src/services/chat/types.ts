@@ -8,6 +8,7 @@ import type {
   StopReason,
   TextCitation,
 } from '../api/types.js'
+import type { TextTruncation } from '../attachments.js'
 
 /**
  * 消息附件。id 是本地标识（IndexedDB files 表的主键，原件按它存储，所有引用同一 id 的消息共用一份），
@@ -23,6 +24,10 @@ export type FileAttachment = {
   isImage: boolean
   /** 具体 MIME；导入时没有原件或无法识别的为空字符串，不影响图片身份。 */
   mimeType: string
+  /** 超过单份文档预算时本地截断过：kept/total 是字符数，用来显示「模型仅阅读了 xx%」 */
+  truncated?: TextTruncation
+  /** 本地估算的 token（读取过原文时才有）；水位条与护栏优先用它，比按体积猜准 */
+  tokens?: number
 }
 
 /** 本地消息的分支关系；字段缺省时按线性消息列表处理。 */
@@ -79,7 +84,7 @@ export type AssistantMessage = MessageBranch & {
   model: ChatModel | null
   /** 请求时是否开启深度思考 */
   thinking?: boolean
-  /** 请求时是否声明 deepseek_web_search；关闭时仍声明 deepseek_read_url */
+  /** 请求时是否声明 deepseek_web_search（阅读链接工具按提问是否带链接另行决定） */
   search?: boolean
   /** 本轮请求的系统信息快照；各回答版本独立保存，续写沿用。历史消息中缺省的快照保持为空。 */
   latestReminder?: string

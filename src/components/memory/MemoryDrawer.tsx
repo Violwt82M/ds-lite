@@ -19,6 +19,8 @@ import {
   getContextLevel,
   getContextUsage,
   getUnfoldedRounds,
+  MANUAL_KEEP_TOKENS,
+  splitFoldableRounds,
 } from '../../services/memory/context.js'
 import { closeMemoryPanel, useMemoryPanel } from '../../services/memory/state.js'
 import { saveFile } from '../../services/export/saveFile.js'
@@ -48,7 +50,8 @@ const MemoryPanel = ({ session }: { session: Session }) => {
   const notes = session.memory?.notes ?? []
   const roundCount = getUnfoldedRounds(session).length
   // 手动整理保留最近 1 轮原文，其余折叠成笔记
-  const foldable = Math.max(0, roundCount - 1)
+  // 与真正整理共用同一套切法：说「能整理」就一定整理得出东西
+  const foldable = splitFoldableRounds(getUnfoldedRounds(session), MANUAL_KEEP_TOKENS).foldable.length
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null)
   const [instruction, setInstruction] = useState(session.memory?.instruction ?? '')
   const [summaryInstruction, setSummaryInstruction] = useState('')
@@ -72,7 +75,9 @@ const MemoryPanel = ({ session }: { session: Session }) => {
           ? session.messages.length > 0
             ? t('memoryCompactNoRounds', { count: session.messages.length })
             : t('memoryCompactEmptyChat')
-          : null
+          : foldable < 1
+            ? t('memoryCompactTooShort')
+            : null
 
   const onCompact = async () => {
     const before = getFoldedRounds(session.id)

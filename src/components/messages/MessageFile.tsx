@@ -162,6 +162,13 @@ export const MessageFile = ({
     <FileCard
       name={file.name}
       size={file.size}
+      note={
+        file.truncated
+          ? t('attachmentTruncated', {
+              percent: Math.round((file.truncated.kept / file.truncated.total) * 100),
+            })
+          : undefined
+      }
       status={uploading ? 'uploading' : failed ? 'error' : 'done'}
       error={errorText}
       onRetry={retry ?? undefined}

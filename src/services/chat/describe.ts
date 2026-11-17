@@ -31,6 +31,11 @@ export const describeReply = (reply: AssistantMessage): Notice | null => {
     if (kind === 'network') {
       return { text: translate('commonNetworkErrorToast') }
     }
+    // 扩展模式（联网 / 阅读链接 / 严格审查）的输入上限只有 32768 token
+    if (status === 400 && /user input too long/i.test(message)) {
+      const tokens = /(\d+)\s*tokens/i.exec(message)?.[1] ?? '?'
+      return { text: translate('replyInputTooLong', { tokens }) }
+    }
     switch (classifyStatus(status)) {
       case 'unauthorized':
         return { text: translate('replyInvalidApiKey'), action: 'apiKey' }

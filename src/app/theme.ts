@@ -67,8 +67,20 @@ const syncTheme = () => {
 const syncFontScale = () => {
   const scale = useSettings.getState().fontScale
   const zoom = scale === 100 ? 1 : scale / 100
-  // 视口单位（vh/vw）不会跟着 zoom 变，把比例挂到根节点上给 CSS 换算用
-  document.documentElement.style.setProperty('--app-zoom', String(zoom))
+  const root = document.documentElement.style
+  root.setProperty('--app-zoom', String(zoom))
+  // 视口单位（vh/vw）不会跟着 zoom 变，这里按比例换算成新值。
+  // 用字面量而不是 CSS 里的 calc(100vh / var(--app-zoom))：老内核对
+  // 「除以变量」支持不一致，值失效会让整页高度塌成 0（荣耀白屏同源问题）。
+  if (zoom === 1) {
+    root.removeProperty('--app-vh')
+    root.removeProperty('--app-vw')
+    root.removeProperty('--app-dvh')
+  } else {
+    root.setProperty('--app-vh', `calc(100vh / ${zoom})`)
+    root.setProperty('--app-vw', `calc(100vw / ${zoom})`)
+    root.setProperty('--app-dvh', `calc(100dvh / ${zoom})`)
+  }
   document.body.style.zoom = zoom === 1 ? '' : String(zoom)
 }
 

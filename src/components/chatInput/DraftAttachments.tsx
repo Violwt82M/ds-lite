@@ -89,7 +89,14 @@ const AttachmentItem = ({
   ) : (
     <FileCard
       name={item.file.name}
-      size={item.file.size}
+      size={item.originalSize ?? item.file.size}
+      note={
+        item.truncated
+          ? t('attachmentTruncated', {
+              percent: Math.round((item.truncated.kept / item.truncated.total) * 100),
+            })
+          : undefined
+      }
       status={status}
       error={error}
       onRetry={retry}
