@@ -28,10 +28,33 @@
       }
       #boot-error h1 { margin: 0; font-size: 19px; }
       #boot-error p { margin: 0; }
-      #boot-error .detail { font-size: 12px; color: #7a7f88; word-break: break-all; }
+      #boot-error .detail {
+        font: 12px/1.6 ui-monospace, Consolas, monospace;
+        color: #b3261e;
+        background: #fbf3f2;
+        border-radius: 8px;
+        padding: 8px 10px;
+        max-height: 38vh;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        user-select: text;
+        -webkit-user-select: text;
+      }
+      #boot-error .env { font-size: 11px; color: #7a7f88; word-break: break-all; }
+      #boot-error .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+      #boot-error button {
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        background: #f5f6f8;
+        font: inherit;
+      }
       @media (prefers-color-scheme: dark) {
         #boot-error { background: #16181c; color: #e6e8eb; }
-        #boot-error .detail { color: #8b909a; }
+        #boot-error .detail { background: #2a1e1d; color: #ff9d95; }
+        #boot-error .env { color: #8b909a; }
+        #boot-error button { border-color: #3a3f47; background: #23262b; color: #e6e8eb; }
       }
     </style>
     <script>
@@ -43,6 +66,33 @@
           var m = ua.match(/Chrom(?:e|ium)\/(\d+)/);
           return m ? parseInt(m[1], 10) : 0;
         }
+        function appVersion() {
+          var meta = document.querySelector('meta[name="application-version"]');
+          return (meta && meta.content) || '未知';
+        }
+        function copyText(text) {
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text);
+              return true;
+            }
+          } catch (e) {}
+          try {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return ok;
+          } catch (e) {
+            return false;
+          }
+        }
+        // 老内核只在真的低于门槛时才给「更新 WebView」的方案，其它错误如实说是程序出错
         function show(detail) {
           if (shown || window.__dsLiteBooted) return;
           shown = true;
@@ -52,21 +102,47 @@
             el.id = 'boot-error';
             document.body.appendChild(el);
           }
-          var engine = chromiumMajor() || '未知';
-          var text = String(detail || '未知错误').replace(/[<>&]/g, '');
+          var engine = chromiumMajor();
+          var tooOld = !!engine && engine < MIN_CHROMIUM;
+          var text = String(detail || '未知错误');
+          var env =
+            '版本 ' + appVersion() +
+            ' · 内核 ' + (engine ? 'Chromium ' + engine : '未识别') +
+            ' · 屏幕 ' + window.screen.width + '×' + window.screen.height +
+            '\n' + navigator.userAgent;
           el.innerHTML =
-            '<h1>DS Lite 没能启动</h1>' +
-            '<p>这台设备的浏览器内核是 <b>Chromium ' + engine + '</b>，低于本应用需要的版本（' + MIN_CHROMIUM + ' 以上）。</p>' +
-            '<p>解决办法：到应用商店搜索「Android System WebView」并更新到最新版，或升级系统后重试。</p>' +
-            '<p>更新完请<b>完全退出应用再打开</b>（不是切到后台）。</p>' +
-            '<p class="detail">错误信息：' + text + '</p>' +
-            '<p><button id="boot-retry" style="margin-top:8px;padding:8px 16px;border-radius:8px;border:1px solid #ccc;background:#f5f6f8">重新加载</button></p>';
-          var retry = document.getElementById('boot-retry');
-          if (retry) {
-            retry.onclick = function () {
-              window.location.reload();
-            };
-          }
+            '<h1>' + (tooOld ? '浏览器内核太旧，DS Lite 没能启动' : 'DS Lite 启动失败') + '</h1>' +
+            (tooOld
+              ? '<p>这台设备的浏览器内核是 <b>Chromium ' + engine + '</b>，低于本应用需要的版本（' + MIN_CHROMIUM + ' 以上）。</p>' +
+                '<p>这种机型已经很少见了，不用自己折腾去装东西；把这页截图发给开发者就行。</p>' +
+                '<p>想再试一次可以点「重新加载」，或者<b>完全退出应用再打开</b>（不是切到后台）。</p>'
+              : '<p>启动时出了个错，不是手机或内核的问题（内核已经够新）。可以点下面「重新加载」再试一次。</p>' +
+                '<p>如果每次都这样，请点「复制错误信息」，把这行字发给开发者。</p>') +
+            '<p class="detail"></p>' +
+            '<p class="env"></p>' +
+            '<p class="btns">' +
+            '<button id="boot-retry">重新加载</button>' +
+            '<button id="boot-copy">复制错误信息</button>' +
+            '</p>';
+          // 用 textContent 写入，避免错误里的尖括号当 HTML 执行
+          el.querySelector('.detail').textContent = text;
+          el.querySelector('.env').textContent = env;
+          el.querySelector('#boot-retry').onclick = function () {
+            window.location.reload();
+          };
+          el.querySelector('#boot-copy').onclick = function () {
+            var ok = copyText(env + '\n\n' + text);
+            this.textContent = ok ? '已复制' : '复制失败，请直接截图';
+            setTimeout(function () { document.getElementById('boot-copy').textContent = '复制错误信息'; }, 2000);
+          };
+          // 兜底页出来之后应用又活过来了：撤掉它，别挡着用户
+          var timer = setInterval(function () {
+            if (window.__dsLiteBooted) {
+              clearInterval(timer);
+              var node = document.getElementById('boot-error');
+              if (node) node.remove();
+            }
+          }, 500);
         }
         // 内核明显过旧：直接给说明，不去加载注定解析失败的脚本
         var major = chromiumMajor();
@@ -79,12 +155,33 @@
             show('浏览器内核 Chromium ' + major + '，版本过低');
           }
         }
+        // 运行时错误：带上堆栈，方便定位是哪个文件出错
         window.addEventListener('error', function (event) {
-          show(event && event.message);
-        });
+          if (!event) return;
+          var target = event.target;
+          if (target && target.tagName === 'SCRIPT') {
+            show('脚本加载失败：' + (target.src || '') + '\n（可能是安装包损坏，重新安装一次试试）');
+            return;
+          }
+          var msg = event.message || '未知错误';
+          var stack = '';
+          try {
+            if (event.error && event.error.stack) {
+              stack = '\n' + event.error.stack;
+            } else if (event.filename) {
+              stack = '\n' + event.filename + ':' + event.lineno + ':' + event.colno;
+            }
+          } catch (e) {}
+          show(msg + stack);
+        }, true);
         window.addEventListener('unhandledrejection', function (event) {
           var reason = event && event.reason;
-          show((reason && reason.message) || reason);
+          var msg = (reason && reason.message) || reason || '未知错误';
+          var stack = '';
+          try {
+            if (reason && reason.stack) stack = '\n' + reason.stack;
+          } catch (e) {}
+          show('未处理的异步错误：' + msg + stack);
         });
         window.addEventListener('load', function () {
           setTimeout(function () {
@@ -95,9 +192,9 @@
             var height = root ? Math.round(root.getBoundingClientRect().height) : 0;
             // 渲染了但高度为 0 也算没起来：老内核 CSS 变量失效时就是这个样子
             if (!root || root.children.length === 0 || height < 120) {
-              show('界面没有渲染出来（内核 ' + (chromiumMajor() || '未知') + '，根节点高度 ' + height + 'px）');
+              show('界面没有渲染出来（根节点高度 ' + height + 'px）');
             }
-          }, 8000);
+          }, 12000);
         });
       })();
     </script>

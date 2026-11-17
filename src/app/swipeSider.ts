@@ -8,6 +8,25 @@ import {
 
 /** 判定横滑要走的像素：太小会把竖滑误判成横滑，太大手感发迟钝 */
 const SLOP = 8
+
+/**
+ * 手指是不是按在一个「自己能横向滚动」的区域里（宽表格、代码块、公式）。
+ * 是的话这次横滑是用户在翻内容，不能拿去开抽屉 —— 否则正文一长，
+ * 用户为了看右边被裁掉的文字往左/右滑，抽屉就跟着出来了。
+ */
+const startedInHScroller = (target: EventTarget | null): boolean => {
+  let node = target instanceof Element ? target : null
+  while (node && node !== document.body) {
+    if (node.scrollWidth - node.clientWidth > 1) {
+      const overflowX = getComputedStyle(node).overflowX
+      if (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'overlay') {
+        return true
+      }
+    }
+    node = node.parentElement
+  }
+  return false
+}
 /** 松手时超过这个进度就吸附到打开，否则收回 */
 const OPEN_THRESHOLD = 0.32
 /** 抽屉开着时左划：拖过抽屉宽度的这个比例就关回去 */
@@ -30,6 +49,9 @@ export const useSwipeSider = (ref: RefObject<HTMLElement>, enabled: boolean) => 
 
     const onStart = (event: TouchEvent) => {
       if (event.touches.length !== 1 || useMobileSider.getState().open) {
+        return
+      }
+      if (startedInHScroller(event.target)) {
         return
       }
       const touch = event.touches[0]

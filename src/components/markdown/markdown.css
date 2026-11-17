@@ -1,6 +1,10 @@
 .ds-markdown {
   font: var(--dsw-font-markdown-base);
   color: var(--dsw-alias-label-primary);
+  /* 长串英文 / 链接 / 连续符号没有断行机会时会顶出屏幕，被 .frame 裁掉；
+     允许在必要时断词，正文永远不会比气泡宽 */
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .ds-markdown strong {
