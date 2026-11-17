@@ -173,7 +173,8 @@ export type DeepseekReadUrlTool = {
 }
 
 export type CreateMessageRequest = {
-  model: ChatModel
+  /** 官方通道是 ChatModel；OpenAI 兼容通道允许任意模型 ID（用户自己填），所以这里放开成 string */
+  model: string
   system: string
   messages: MessageParam[]
   thinking: { type: 'enabled' | 'disabled' }

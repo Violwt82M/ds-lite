@@ -1,5 +1,6 @@
 import clsx from 'clsx'
 import { useEffect, useState } from 'react'
+import { truncatePercent } from '../../utils/safeText.js'
 import { useTranslate } from '../../i18n/index.js'
 import { useUploads } from '../../services/attachments.js'
 import { loadFile } from '../../services/chat/db.js'
@@ -160,14 +161,16 @@ export const MessageFile = ({
 
   return (
     <FileCard
-      name={file.name}
+      name={file.displayName ?? file.name}
       size={file.size}
       note={
         file.truncated
           ? t('attachmentTruncated', {
-              percent: Math.round((file.truncated.kept / file.truncated.total) * 100),
+              percent: truncatePercent(file.truncated.kept, file.truncated.total),
             })
-          : undefined
+          : file.extracted
+            ? t('attachmentExtracted')
+            : undefined
       }
       status={uploading ? 'uploading' : failed ? 'error' : 'done'}
       error={errorText}

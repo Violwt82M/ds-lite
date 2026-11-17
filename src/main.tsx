@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { App } from './app/App.js'
 import { setupTheme } from './app/theme.js'
 import { ensureKatex } from './services/markdown/katex.js'
+import { watchWebUpdate } from './services/webUpdate.js'
 import './app/theme.css'
 import './app/global.css'
 
@@ -19,7 +20,10 @@ function setupOffline() {
     return
   }
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {})
+    navigator.serviceWorker
+      .register('sw.js')
+      .then(() => watchWebUpdate())
+      .catch(() => {})
   })
 }
 

@@ -4,13 +4,15 @@ import { Button } from '../base/Button.js'
 import { openDisclaimer } from './disclaimerState.js'
 import { Tutorials } from './Tutorials.js'
 import { Changelog } from './Changelog.js'
+import { openSponsor } from './sponsorState.js'
+import { UpdateRow } from './UpdateRow.js'
+import { APP_VERSION, UPSTREAM_VERSION } from '../../version.js'
 import settingsStyles from '../settings/Settings.module.css'
 
 /** 上游开源项目与版本信息：二次开发必须保留出处 */
 export const OFFICIAL_REPO = 'https://github.com/deepseek-ai/chat-demo'
 export const OFFICIAL_LICENSE = 'https://github.com/deepseek-ai/chat-demo/blob/main/LICENSE'
-export const APP_VERSION = '0.9.30'
-export const UPSTREAM_VERSION = '0.1.1'
+export { APP_VERSION, UPSTREAM_VERSION } from '../../version.js'
 
 /** 设置里的「关于」分组：非官方声明、开源许可、上游仓库 */
 export const AboutPanel = () => {
@@ -27,6 +29,21 @@ export const AboutPanel = () => {
             DS Lite {APP_VERSION} · upstream chat-demo {UPSTREAM_VERSION}
           </div>
         </div>
+      </div>
+      <UpdateRow />
+      <div className={clsx(settingsStyles.cell, settingsStyles.row)}>
+        <div className={settingsStyles.text}>
+          <div className={settingsStyles.label}>{t('aboutSponsor')}</div>
+          <div className={settingsStyles.description}>{t('aboutSponsorDescription')}</div>
+        </div>
+        <Button
+          variant="outlined"
+          size="m"
+          className={settingsStyles.cellButton}
+          onClick={openSponsor}
+        >
+          {t('aboutView')}
+        </Button>
       </div>
       <div className={clsx(settingsStyles.cell, settingsStyles.row)}>
         <div className={settingsStyles.text}>

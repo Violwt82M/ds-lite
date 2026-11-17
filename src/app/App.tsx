@@ -18,6 +18,10 @@ import { Welcome } from '../components/session/Welcome.js'
 import { ensureApiKey, openSettings } from '../components/settings/settingsDialogState.js'
 import { SettingsDialog } from '../components/settings/SettingsDialog.js'
 import { DisclaimerDialog } from '../components/about/DisclaimerDialog.js'
+import { ChangelogDialog } from '../components/about/ChangelogDialog.js'
+import { checkForUpdate, isNativePlatform } from '../services/updateCheck.js'
+import { applyWebUpdate, useWebUpdate } from '../services/webUpdate.js'
+import { SponsorDialog } from '../components/about/SponsorDialog.js'
 import { ContextGuideDialog } from '../components/memory/ContextGuideDialog.js'
 import { useDisclaimer } from '../components/about/disclaimerState.js'
 import { Toast } from '../components/base/Toast.js'
@@ -38,6 +42,7 @@ import styles from './App.module.css'
 export const App = () => {
   const t = useTranslate()
   const isMobile = useIsMobile()
+  const webUpdateAvailable = useWebUpdate((state) => state.available)
   const locale = useSettings((state) => state.locale)
   // 移动端侧边栏以独立抽屉管理开合状态
   const siderCollapsed = useSettings((state) => state.siderCollapsed) && !isMobile
@@ -94,6 +99,13 @@ export const App = () => {
         openSettings('data')
       }
     })
+  }, [])
+
+  // APK 启动后台查一次新版（24 小时内不重复、失败静默）；网页版靠 SW 自己提示
+  useEffect(() => {
+    if (isNativePlatform()) {
+      void checkForUpdate()
+    }
   }, [])
 
   useEffect(() => {
@@ -186,9 +198,19 @@ export const App = () => {
         </main>
         <SearchPanel />
       </div>
+      {webUpdateAvailable ? (
+        <div className={styles.updateBar} role="status">
+          <span>{t('webUpdateAvailable')}</span>
+          <button type="button" className={styles.updateBarAction} onClick={applyWebUpdate}>
+            {t('webUpdateApply')}
+          </button>
+        </div>
+      ) : null}
       <SettingsDialog />
       <DisclaimerDialog />
       <ContextGuideDialog />
+      <ChangelogDialog />
+      <SponsorDialog />
       <Toast />
     </>
   )

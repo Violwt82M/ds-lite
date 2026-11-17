@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { TranslationMessage } from '../../i18n/index.js'
 import { createId } from '../../utils/id.js'
-import { safeTail } from '../../utils/safeText.js'
+import { safeTail, truncatePercent } from '../../utils/safeText.js'
 import { ApiError, streamMessage } from '../api/client.js'
 import type { ChatModel } from '../api/types.js'
 import { isCustomApiOrigin } from '../api/base.js'
@@ -744,7 +744,7 @@ export const sendMessage = (targetSessionId: string | null) => {
       key: 'attachmentTruncatedNotice',
       params: {
         name: sliced.name,
-        percent: Math.round((sliced.truncated.kept / sliced.truncated.total) * 100),
+        percent: truncatePercent(sliced.truncated.kept, sliced.truncated.total),
         kept: formatCharCount(sliced.truncated.keptTokens),
         total: formatCharCount(sliced.truncated.totalTokens),
       },
@@ -1777,7 +1777,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           // 自动降级要说得清楚：用户可能刚点了联网，不能悄悄当没点
           showToast({
             key: 'replyExtendedDowngraded',
-            params: { chars: Math.max(1, Math.round(requestTokens / 7_500)) },
+            params: { chars: Math.max(1, Math.round(charsForTokens(requestTokens) / 10_000)) },
           })
         }
         // 没要到服务端标题时本地兜一个，免得会话一直叫「新对话」

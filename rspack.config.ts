@@ -7,9 +7,11 @@ import { rspack, type Configuration } from '@rspack/core'
 const dev = process.env.NODE_ENV !== 'production'
 const targets = ['chrome >= 70', 'edge >= 79', 'safari >= 14', 'firefox >= 78']
 const root = path.dirname(fileURLToPath(import.meta.url))
-const { version } = JSON.parse(
-  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
-) as { version: string }
+/** 注入 HTML meta 的版本号取自 src/version.ts（唯一来源）；读不到就退回 0.0.0，别退回 package.json */
+const version =
+  /APP_VERSION\s*=\s*'([^']+)'/.exec(
+    readFileSync(new URL('./src/version.ts', import.meta.url), 'utf8')
+  )?.[1] ?? '0.0.0'
 
 const cssLoader = {
   loader: 'builtin:lightningcss-loader',

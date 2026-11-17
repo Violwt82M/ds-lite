@@ -59,6 +59,41 @@
   }
 }
 
+/* 单份文档预算的无级滑杆（0.9.35）：滑杆 + 右侧数值，窄屏时数值换行到下面 */
+.rangeWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.range {
+  width: 140px;
+  accent-color: var(--dsw-alias-brand-primary, #4d6bfe);
+  cursor: pointer;
+}
+
+.rangeValue {
+  min-width: 66px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .rangeWrap {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+
+  .range {
+    width: 150px;
+  }
+}
+
 .content {
   display: flex;
   flex: 1 0 0;
@@ -695,6 +730,20 @@
 .apiOriginBody {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+
+/* 协议选择（0.9.37）：两个按钮 + 一行标题 */
+.apiOriginLabelRow {
+  margin-top: 2px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.apiProtocolRow {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 

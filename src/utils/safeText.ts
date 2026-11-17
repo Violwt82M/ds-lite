@@ -67,3 +67,16 @@ export const safeTruncate = (text: string, limit: number, suffix = '…'): strin
 /** 保留结尾（用于「…后面的内容」这类倒序截取） */
 export const safeTail = (text: string, limit: number): string =>
   text.length <= limit ? text : `…${safeSlice(text, text.length - limit)}`
+
+/**
+ * 截断后「模型读了多少」的百分比。
+ * 截断的前提就是 kept < total，但 538,461 / 540,000 用四舍五入会显示成 100%，
+ * 用户会以为整份都读了（0.9.31 修）。所以向下取整并夹在 1~99：
+ * 截断时永远不会出现 100%，也不会因为比例太小显示 0%。
+ */
+export const truncatePercent = (kept: number, total: number): number => {
+  if (total <= 0 || kept >= total) {
+    return 100
+  }
+  return Math.min(99, Math.max(1, Math.floor((kept / total) * 100)))
+}

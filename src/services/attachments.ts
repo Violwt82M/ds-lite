@@ -4,6 +4,9 @@ import { ApiError, uploadFile } from './api/client.js'
 import { classifyApiError, getUploadErrorInfo, isRetryableApiError } from './api/errors.js'
 import type { FilePurpose } from './api/types.js'
 import { ACCEPT_FILE_EXTS } from './uploadExts.js'
+import { DOCUMENT_BUDGET_DEFAULT } from './documentBudget.js'
+import { extractDocumentText, isExtractable } from './documents/extract.js'
+import { usesOpenAiProtocol } from './api/protocol.js'
 import { safeSlice } from '../utils/safeText.js'
 import { decodeTextBytes } from '../utils/textDecode.js'
 import { estimateTextTokens } from '../utils/textTokens.js'
@@ -21,15 +24,53 @@ export const MAX_COUNT = 50
  * 单份文档最多占多少 token —— 服务端不会替你截（超了直接 400），
  * 所以必须本地截：截完把「模型实际读了多少」按官方口径告诉用户（仅阅读 xx%）。
  */
-export const DOCUMENT_TOKEN_BUDGET = 350_000
+export {
+  DOCUMENT_BUDGET_DEFAULT,
+  DOCUMENT_BUDGET_MAX,
+  DOCUMENT_BUDGET_MIN,
+  DOCUMENT_BUDGET_STEP,
+} from './documentBudget.js'
+/** 默认单份文档预算；实际值跟随设置（settings.documentBudget） */
+export const DOCUMENT_TOKEN_BUDGET = DOCUMENT_BUDGET_DEFAULT
 /** 切点回溯窗口：在预算前这么多字符里找段落、句末 */
 const CUT_WINDOW = 20_000
 
-/** 本地能读文本的附件类型（其余如 PDF/Word 要服务端解析，拆不了） */
+/**
+ * 本地能读文本的附件类型（其余如 PDF/Word 要服务端解析，拆不了）。
+ *
+ * 0.9.35 从 32 个扩到约 190 个：以前白名单有 973 个扩展名、却只有 32 个能在本地截断，
+ * 其余 900 多个都是整段上传 —— 超了就是服务端 400，这才是「有些文件传上去就失败」的真因。
+ * 这里只列**能确定是纯文本**的；图片/音视频/压缩包/Office/电子书一概不列。
+ * 没列到的扩展名仍可上传，只是不做本地截断（行为与 0.9.34 一致）。
+ */
 const TEXT_EXTS = new Set([
-  'txt', 'md', 'markdown', 'csv', 'json', 'jsonl', 'log', 'xml', 'yaml', 'yml',
-  'js', 'jsx', 'ts', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cc', 'cpp', 'h', 'hpp',
-  'sql', 'sh', 'html', 'css', 'vue', 'php', 'rb', 'kt', 'swift',
+  // 日常文本 / 日志 / 配置
+  'txt', 'text', 'log', 'csv', 'tsv', 'diff', 'patch', 'srt', 'vtt', 'lrc', 'eml',
+  'ini', 'conf', 'cfg', 'config', 'prefs', 'properties', 'env', 'toml', 'lock',
+  'gitignore', 'gitattributes', 'gitmodules', 'gitkeep', 'editorconfig',
+  // 数据 / 结构化
+  'json', 'json5', 'jsonl', 'jsonc', 'jsonld', 'ndjson', 'geojson', 'topojson',
+  'yaml', 'yml', 'xml', 'plist', 'xsd', 'xsl', 'xslt', 'dtd', 'rss', 'atom', 'opml',
+  'ipynb', 'graphql', 'gql', 'proto', 'thrift', 'csv', 'sql', 'plsql', 'prc', 'ddl',
+  'hcl', 'tf', 'bzl', 'gradle', 'cmake', 'mk', 'mak', 'ninja', 'dockerfile',
+  // 文档 / 标记
+  'md', 'markdown', 'mdown', 'mkdn', 'mkd', 'mdx', 'rmd', 'org', 'rst', 'adoc',
+  'asciidoc', 'textile', 'wiki', 'mediawiki', 'creole', 'tex', 'bib', 'sty',
+  // 网页 / 模板
+  'html', 'htm', 'xhtml', 'shtml', 'shtml5', 'vue', 'jsx', 'tsx', 'hbs',
+  'handlebars', 'mustache', 'ejs', 'pug', 'jade', 'haml', 'slim', 'twig', 'liquid',
+  'erb', 'jsp', 'asp', 'aspx', 'php', 'phtml', 'cshtml', 'njk', 'nunjucks',
+  // 样式
+  'css', 'scss', 'sass', 'less', 'styl', 'stylus',
+  // 编程语言
+  'js', 'mjs', 'cjs', 'ts', 'mts', 'cts', 'coffee', 'litcoffee', 'py', 'pyi', 'pyw',
+  'rb', 'pl', 'pm', 'lua', 'r', 'jl', 'go', 'rs', 'c', 'h', 'cc', 'cpp', 'cxx',
+  'hpp', 'hh', 'hxx', 'inl', 'cs', 'java', 'kt', 'kts', 'scala', 'swift', 'm', 'mm',
+  'dart', 'ex', 'exs', 'erl', 'hrl', 'hs', 'lhs', 'clj', 'cljs', 'cljc', 'edn',
+  'lisp', 'lsp', 'scm', 'rkt', 'el', 'ml', 'mli', 'fs', 'fsi', 'fsx', 'vb', 'vbs',
+  'pas', 'd', 'nim', 'v', 'sv', 'vh', 'svh', 'vhd', 'vhdl', 'asm', 's', 'nasm',
+  'sh', 'bash', 'zsh', 'fish', 'ksh', 'bat', 'cmd', 'ps1', 'psm1', 'psd1',
+  'groovy', 'gsp', 'gradle', 'tcl', 'awk', 'sed', 'coq', 'lean', 'agda', 'idr',
 ])
 
 export const isTextFile = (name: string) => TEXT_EXTS.has(getFileExt(name))
@@ -65,9 +106,56 @@ const findCut = (text: string, budget: number): number => {
  * 否则切出来的全是 U+FFFD。切点用 safeSlice，避免把 emoji 切成半个（孤立代理会让服务端 400）。
  * 未超预算时原样上传（服务端自己认 GBK），只返回估算 token 供水位条使用。
  */
-export const truncateTextFile = async (
+/**
+ * 附件本地预处理的结果。
+ * extracted：这个文件是 Office/电子书，本地抽成了纯文本再上传（服务端按 user_data 处理）；
+ * displayName：抽取后文件名叫 xx.txt，但卡片上要显示原文件名。
+ */
+export type PreparedAttachment = {
   file: File
-): Promise<{ file: File; truncated?: TextTruncation; tokens?: number; originalSize?: number }> => {
+  truncated?: TextTruncation
+  tokens?: number
+  originalSize?: number
+  extracted?: boolean
+  displayName?: string
+}
+
+/** 把一段已知纯文本按预算截断成"可直接上传的文本文件" */
+const sliceTextToFile = (name: string, text: string, budget: number): PreparedAttachment => {
+  const totalTokens = estimateTextTokens(text)
+  if (totalTokens <= budget) {
+    return { file: new File([text], name, { type: 'text/plain' }), tokens: totalTokens }
+  }
+  const charBudget = Math.max(1, Math.floor(text.length * (budget / totalTokens)))
+  const kept = safeSlice(text, 0, findCut(text, charBudget))
+  const keptTokens = estimateTextTokens(kept)
+  return {
+    file: new File([kept], name, { type: 'text/plain' }),
+    truncated: { kept: kept.length, total: text.length, keptTokens, totalTokens },
+    tokens: keptTokens,
+  }
+}
+
+export const truncateTextFile = async (
+  file: File,
+  budget: number = DOCUMENT_TOKEN_BUDGET
+): Promise<PreparedAttachment> => {
+  const ext = getFileExt(file.name)
+  // Office / 电子书：先本地抽文本，抽不动再退回整段上传（0.9.35）
+  if (isExtractable(ext)) {
+    const text = await extractDocumentText(file, ext)
+    if (text && text.trim() !== '') {
+      const base = file.name.replace(/\.[^./\\]+$/, '')
+      const prepared = sliceTextToFile(`${base}.txt`, text, budget)
+      return {
+        ...prepared,
+        originalSize: file.size,
+        extracted: true,
+        displayName: file.name,
+      }
+    }
+    return { file }
+  }
   if (!isTextFile(file.name)) {
     return { file }
   }
@@ -76,10 +164,10 @@ export const truncateTextFile = async (
     return { file }
   }
   const totalTokens = estimateTextTokens(text)
-  if (totalTokens <= DOCUMENT_TOKEN_BUDGET) {
+  if (totalTokens <= budget) {
     return { file, tokens: totalTokens }
   }
-  const charBudget = Math.max(1, Math.floor(text.length * (DOCUMENT_TOKEN_BUDGET / totalTokens)))
+  const charBudget = Math.max(1, Math.floor(text.length * (budget / totalTokens)))
   const kept = safeSlice(text, 0, findCut(text, charBudget))
   const keptTokens = estimateTextTokens(kept)
   return {
@@ -119,6 +207,10 @@ const getMaxSizeMB = (file: File) =>
 
 /** 添加前校验：格式 → 大小 → 数量，任一不满足即整批不添加 */
 export const validateFiles = (files: File[], currentCount: number): TranslationMessage | null => {
+  // OpenAI 兼容通道没有 Files API：附件整条链路不支持，直接说清楚，别让用户以为传上去了
+  if (usesOpenAiProtocol()) {
+    return { key: 'uploadNotSupportedOpenAi' }
+  }
   if (files.some((file) => !isAcceptedExt(file.name))) {
     return { key: 'uploadUnsupportedFormat' }
   }

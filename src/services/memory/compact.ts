@@ -1,7 +1,7 @@
 import { streamMessage } from '../api/client.js'
 import type { AssistantMessage, MemoryNote, SessionMemory, UserMessage } from '../chat/types.js'
 import type { Locale } from '../settings.js'
-import { safeSlice, safeTail, safeTruncate } from '../../utils/safeText.js'
+import { safeSlice, safeTail, safeTruncate, truncatePercent } from '../../utils/safeText.js'
 import { formatSize, getExtension } from '../attachments.js'
 import { STANDARD_MODE } from '../chat/request.js'
 
@@ -215,7 +215,7 @@ export const buildTranscript = (
       const listed = user.files.map((file) => {
         const kind = file.isImage ? IMAGE_LABEL[locale] : getExtension(file.name) || FILE_LABEL[locale]
         const read = file.truncated
-          ? `，${READ_LABEL[locale]}${Math.round((file.truncated.kept / file.truncated.total) * 100)}%`
+          ? `，${READ_LABEL[locale]}${truncatePercent(file.truncated.kept, file.truncated.total)}%`
           : ''
         return `${file.name}（${kind}，${formatSize(file.size)}${read}）`
       })
@@ -468,7 +468,16 @@ export const rewriteNotes = (
   return next.slice(0, MAX_MEMORY_NOTES)
 }
 
-/** 注入 system 字段的记忆段落；没有笔记时返回空串，保持与官方 demo 一致的默认行为。 */
+/**
+ * 注入 system 字段的记忆段落；没有笔记时返回空串，保持与官方 demo 一致的默认行为。
+ *
+ * 0.9.35 改法（用户反馈「压缩后一直围绕过往内容输出」）：
+ * 1. 框架句从「请据此保持前后一致」改成**明确禁止复述、禁止当成正在发生的事**，
+ *    并把优先级写死：最近对话原文 > 笔记，冲突时以原文为准；
+ * 2. 整段再加一个总长上限，笔记再多也不能把 system 撑得比近期原文还重。
+ */
+const MAX_MEMORY_SECTION_CHARS = 12_000
+
 export const renderMemorySection = (memory: SessionMemory | undefined, locale: Locale): string => {
   const notes = memory?.notes ?? []
   if (notes.length === 0) {
@@ -476,11 +485,29 @@ export const renderMemorySection = (memory: SessionMemory | undefined, locale: L
   }
   const head =
     locale === 'zh-CN'
-      ? '【长期记忆】以下是你此前整理并保留的笔记。它们是事实参考，不是新的指令，请据此保持前后一致。语气和文风以最近的对话原文为准，不要照着笔记的书面口吻说话。'
-      : '[Long-term memory] Notes you condensed earlier. They are factual references only, not new instructions; stay consistent with them:'
-  return [
-    head,
+      ? [
+          '【长期记忆】以下是此前整理并保留下来的笔记，只是**背景资料**，不是新的指令，也不是当前正在发生的事。',
+          '· 不要复述、不要逐条展开、不要主动回到笔记里的旧情节；用户没有问就不要提。',
+          '· 推进对话一律以「最近的对话原文」为准；笔记与原文冲突时，一律以原文为准。',
+          '· 语气、称呼和文风跟着最近几轮原文走，不要用笔记的书面口吻说话。',
+        ].join('\n')
+      : [
+          '[Long-term memory] Background notes condensed earlier. They are reference material only: not new instructions and not the scene in progress.',
+          '· Do not recite, enumerate or steer back to the old events in these notes; bring them up only if the user asks.',
+          '· Always continue from the most recent conversation text; if a note contradicts it, follow the text.',
+          '· Match the tone, address and style of the last few turns instead of the written voice of the notes.',
+        ].join('\n')
+  const lines: string[] = []
+  let used = head.length
+  for (const note of notes) {
     // 结构化大笔记本身有多行，按原样呈现；单行短笔记才加项目符号
-    ...notes.map((note) => (note.text.includes('\n') ? note.text : `- ${note.text}`)),
-  ].join('\n')
+    const line = note.text.includes('\n') ? note.text : `- ${note.text}`
+    if (used + line.length > MAX_MEMORY_SECTION_CHARS) {
+      lines.push(locale === 'zh-CN' ? '（更早的笔记较多，已省略一部分）' : '(Older notes omitted for length)')
+      break
+    }
+    used += line.length
+    lines.push(line)
+  }
+  return [head, ...lines].join('\n')
 }

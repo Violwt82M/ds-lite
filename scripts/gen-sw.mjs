@@ -87,9 +87,17 @@ self.addEventListener('install', (event) => {
       await Promise.all(CORE.map((asset) => cacheFile(cache, asset)));
       // 其余资源后台尽力缓存，失败不算错
       await Promise.allSettled(REST.map((asset) => cacheFile(cache, asset)));
-      await self.skipWaiting();
+      // 故意不 skipWaiting：新 SW 先停在 waiting，等用户在界面上点「立即刷新」再接管，
+      // 免得正开着的旧页面异步 chunk 因为缓存被换掉而 404。
     })()
   );
+});
+
+// 用户在「有新版本」提示条上点了刷新，才让 waiting 的新 SW 接管
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (event) => {

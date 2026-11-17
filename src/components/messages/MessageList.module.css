@@ -27,6 +27,14 @@
   display: block;
 }
 
+/* 到顶按钮：和「回到底部」同一套外观，只是贴上方、靠右；
+   负的 margin-bottom 让它不占高度，压在第一条消息上 */
+.jumpUp {
+  top: 10px;
+  bottom: auto;
+  margin: 0 6px -30px auto;
+}
+
 .container {
   position: relative;
   flex: 1;

@@ -57,6 +57,8 @@ export const AssistantMessage = memo(function AssistantMessage({
     .filter(Boolean)
     .join('\n\n')
   const copyText = responseText || notice?.text
+  // 每条回答的字数（用户要求显示字数、不显示 token）：不含空白字符
+  const charCount = responseText ? responseText.replace(/\s/g, '').length : 0
   const waiting = streaming && view.steps.length === 0 && !view.answer && !message.thinking
   const summaryEntry = `${message.id}-summary`
   return (
@@ -107,8 +109,9 @@ export const AssistantMessage = memo(function AssistantMessage({
       ) : notice ? (
         <div className={styles.notice}>
           <IconWarningOutline16 />
-          <span>
-            {notice.text}
+          <div className={styles.noticeBody}>
+            <span className={styles.noticeText}>
+              {notice.text}
             {notice.action === 'apiKey' ? (
               <>
                 {' '}
@@ -121,21 +124,31 @@ export const AssistantMessage = memo(function AssistantMessage({
                 </button>
               </>
             ) : null}
-            {notice.action === 'topUp' ? (
-              <>
-                {' '}
-                <a
-                  className={styles.noticeAction}
-                  href={TOP_UP_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {t('topUp')}
-                </a>
-              </>
+              {notice.action === 'topUp' ? (
+                <>
+                  {' '}
+                  <a
+                    className={styles.noticeAction}
+                    href={TOP_UP_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t('topUp')}
+                  </a>
+                </>
+              ) : null}
+            </span>
+            {notice.detail ? (
+              <details className={styles.noticeDetail}>
+                <summary className={styles.noticeDetailSummary}>{t('errorDetailLabel')}</summary>
+                <span className={styles.noticeDetailText}>{notice.detail}</span>
+              </details>
             ) : null}
-          </span>
+          </div>
         </div>
+      ) : null}
+      {!streaming && charCount > 0 ? (
+        <div className={styles.charCount}>{t('messageCharCount', { count: charCount })}</div>
       ) : null}
       {!streaming && !refused && view.searchResults.length > 0 ? (
         <div

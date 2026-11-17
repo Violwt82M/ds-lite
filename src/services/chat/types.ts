@@ -28,6 +28,10 @@ export type FileAttachment = {
   truncated?: TextTruncation
   /** 本地估算的 token（读取过原文时才有）；水位条与护栏优先用它，比按体积猜准 */
   tokens?: number
+  /** Office/电子书已在本地抽成纯文本上传：卡片上要提示「已转纯文本」 */
+  extracted?: boolean
+  /** 抽取后上传的是 xx.txt，但卡片要显示原文件名 */
+  displayName?: string
 }
 
 /** 本地消息的分支关系；字段缺省时按线性消息列表处理。 */

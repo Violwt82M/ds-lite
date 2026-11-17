@@ -70,6 +70,13 @@
   opacity: 1;
 }
 
+/* 触摸设备没有 hover：操作按钮必须常显，否则手机上看不出来能点（0.9.32） */
+@media (hover: none) {
+  .actions {
+    opacity: 1;
+  }
+}
+
 .editor {
   width: 100%;
   box-sizing: border-box;

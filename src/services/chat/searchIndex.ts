@@ -28,36 +28,43 @@ import type { Message, Session, SessionSummary } from './types.js'
 
 /** 命中上下文左右各保留多少字 */
 const CONTEXT_CHARS = 40
-/** 一次最多返回多少条结果：再多用户也滚不到底，滚到底之前会提示「换个更具体的关键词」 */
-const MAX_ROWS = 500
 /**
- * 单个会话最多占几条正文结果。完全不限的话，几条几千条的会话会把名额吃光，
- * 别的会话一条都看不到（搜索结果全变成同一个会话）；20 条足够在一个会话里浏览上下文。
+ * 每个会话在结果列表里先给几条正文命中当预览。
+ * 以前是「每会话最多 20 条、全库 500 条就停」，长会话里 20 条根本不够翻；
+ * 现在改成按会话分组：组头显示精确命中总数，点开可以继续加载（见 MAX_HITS_PER_SESSION）。
  */
-const MAX_ROWS_PER_SESSION = 20
+const PREVIEW_PER_SESSION = 5
+/** 展开单个会话时最多返回多少条：再多 DOM 会爆（单个会话最多见过 4,686 条消息） */
+const MAX_HITS_PER_SESSION = 1000
 /** 保存后多久重建该会话的索引：流式回复期间 persist 很频繁，攒一下再写 */
 const REINDEX_DELAY_MS = 1200
 
-/** 一条搜索结果：标题命中没有消息，正文命中带一条消息的片段 */
-export type SearchRow = {
-  sessionId: string
-  title: string
-  updatedAt: number
-  source: 'title' | 'content'
-  /** 标题里的命中位置，升序 */
-  titleRanges: SearchRange[]
-  /** 正文命中：消息 id 与角色 */
-  messageId: string | null
-  role: Message['role'] | null
+/** 一条正文命中：只带消息 id、角色和片段，会话信息在 SearchGroup 上 */
+export type SearchHit = {
+  messageId: string
+  role: Message['role']
   snippet: SearchSnippet | null
 }
 
+/** 一个会话的命中：标题命中（titleRanges 非空）+ 正文命中（totalHits 条，hits 里是前几条预览） */
+export type SearchGroup = {
+  sessionId: string
+  title: string
+  updatedAt: number
+  /** 标题里的命中位置，升序；没命中标题就是空数组 */
+  titleRanges: SearchRange[]
+  /** 该会话的正文命中总数（精确，不受预览条数影响） */
+  totalHits: number
+  /** 预览用的前几条正文命中 */
+  hits: SearchHit[]
+}
+
 export type SearchResult = {
-  rows: SearchRow[]
+  groups: SearchGroup[]
   /** 还有多少个会话没进索引（首次安装/刚导入时为非 0，索引建完就是 0） */
   pending: number
-  /** 命中太多被截断：结果区提示「只看得到前 N 条」 */
-  truncated: boolean
+  /** 所有会话的正文命中总数 */
+  totalHits: number
 }
 
 export type IndexProgress = { done: number; total: number }
@@ -191,9 +198,13 @@ const findInDoc = (text: string, keyword: string, keywordLower: string, ascii: b
 }
 
 /**
- * 搜索全部会话：先按「置顶 → 最近更新」的列表顺序给出标题命中，
- * 再逐会话给出正文命中（一条消息一行），最多 MAX_ROWS 条。
- * sessions 的顺序由调用方决定（抽屉和全屏页都按列表顺序传）。
+ * 搜索全部会话，按会话分组返回：
+ * 每个命中会话给一条 SearchGroup（含精确命中总数和前 PREVIEW_PER_SESSION 条正文命中），
+ * 组顺序跟会话列表一致（置顶 → 最近更新）。sessions 的顺序由调用方决定。
+ *
+ * 为什么不再「每会话 20 条就停」：那会让长会话里的第 21 条起永远搜不到，
+ * 而用户要的恰恰是「长对话里还能往下翻」。现在总数照数、预览只给几条，
+ * 想看全部再调 searchSessionHits 按需展开。
  */
 export const searchAll = async (
   query: string,
@@ -201,57 +212,96 @@ export const searchAll = async (
 ): Promise<SearchResult> => {
   const keyword = normalizeQuery(query)
   if (!keyword) {
-    return { rows: [], pending: 0, truncated: false }
+    return { groups: [], pending: 0, totalHits: 0 }
   }
   const map = await readCache()
   const ascii = /[a-z]/i.test(keyword)
   const keywordLower = ascii ? keyword.toLowerCase() : keyword
-  const rows: SearchRow[] = []
+  const groups: SearchGroup[] = []
   let pending = 0
+  let totalHits = 0
   for (const session of sessions) {
     const title = collapseSpaces(session.title).trim()
     const titleRanges = findRanges(title, keyword)
-    if (titleRanges.length > 0) {
-      rows.push({
-        sessionId: session.id,
-        title,
-        updatedAt: session.updatedAt,
-        source: 'title',
-        titleRanges,
-        messageId: null,
-        role: null,
-        snippet: null,
-      })
-    }
     const record = map.get(session.id)
     if (!record) {
       pending += 1
+      if (titleRanges.length > 0) {
+        groups.push({
+          sessionId: session.id,
+          title,
+          updatedAt: session.updatedAt,
+          titleRanges,
+          totalHits: 0,
+          hits: [],
+        })
+      }
       continue
     }
-    let contentRows = 0
+    const hits: SearchHit[] = []
+    let count = 0
     for (const doc of record.docs) {
-      if (contentRows >= MAX_ROWS_PER_SESSION) {
-        break
-      }
       const index = findInDoc(doc.text, keyword, keywordLower, ascii)
       if (index < 0) {
         continue
       }
-      contentRows += 1
-      rows.push({
+      count += 1
+      if (hits.length < PREVIEW_PER_SESSION) {
+        hits.push({
+          messageId: doc.id,
+          role: doc.role,
+          snippet: buildSnippet(doc.text, keyword, index, CONTEXT_CHARS),
+        })
+      }
+    }
+    totalHits += count
+    if (count > 0 || titleRanges.length > 0) {
+      groups.push({
         sessionId: session.id,
         title,
         updatedAt: session.updatedAt,
-        source: 'content',
         titleRanges,
-        messageId: doc.id,
-        role: doc.role,
-        snippet: buildSnippet(doc.text, keyword, index, CONTEXT_CHARS),
+        totalHits: count,
+        hits,
       })
-      if (rows.length >= MAX_ROWS) {
-        return { rows, pending, truncated: true }
-      }
     }
   }
-  return { rows, pending, truncated: false }
+  return { groups, pending, totalHits }
+}
+
+/**
+ * 展开某个会话时把它的正文命中全取出来（最多 MAX_HITS_PER_SESSION 条）。
+ * 只扫这一个会话的索引，不碰其它会话；索引在内存里，几十毫秒级。
+ */
+export const searchSessionHits = async (
+  sessionId: string,
+  query: string
+): Promise<SearchHit[]> => {
+  const keyword = normalizeQuery(query)
+  if (!keyword) {
+    return []
+  }
+  const map = await readCache()
+  const record = map.get(sessionId)
+  if (!record) {
+    return []
+  }
+  const ascii = /[a-z]/i.test(keyword)
+  const keywordLower = ascii ? keyword.toLowerCase() : keyword
+  const hits: SearchHit[] = []
+  for (const doc of record.docs) {
+    const index = findInDoc(doc.text, keyword, keywordLower, ascii)
+    if (index < 0) {
+      continue
+    }
+    hits.push({
+      messageId: doc.id,
+      role: doc.role,
+      snippet: buildSnippet(doc.text, keyword, index, CONTEXT_CHARS),
+    })
+    if (hits.length >= MAX_HITS_PER_SESSION) {
+      break
+    }
+  }
+  return hits
 }

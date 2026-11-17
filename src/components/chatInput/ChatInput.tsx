@@ -17,6 +17,7 @@ import {
   type ThinkingEffort,
 } from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
+import { usesOpenAiProtocol } from '../../services/api/protocol.js'
 import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
 import {
   addDraftFiles,
@@ -403,7 +404,14 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               className={clsx(styles.toggle, search && styles.selected)}
               aria-label={t('search')}
               aria-pressed={search}
-              onClick={() => setSearch(!search)}
+              onClick={() => {
+              // OpenAI 兼容通道没有联网搜索工具：说清楚，别让人以为开了
+              if (usesOpenAiProtocol()) {
+                showToast({ key: 'openAiSearchUnsupported' })
+                return
+              }
+              setSearch(!search)
+            }}
             >
               <IconGlobeLanguageOutline14 />
               <span className={styles.toggleLabel}>{t('search')}</span>

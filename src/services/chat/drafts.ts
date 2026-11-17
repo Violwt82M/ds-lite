@@ -11,6 +11,7 @@ import {
   type TextTruncation,
   type UploadTask,
 } from '../attachments.js'
+import { useSettings } from '../settings.js'
 import type { FileAttachment } from './types.js'
 
 export type DraftAttachment = {
@@ -25,6 +26,10 @@ export type DraftAttachment = {
   tokens?: number
   /** 截断前的原文件体积：卡片上仍显示原文大小 */
   originalSize?: number
+  /** Office/电子书已本地抽成纯文本 */
+  extracted?: boolean
+  /** 抽取后的展示名（原文件名） */
+  displayName?: string
 }
 
 type Draft = { text: string; attachments: DraftAttachment[] }
@@ -79,19 +84,23 @@ export const addDraftFiles = async (
     return error
   }
   // 纯文本类超过单份文档预算时本地截断：服务端不会替你截，超了直接 400
-  const prepared = await Promise.all(files.map((file) => truncateTextFile(file)))
-  const added = prepared.map(({ file, truncated, tokens, originalSize }): DraftAttachment => {
-    const image = isImage(resolveMimeType(file))
-    return {
-      id: createId(),
-      file,
-      isImage: image,
-      previewUrl: image ? URL.createObjectURL(file) : null,
-      ...(truncated ? { truncated } : {}),
-      ...(typeof tokens === 'number' ? { tokens } : {}),
-      ...(typeof originalSize === 'number' ? { originalSize } : {}),
+  const budget = useSettings.getState().documentBudget
+  const prepared = await Promise.all(files.map((file) => truncateTextFile(file, budget)))
+  const added = prepared.map(
+    ({ file, truncated, tokens, originalSize, extracted, displayName }): DraftAttachment => {
+      const image = isImage(resolveMimeType(file))
+      return {
+        id: createId(),
+        file,
+        isImage: image,
+        previewUrl: image ? URL.createObjectURL(file) : null,
+        ...(truncated ? { truncated } : {}),
+        ...(typeof tokens === 'number' ? { tokens } : {}),
+        ...(typeof originalSize === 'number' ? { originalSize } : {}),
+        ...(extracted ? { extracted, displayName } : {}),
+      }
     }
-  })
+  )
   updateDraft(sessionId, (draft) => ({ ...draft, attachments: [...draft.attachments, ...added] }))
   added.forEach((attachment) => upload(attachment, apiKey))
   return null
@@ -130,6 +139,9 @@ export const prepareDraftMessage = (draft: Draft, tasks: Record<string, UploadTa
       blob: attachment.file,
       ...(attachment.truncated ? { truncated: attachment.truncated } : {}),
       ...(typeof attachment.tokens === 'number' ? { tokens: attachment.tokens } : {}),
+      ...(attachment.extracted
+        ? { extracted: true, displayName: attachment.displayName ?? attachment.file.name }
+        : {}),
     })
   }
   return { text, files }

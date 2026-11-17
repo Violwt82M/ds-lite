@@ -2,6 +2,12 @@ import { create } from 'zustand'
 import type { ChatModel } from './api/types.js'
 import type { TtsVoice } from './api/speech.js'
 import { normalizeLocation, type UserLocation } from './location.js'
+import {
+  DOCUMENT_BUDGET_DEFAULT,
+  DOCUMENT_BUDGET_MAX,
+  DOCUMENT_BUDGET_MIN,
+  DOCUMENT_BUDGET_STEP,
+} from './documentBudget.js'
 
 export type Locale = 'zh-CN' | 'en-US'
 
@@ -43,6 +49,8 @@ type Settings = {
   memoryMode: MemoryMode
   /** 生成「记录」用的模型（默认 flash，花钱少） */
   recordModel: ChatModel
+  /** 单份文档的 token 预算（设置里无级滑杆可调），决定「模型最多读多少字」 */
+  documentBudget: number
 }
 
 /** 记忆整理模式：auto 让模型自己判断对话类型 */
@@ -68,6 +76,7 @@ const KEYS = {
   fontScale: 'chat-demo:font-scale',
   recordModel: 'chat-demo:record-model',
   memoryMode: 'chat-demo:memory-mode',
+  documentBudget: 'chat-demo:document-budget',
 } as const
 
 const read = (key: string) => {
@@ -156,9 +165,28 @@ export const useSettings = create<Settings>(() => ({
     return saved === 'rp' || saved === 'plain' ? saved : 'auto'
   })(),
   recordModel: read(KEYS.recordModel) === 'deepseek-v4-pro' ? 'deepseek-v4-pro' : 'deepseek-flash',
+  documentBudget: (() => {
+    const saved = Number(read(KEYS.documentBudget))
+    if (!Number.isFinite(saved) || saved <= 0) {
+      return DOCUMENT_BUDGET_DEFAULT
+    }
+    return clampDocumentBudget(saved)
+  })(),
   // 默认 flash：更快更便宜，而且支持图片
   model: read(KEYS.model) === 'deepseek-v4-pro' ? 'deepseek-v4-pro' : 'deepseek-flash',
 }))
+
+/** 预算夹到允许区间并对齐步长：脏数据（手改 localStorage）不会把截断逻辑搞坏 */
+const clampDocumentBudget = (value: number) => {
+  const stepped = Math.round(value / DOCUMENT_BUDGET_STEP) * DOCUMENT_BUDGET_STEP
+  return Math.min(DOCUMENT_BUDGET_MAX, Math.max(DOCUMENT_BUDGET_MIN, stepped))
+}
+
+export const setDocumentBudget = (value: number) => {
+  const next = clampDocumentBudget(value)
+  write(KEYS.documentBudget, String(next))
+  useSettings.setState({ documentBudget: next })
+}
 
 export const setLocale = (locale: Locale) => {
   write(KEYS.locale, locale)

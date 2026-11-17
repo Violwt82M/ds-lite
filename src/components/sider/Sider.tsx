@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { IconPanelLeftOutline16, IconSettingsOutline16, NewChatIcon } from '../base/icons.js'
 import { setSiderCollapsed } from '../../services/settings.js'
@@ -12,6 +12,7 @@ import { Modal } from '../base/Modal.js'
 import { showToast } from '../base/toastState.js'
 import { openSettings } from '../settings/settingsDialogState.js'
 import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
+import { useSwipeSiderClose } from '../../app/swipeSider.js'
 import { SessionItem } from './SessionItem.js'
 import { SessionSearch } from './SessionSearch.js'
 import { openSearchPage } from './searchPageState.js'
@@ -168,8 +169,7 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
   )
 }
 
-/** 抽屉宽度与 CSS 保持一致（.mobile 的 width / max-width），拖动换算进度要用它 */
-export const MOBILE_SIDER_WIDTH = () => Math.min(300, window.innerWidth - 48)
+export { MOBILE_SIDER_WIDTH } from './mobileSiderState.js'
 
 /**
  * 移动端抽屉：可以点菜单按钮弹出，也可以从正文任意位置向右拖出来。
@@ -179,8 +179,14 @@ export const MobileSider = () => {
   const open = useMobileSider((state) => state.open)
   const progress = useMobileSider((state) => state.progress)
   const dragging = useMobileSider((state) => state.dragging)
+  const drawerRef = useRef<HTMLDivElement>(null)
   // 关的时候要留在 DOM 里把动画放完，不然抽屉会"啪"地消失
   const [rendered, setRendered] = useState(open || progress > 0)
+  /**
+   * 点按钮打开时 open/progress 是一次性置到 1 的，元素直接以终态挂载、CSS transition 没有起点，
+   * 于是只有关闭有动画、打开是"啪"地出现。这里先以 0 挂载一帧，下一帧再放开。
+   */
+  const [entered, setEntered] = useState(false)
   useEffect(() => {
     if (open || progress > 0) {
       setRendered(true)
@@ -189,10 +195,25 @@ export const MobileSider = () => {
     const timer = window.setTimeout(() => setRendered(false), 240)
     return () => window.clearTimeout(timer)
   }, [open, progress])
+  useEffect(() => {
+    if (!rendered) {
+      setEntered(false)
+      return
+    }
+    // 手指已经在拖（从正文右滑拉出）时不需要入场动画，否则会从 0 跳一下
+    if (dragging) {
+      setEntered(true)
+      return
+    }
+    const frame = window.requestAnimationFrame(() => setEntered(true))
+    return () => window.cancelAnimationFrame(frame)
+  }, [rendered, dragging])
+  // 抽屉开着时可以在抽屉上左划关回去（官方行为；以前只能划出来、划不回去）
+  useSwipeSiderClose(drawerRef, rendered)
   if (!rendered) {
     return null
   }
-  const shown = open ? 1 : progress
+  const shown = dragging ? progress : entered ? (open ? 1 : progress) : 0
   return (
     <>
       <div
@@ -204,6 +225,7 @@ export const MobileSider = () => {
         }}
       />
       <div
+        ref={drawerRef}
         className={styles.drawer}
         style={{
           transform: `translateX(${(shown - 1) * 100}%)`,

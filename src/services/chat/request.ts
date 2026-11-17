@@ -1,5 +1,6 @@
 import type { ChatModel, CreateMessageRequest, MessageParam } from '../api/types.js'
 import { sanitizeSurrogates } from '../../utils/safeText.js'
+import { getCustomModel, usesOpenAiProtocol } from '../api/protocol.js'
 
 /**
  * 服务端「扩展模式」的输入上限：32768 token（约 5 万字）。
@@ -101,15 +102,20 @@ export const buildRequest = (options: BuildRequestOptions): BuiltRequest => {
     forceStandard = false,
   } = options
 
-  const hasUrl = URL_PATTERN.test(questionText)
+  /**
+   * OpenAI 兼容通道：联网搜索 / 读链接 / 内容审查 / 服务端标题全都不支持，
+   * 所以这里一个扩展字段都不声明（也别让 degraded 提示误报）。
+   */
+  const openAi = usesOpenAiProtocol()
+  const hasUrl = !openAi && URL_PATTERN.test(questionText)
   /** 只要出现任意扩展字段，本轮就落进 32768 token 的小房间 */
-  const wantsExtended = search || safety === 'high' || hasUrl
+  const wantsExtended = !openAi && (search || safety === 'high' || hasUrl)
   const tooLong = inputTokens > EXTENDED_INPUT_LIMIT_TOKENS
   /** 长输入一律标准模式：扩展能力全部让位，否则请求必被拒 */
   const standardOnly = tooLong || forceStandard
 
   const tools: CreateMessageRequest['tools'] = []
-  if (!standardOnly) {
+  if (!standardOnly && !openAi) {
     if (hasUrl) {
       tools.push({ type: 'deepseek_read_url', name: 'deepseek_read_url' })
     }
@@ -119,7 +125,8 @@ export const buildRequest = (options: BuildRequestOptions): BuiltRequest => {
   }
 
   const body: CreateMessageRequest = {
-    model,
+    // OpenAI 通道的模型名由用户在设置里填（别家服务不认识 deepseek-flash）
+    model: openAi ? getCustomModel() : model,
     system: sanitizeSurrogates(system),
     messages: cleanMessages(messages),
     thinking: { type: thinking ? 'enabled' : 'disabled' },

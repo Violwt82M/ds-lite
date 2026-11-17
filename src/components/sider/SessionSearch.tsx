@@ -2,9 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import {
   searchAll,
+  searchSessionHits,
   warmSearchIndex,
   type IndexProgress,
-  type SearchRow,
+  type SearchGroup,
+  type SearchHit,
+  type SearchResult,
 } from '../../services/chat/searchIndex.js'
 import { splitByRanges, type SearchRange } from '../../services/chat/searchText.js'
 import { selectSession, useChatStore } from '../../services/chat/store.js'
@@ -15,6 +18,8 @@ import styles from './SessionSearch.module.css'
 
 /** 输入停顿多久才去内存里扫一遍：30 万字的会话全库扫一遍只要几十毫秒，停顿短一点更跟手 */
 const DEBOUNCE_MS = 80
+/** 展开一个会话后一次渲染多少条命中：上千条一次性上屏会卡，分成 200 一页 */
+const HITS_PAGE = 200
 
 /** 把纯文本按命中下标切开渲染：命中词加高亮，不拼 HTML，标题和正文片段共用。 */
 const Highlighted = ({ text, ranges }: { text: string; ranges: readonly SearchRange[] }) => (
@@ -60,9 +65,11 @@ export const SessionSearch = ({
   const [query, setQuery] = useState('')
   /** 已提交的关键词：输入法组字期间停在旧值，结束组字才更新，避免用拼音中间态去搜索 */
   const [committed, setCommitted] = useState('')
-  const [rows, setRows] = useState<SearchRow[]>([])
-  const [pending, setPending] = useState(0)
-  const [truncated, setTruncated] = useState(false)
+  const [result, setResult] = useState<SearchResult | null>(null)
+  /** 展开的会话 → 该会话全部命中（'loading' 表示正在取） */
+  const [expanded, setExpanded] = useState<Record<string, SearchHit[] | 'loading' | undefined>>({})
+  /** 展开后每个会话已经渲染了多少条 */
+  const [shownCount, setShownCount] = useState<Record<string, number>>({})
   /** 已经算完结果的关键词：算完之前不显示「没有找到」，否则刚敲第一个字会闪一下空状态 */
   const [settled, setSettled] = useState('')
   const [progress, setProgress] = useState<IndexProgress | null>(null)
@@ -96,9 +103,9 @@ export const SessionSearch = ({
   // 关键词变了就重新扫索引：命中即停，最多 MAX_ROWS 条
   useEffect(() => {
     if (!keyword) {
-      setRows([])
-      setPending(0)
-      setTruncated(false)
+      setResult(null)
+      setExpanded({})
+      setShownCount({})
       setSettled('')
       return
     }
@@ -106,18 +113,18 @@ export const SessionSearch = ({
     let cancelled = false
     const timer = window.setTimeout(() => {
       searchAll(keyword, sessions)
-        .then((result) => {
+        .then((next) => {
           if (cancelled) {
             return
           }
-          setRows(result.rows)
-          setPending(result.pending)
-          setTruncated(result.truncated)
+          setResult(next)
+          setExpanded({})
+          setShownCount({})
           setSettled(keyword)
         })
         .catch(() => {
           if (!cancelled) {
-            setRows([])
+            setResult(null)
             setSettled(keyword)
           }
         })
@@ -142,6 +149,26 @@ export const SessionSearch = ({
     selectSession(sessionId)
     closeMobileSider()
     onPick(sessionId)
+  }
+
+  /**
+   * 点组头：展开/收起该会话的全部命中。
+   * 只命中标题、没有正文命中的会话没有可展开的内容，直接进去。
+   */
+  const toggleGroup = (group: SearchGroup) => {
+    if (expanded[group.sessionId] !== undefined) {
+      // 置 undefined 而不是 delete：lint 禁止动态 delete，判定上两者等价（都不等于 undefined 检查）
+      setExpanded((previous) => ({ ...previous, [group.sessionId]: undefined }))
+      return
+    }
+    if (group.totalHits === 0) {
+      pick(group.sessionId, null)
+      return
+    }
+    setExpanded((previous) => ({ ...previous, [group.sessionId]: 'loading' }))
+    void searchSessionHits(group.sessionId, keyword).then((hits) => {
+      setExpanded((previous) => ({ ...previous, [group.sessionId]: hits }))
+    })
   }
 
   // 全屏页没有输入时先列出全部会话（官方搜索页一进来就是会话列表）
@@ -220,13 +247,14 @@ export const SessionSearch = ({
           <div className={styles.status} aria-live="polite">
             {building
               ? t('sessionSearchIndexing', { done: progress.done, total: progress.total })
-              : keyword && pending > 0
-                ? t('sessionSearchPartial', { count: rows.length })
+              : keyword && result && result.pending > 0
+                ? t('sessionSearchPartial', { count: result.totalHits })
                 : keyword
-                  ? rows.length > 0
-                    ? truncated
-                      ? t('sessionSearchTruncated', { count: rows.length })
-                      : t('sessionSearchResults', { count: rows.length })
+                  ? result && result.groups.length > 0
+                    ? t('sessionSearchSummary', {
+                        hits: result.totalHits,
+                        groups: result.groups.length,
+                      })
                     : ''
                   : t('sessionSearchAll', { count: allSessions.length })}
           </div>
@@ -242,30 +270,77 @@ export const SessionSearch = ({
               <span className={styles.hitTitle}>{session.title || t('untitledChat')}</span>
             </button>
           ))}
-          {rows.map((row, index) => (
-            <button
-              key={`${row.sessionId}:${row.messageId ?? 'title'}:${index}`}
-              type="button"
-              className={styles.hit}
-              onClick={() => pick(row.sessionId, row.messageId)}
-            >
-              <span className={styles.hitTitle}>
-                {row.source === 'title' ? (
-                  <Highlighted text={row.title} ranges={row.titleRanges} />
-                ) : (
-                  row.title || t('untitledChat')
-                )}
-              </span>
-              {row.snippet ? (
-                <span className={styles.hitSnippet}>
-                  {row.snippet.clippedStart ? '…' : null}
-                  <Highlighted text={row.snippet.text} ranges={row.snippet.ranges} />
-                  {row.snippet.clippedEnd ? '…' : null}
-                </span>
-              ) : null}
-            </button>
-          ))}
-          {keyword && settled === keyword && rows.length === 0 && !building ? (
+          {result?.groups.map((group) => {
+            const loaded = expanded[group.sessionId]
+            const isExpanded = loaded !== undefined
+            const allHits = Array.isArray(loaded) ? loaded : group.hits
+            const limit = shownCount[group.sessionId] ?? HITS_PAGE
+            const visible = isExpanded ? allHits.slice(0, limit) : group.hits
+            const canExpand = group.totalHits > group.hits.length
+            const capped = Array.isArray(loaded) && loaded.length < group.totalHits
+            return (
+              <div key={group.sessionId} className={styles.group}>
+                <button
+                  type="button"
+                  className={styles.groupHead}
+                  onClick={() => toggleGroup(group)}
+                >
+                  <span className={styles.hitTitle}>
+                    {group.titleRanges.length > 0 ? (
+                      <Highlighted text={group.title} ranges={group.titleRanges} />
+                    ) : (
+                      group.title || t('untitledChat')
+                    )}
+                  </span>
+                  {group.totalHits > 0 ? (
+                    <span className={styles.groupCount}>
+                      {canExpand ? (isExpanded ? '▾ ' : '▸ ') : ''}
+                      {t('sessionSearchHits', { count: group.totalHits })}
+                    </span>
+                  ) : null}
+                </button>
+                {visible.map((hit) => (
+                  <button
+                    key={hit.messageId}
+                    type="button"
+                    className={styles.hit}
+                    onClick={() => pick(group.sessionId, hit.messageId)}
+                  >
+                    <span className={styles.hitSnippet}>
+                      {hit.snippet?.clippedStart ? '…' : null}
+                      {hit.snippet ? (
+                        <Highlighted text={hit.snippet.text} ranges={hit.snippet.ranges} />
+                      ) : null}
+                      {hit.snippet?.clippedEnd ? '…' : null}
+                    </span>
+                  </button>
+                ))}
+                {isExpanded && loaded === 'loading' ? (
+                  <div className={styles.empty}>{t('sessionSearching')}</div>
+                ) : null}
+                {isExpanded && allHits.length > limit ? (
+                  <button
+                    type="button"
+                    className={styles.loadMore}
+                    onClick={() =>
+                      setShownCount((previous) => ({
+                        ...previous,
+                        [group.sessionId]: (previous[group.sessionId] ?? HITS_PAGE) + HITS_PAGE,
+                      }))
+                    }
+                  >
+                    {t('sessionSearchLoadMore', { count: Math.min(HITS_PAGE, allHits.length - limit) })}
+                  </button>
+                ) : null}
+                {capped ? (
+                  <div className={styles.empty}>
+                    {t('sessionSearchHitCapped', { count: (loaded as SearchHit[]).length })}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+          {keyword && settled === keyword && (!result || result.groups.length === 0) && !building ? (
             <div className={styles.empty}>{t('sessionSearchNoResult')}</div>
           ) : null}
         </div>

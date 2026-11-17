@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 /** 说明版本号：内容有实质变化时改这里，老用户会重新看到一次 */
-const DISCLAIMER_VERSION = '2'
+const DISCLAIMER_VERSION = '3'
 const STORAGE_KEY = 'ds-lite:disclaimer'
 
 const readAccepted = (): boolean => {

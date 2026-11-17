@@ -106,8 +106,11 @@ export const MessageList = ({
       : null
   // 上滑离底部太远、或正停在被跳转到的历史位置时浮出「回到底部」
   const [showJumpDown, setShowJumpDown] = useState(false)
+  // 往上翻过一屏、或正停在历史窗口里时浮出「回到顶部」
+  const [showJumpUp, setShowJumpUp] = useState(false)
   const expandAnchor = useRef<{ scrollTop: number; scrollHeight: number } | null>(null)
   const bottomAfterRender = useRef(false)
+  const topAfterRender = useRef(false)
   // 加载更早的消息后，保持视线位置不跳动
   useLayoutEffect(() => {
     const el = scrollRef.current
@@ -121,6 +124,13 @@ export const MessageList = ({
       if (el) {
         el.scrollTop = el.scrollHeight
         scrollTopRef.current = el.scrollTop
+      }
+    }
+    if (topAfterRender.current) {
+      topAfterRender.current = false
+      if (el) {
+        el.scrollTop = 0
+        scrollTopRef.current = 0
       }
     }
   }, [start, tail])
@@ -220,6 +230,7 @@ export const MessageList = ({
       setShowJumpDown(
         winRef.current.tail > 0 || el.scrollHeight - el.scrollTop - el.clientHeight > 360
       )
+      setShowJumpUp(winRef.current.start > 0 || el.scrollTop > 360)
       scrollTopRef.current = el.scrollTop
     }
     el.addEventListener('scroll', onScroll, { passive: true })
@@ -281,11 +292,51 @@ export const MessageList = ({
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
     }
   }
+  const jumpToTop = () => {
+    const el = scrollRef.current
+    if (start > 0) {
+      // 换到最前面那一段窗口。注意必须同时算 tail：只把 start 置 0、tail 留 0，
+      // shown = messages.slice(0, len) 会把几千条一次性渲染出来 —— 那就是白屏/卡死的根因。
+      stickyRef.current = false
+      topAfterRender.current = true
+      setShowJumpUp(false)
+      setWindowState({
+        sessionId: session.id,
+        start: 0,
+        tail: Math.max(0, messages.length - RENDER_PAGE),
+      })
+      return
+    }
+    stickyRef.current = false
+    setShowJumpUp(false)
+    if (el) {
+      el.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
   return (
     <ScrollToBottomContext.Provider value={scrollToBottom}>
       <div ref={isMobile ? undefined : scrollRef} className={styles.container}>
         <div ref={isMobile ? scrollRef : undefined} className={styles.scroll}>
           <div ref={contentRef} className={styles.column}>
+            {showJumpUp ? (
+              <button
+                type="button"
+                className={`${styles.jumpDown} ${styles.jumpUp}`}
+                aria-label={t('scrollToTop')}
+                title={t('scrollToTop')}
+                onClick={jumpToTop}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                  <path
+                    d="M8 13V4m0 0 4 4m-4-4-4 4"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            ) : null}
             {hiddenCount > 0 ? (
               <button type="button" className={styles.loadEarlier} onClick={loadEarlier}>
                 {t('loadEarlierMessages', { count: hiddenCount })}

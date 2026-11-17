@@ -3,7 +3,8 @@ import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
 import { acceptDisclaimer, useDisclaimer } from './disclaimerState.js'
 import { ensureApiKey } from '../settings/settingsDialogState.js'
-import { OFFICIAL_REPO, APP_VERSION, UPSTREAM_VERSION } from './AboutPanel.js'
+import { OFFICIAL_REPO } from './AboutPanel.js'
+import { APP_VERSION, UPSTREAM_VERSION } from '../../version.js'
 import styles from './DisclaimerDialog.module.css'
 
 /**

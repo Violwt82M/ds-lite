@@ -15,10 +15,12 @@ import {
 } from '../../services/persona/store.js'
 import { toAvatarDataUrl } from '../../utils/image.js'
 import { setSafety, useSettings } from '../../services/settings.js'
+import { usesOpenAiProtocol } from '../../services/api/protocol.js'
 import { Button } from '../base/Button.js'
 import { IconEditOutline16, IconUploadOutline14 } from '../base/icons.js'
 import { showToast } from '../base/toastState.js'
 import { PersonaEditor } from './PersonaEditor.js'
+import { PersonaGenerateDialog } from './PersonaGenerateDialog.js'
 import settingsStyles from './Settings.module.css'
 import styles from './PersonaSetting.module.css'
 
@@ -58,6 +60,8 @@ export const PersonaSetting = () => {
     initial?: PersonaCard
     avatar?: string
   } | null>(null)
+  /** AI 写角色卡弹窗（0.9.36）：生成完把草稿交给编辑器，不直接入库 */
+  const [generateOpen, setGenerateOpen] = useState(false)
   const enabled = usePersona((state) => state.enabled)
   const userName = usePersona((state) => state.userName)
   const cards = usePersona((state) => state.cards)
@@ -112,6 +116,14 @@ export const PersonaSetting = () => {
         description={active ? t('personaCurrent', { name: active.card.name }) : t('personaNoCard')}
         action={
           <>
+            <Button
+              variant="outlined"
+              size="m"
+              className={settingsStyles.cellButton}
+              onClick={() => setGenerateOpen(true)}
+            >
+              {t('personaGenerate')}
+            </Button>
             <Button
               variant="outlined"
               size="m"
@@ -207,7 +219,14 @@ export const PersonaSetting = () => {
             variant={safety === 'high' ? 'dangerOutlined' : 'outlined'}
             size="m"
             className={settingsStyles.cellButton}
-            onClick={() => setSafety(safety === 'high' ? 'low' : 'high')}
+            onClick={() => {
+              // 内容审查是 DeepSeek 服务端能力，OpenAI 兼容通道没有
+              if (usesOpenAiProtocol()) {
+                showToast({ key: 'openAiSafetyUnsupported' })
+                return
+              }
+              setSafety(safety === 'high' ? 'low' : 'high')
+            }}
           >
             {t(safety === 'high' ? 'safetyHigh' : 'safetyLow')}
           </Button>
@@ -226,6 +245,15 @@ export const PersonaSetting = () => {
           />
         }
       />
+      {generateOpen ? (
+        <PersonaGenerateDialog
+          onClose={() => setGenerateOpen(false)}
+          onDone={(card) => {
+            setGenerateOpen(false)
+            setEditor({ id: null, initial: card })
+          }}
+        />
+      ) : null}
       {editor ? (
         <PersonaEditor
           id={editor.id}

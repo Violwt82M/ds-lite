@@ -1,5 +1,6 @@
 import clsx from 'clsx'
 import { memo } from 'react'
+import { truncatePercent } from '../../utils/safeText.js'
 import { useTranslate } from '../../i18n/index.js'
 import { useUploads, type UploadTask } from '../../services/attachments.js'
 import type { DraftAttachment } from '../../services/chat/drafts.js'
@@ -88,14 +89,16 @@ const AttachmentItem = ({
     </div>
   ) : (
     <FileCard
-      name={item.file.name}
+      name={item.displayName ?? item.file.name}
       size={item.originalSize ?? item.file.size}
       note={
         item.truncated
           ? t('attachmentTruncated', {
-              percent: Math.round((item.truncated.kept / item.truncated.total) * 100),
+              percent: truncatePercent(item.truncated.kept, item.truncated.total),
             })
-          : undefined
+          : item.extracted
+            ? t('attachmentExtracted')
+            : undefined
       }
       status={status}
       error={error}

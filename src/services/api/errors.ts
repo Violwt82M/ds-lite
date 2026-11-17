@@ -10,6 +10,14 @@ export type ApiErrorCondition =
   | 'tooLarge'
   | 'rateLimited'
   | 'serverBusy'
+  /** 400：参数/内容不合规。以前并进 other，用户只能看到服务端英文原文 */
+  | 'badRequest'
+  /** 403：权限或地域限制 */
+  | 'forbidden'
+  /** 404：地址不对（自定义 API 地址最常见的原因） */
+  | 'notFound'
+  /** 405：方法不对（自定义地址不支持 POST /anthropic/v1/messages） */
+  | 'methodNotAllowed'
   | 'network'
   | 'other'
 
@@ -29,6 +37,18 @@ export const classifyStatus = (status: number | undefined): ApiErrorCondition =>
   }
   if ((status ?? 0) >= 500) {
     return 'serverBusy'
+  }
+  if (status === 400) {
+    return 'badRequest'
+  }
+  if (status === 403) {
+    return 'forbidden'
+  }
+  if (status === 404) {
+    return 'notFound'
+  }
+  if (status === 405) {
+    return 'methodNotAllowed'
   }
   return 'other'
 }

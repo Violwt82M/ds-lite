@@ -92,6 +92,35 @@
   }
 }
 
+/* 错误提示主体：「原因 + 建议」在上，技术详情折叠在下（0.9.33） */
+.noticeBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.noticeText {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.noticeDetail {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.noticeDetailSummary {
+  cursor: pointer;
+}
+
+.noticeDetailText {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .noticeAction {
   padding: 0;
   border: none;
@@ -129,6 +158,13 @@
   opacity: 1;
 }
 
+/* 触摸设备没有 hover：操作按钮必须常显，否则手机上看不出来能点（0.9.32） */
+@media (hover: none) {
+  .actions {
+    opacity: 1;
+  }
+}
+
 .continueButton {
   margin-left: auto;
 }
@@ -161,6 +197,16 @@
     background-color: var(--dsw-alias-interactive-bg-hover);
     --search-row-site-logo-color: var(--dsw-alias-interactive-bg-hover);
   }
+}
+
+/* 每条回答的字数：常显的小号灰字，贴在这条消息下面靠右 */
+.charCount {
+  margin-top: 6px;
+  text-align: right;
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 /* 每条回答的 token 用量与估算费用，靠左显示在操作行里 */

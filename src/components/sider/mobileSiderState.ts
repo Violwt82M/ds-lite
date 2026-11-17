@@ -7,6 +7,11 @@ import { create } from 'zustand'
  */
 type MobileSiderState = { open: boolean; progress: number; dragging: boolean }
 
+/** 抽屉宽度与 CSS 保持一致（Sider.module.css 的 .mobile 宽度），拖动换算进度要用它。
+ * 放在这里而不是 Sider.tsx：swipeSider 需要它，而 Sider 又要用 swipeSider 的关闭手势，
+ * 放 Sider 里会形成循环 import。 */
+export const MOBILE_SIDER_WIDTH = () => Math.min(300, window.innerWidth - 48)
+
 export const useMobileSider = create<MobileSiderState>(() => ({
   open: false,
   progress: 0,

@@ -27,6 +27,12 @@ import { consumeSharedArchive, useSharedArchive } from '../../services/chat/hist
 import { useIsMobile } from '../../app/viewport.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { useTransfer } from '../../services/chat/transfer.js'
+import {
+  DOCUMENT_BUDGET_MAX,
+  DOCUMENT_BUDGET_MIN,
+  DOCUMENT_BUDGET_STEP,
+} from '../../services/attachments.js'
+import { formatCharCount } from '../../services/memory/context.js'
 import { saveFile } from '../../services/export/saveFile.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
 import {
@@ -40,6 +46,7 @@ import {
   setThemePreference,
   setThinkingEffort,
   setTtsVoice,
+  setDocumentBudget,
   useSettings,
   type ThemePreference,
   type ThinkingEffort,
@@ -147,6 +154,7 @@ const SettingsContent = () => {
               <ThemeSetting />
               <WallpaperSetting />
               <FontScaleSetting />
+              <DocumentBudgetSetting />
               <ModelSetting />
               <RecordModelSetting />
               <ThinkingEffortSetting />
@@ -445,6 +453,36 @@ const WallpaperSetting = () => {
         />
       ) : null}
     </>
+  )
+}
+
+/** 单份文档预算：无级滑杆（用户明确要滑杆、不要档位），范围 20~95 万 token */
+const DocumentBudgetSetting = () => {
+  const t = useTranslate()
+  const budget = useSettings((state) => state.documentBudget)
+  return (
+    <SettingCell
+      label={t('settingsDocBudget')}
+      description={t('settingsDocBudgetHint', { chars: formatCharCount(budget) })}
+      status={null}
+      action={
+        <div className={styles.rangeWrap}>
+          <input
+            className={styles.range}
+            type="range"
+            min={DOCUMENT_BUDGET_MIN}
+            max={DOCUMENT_BUDGET_MAX}
+            step={DOCUMENT_BUDGET_STEP}
+            value={budget}
+            aria-label={t('settingsDocBudget')}
+            onChange={(event) => setDocumentBudget(Number(event.currentTarget.value))}
+          />
+          <span className={styles.rangeValue}>
+            {t('settingsDocBudgetValue', { count: budget / 10_000 })}
+          </span>
+        </div>
+      }
+    />
   )
 }
 
