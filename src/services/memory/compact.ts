@@ -41,44 +41,66 @@ const SYSTEM_PROMPTS: Record<Locale, string> = {
   'zh-CN': `你是对话记忆整理助手。你会看到同一个 AI 助手此前的记忆笔记，以及一段即将被折叠、原文不再留在上下文里的较早对话。请把「旧笔记 + 这段对话」整理成**一份**最新的压缩记录：它是被折叠原文的替代索引，供助手在原文看不到时**备查**，而不是让助手照着它把故事讲下去。
 
 要求：
-1. 只写后续对话真正需要的事实：人物与关系、设定与世界观、已发生的关键事件、用户的偏好与禁忌、明确的约定或未完成的事、重要的名称与结论。
+1. 只写后续对话真正需要的事实：人物与关系、设定与世界观、用户的偏好与禁忌、明确的约定或未完成的事、重要的名称与结论。【关键事实】只放之后还用得到的设定与约定，不要记某一幕的细节（吃了什么、穿了什么、说了哪句话）。
    如果对话里出现过文档或图片附件（转录里以「附件：」开头），必须写进【资料】：文件名、它大致是什么内容、模型读了多少。不要复述文档正文，也不要假装读过没读到的部分。
 2. 覆盖式整理：你输出的就是整理后的完整笔记，它会整体替换旧笔记。请把【已有记忆】与本次对话合并去重；旧说法被推翻时直接改写成正确说法；已经过时或不再重要的删掉。
 3. 先判断这段对话是哪种，再决定写什么：
-   · 角色扮演 / 人物对话 / 小说或剧本创作：重点是角色的当前状态、彼此关系、这段被省略的原文里发生过什么（一句话一件，只记事件与结果）、还没解决的事。
-     这一节是「被省略原文的替代索引」，不是剧情推进方向：不要写成叙事、不要铺陈场景、不要抄台词；写它只是让后续知道自己缺了哪些原文。语气与文风由后续的近期原文保持。
+   · 角色扮演 / 人物对话 / 小说或剧本创作：把被省略的部分分成两类写——
+     (a)【重大情节】：改变了关系、处境或局面的事件，一条一件，写「发生了什么 → 之后变成什么样」，不写过程；
+     (b)【事情经过】：重大情节之外的其余经过，粗略讲清楚就行，按时间顺序 3~8 条，每条一句话概括一段经历（谁做了什么、结果怎样），不写对话、不写动作和心理描写。
+     什么算重大（满足任一条才算，普通日常一律不算）：关系改变（初识、越界、确认关系、决裂、和解、结婚、分离）；处境改变（身份、地位、能力、所在地变了，或得到/失去重要的东西）；关键代价（受伤、死亡、被骗、秘密暴露、无法挽回的决定）；重要约定或承诺（答应对方以后要做的事、定下的规矩）；世界观揭示（刚被说破的真相或设定）。
+     吃饭、出门、撒娇、睡觉、闲聊这些日常不进【重大情节】，进【事情经过】。
+     这两节都是「被省略原文的替代索引」，不是剧情推进方向：写它们只是让后续知道自己缺了哪些原文。语气与文风由后续的近期原文保持。
    · 普通使用（问问题、查资料、办事、写代码）：重点是事实与结论、用户的要求与偏好、怎么称呼用户、已经定下来的方案、还没做完的事。
    如果用户消息里带了【角色扮演背景】，直接按角色扮演处理，不用再判断。
-4. 输出格式：一份笔记，用下面五个小标题分段，没有内容的段直接省略：
+4. 输出格式：一份笔记，用下面六个小标题分段，没有内容的段直接省略：
 【关键事实】
 【角色与关系】
-【已省略的过往】
+【重大情节】
+【事情经过】
 【资料】
 【待办】
    每条一行、以「· 」开头，一句话说清一件事。
-5. 篇幅以【篇幅要求】为准；宁可少写，也要写得准，但人物的当前状态、关系变化、关键事件与未解决的事不能省——关键事件只记「发生了什么、结果如何」，不写过程细节。
+   【重大情节】写「改变」，不写过程：
+   · 对：两人越过了兄妹的界限，灵犀改口叫他“老公”，关系从兄妹变成夫妻。
+   · 错（写成过程了）：他扣住她的手腕，她喊了一声“好烫”后吻上来，两个小时后她软声认错。
+   【事情经过】写粗略经过，一句话一段经历：
+   · 对：她肚子难受，他照顾了一夜，第二天两人在家歇着。
+   · 错（太细了，别这样写）：她夜里怪他“过分”，他揽她入怀、亲她发顶，解释是怕她难受。
+5. 篇幅以【篇幅要求】为准；宁可少写、宁可写粗，也要写得准。人物的当前状态、关系变化、还没解决的事不能省；【重大情节】最多 8 条、【事情经过】最多 8 条，两节不要互相重复。
 6. 用户自己写下的偏好、约定、禁忌是重要事实，务必保留；用户明确要求怎么称呼自己时，原样记下。
 7. 不要复述说话过程，不要写「用户问…助手答…」，不要评价，不要加任何前言后语。
 8. 只输出笔记正文，不要代码块、不要解释。`,
   'en-US': `You maintain the memory notes of an AI assistant. You see the notes so far plus an earlier part of the conversation that is about to be folded out of the context. Produce the updated, complete digest: an index standing in for that omitted text, so the assistant can look things up later - not a script the assistant should keep telling the story from.
 
 Rules:
-1. Keep only facts needed later: people and relationships, setting, key events that happened, user preferences and dislikes, agreements or unfinished tasks, important names and conclusions.
+1. Keep only facts needed later: people and relationships, setting, user preferences and dislikes, agreements or unfinished tasks, important names and conclusions. [Key facts] holds only setting and agreements still needed later - not the detail of one scene (what they ate, what they wore, what was said).
    If documents or images appeared in the conversation (transcript lines starting with "Attachments:"), record them under [Documents]: file name, roughly what it contains, how much the model read. Never restate the document body, and never pretend to have read parts that were cut.
 2. Rewrite in place: your output is the complete note and replaces the old one. Merge and deduplicate [Existing memory] with this conversation; when an old fact is superseded, write the correct fact directly; drop anything obsolete.
 3. First decide what kind of conversation this is:
-   - Roleplay / character dialogue / fiction or script writing: focus on the character's current state, relationships, what actually happened in the omitted text (one line per event, event and outcome only) and what is still open.
-     This section is an index standing in for the omitted text, not a direction for the story: do not narrate, do not describe scenes, do not copy dialogue. It exists only so the assistant knows which text it no longer has. Tone and style come from the recent messages that stay verbatim.
+   - Roleplay / character dialogue / fiction or script writing: split the omitted part into two kinds -
+     (a) [Key events]: events that changed the relationship, the situation or the balance of power. One line each: what happened -> what it became. Do not retell the process.
+     (b) [What happened]: everything else, told roughly. 3-8 lines in time order, one sentence per stretch of events (who did what, how it ended). No dialogue, no action or inner-thought description.
+     What counts as a key event (any one is enough, ordinary daily life never counts): the relationship changed (first meeting, crossing a line, becoming a couple, a break, a reconciliation, marriage, separation); the situation changed (status, position, ability, location, gaining or losing something important); a real cost (injury, death, being deceived, a secret exposed, an irreversible decision); an important promise or rule agreed between them; a world-level reveal (a truth or setting just made explicit).
+     Eating, going out, flirting, sleeping or small talk are not key events - they go under [What happened].
+     Both sections are an index standing in for the omitted text, not a direction for the story: they exist only so the assistant knows which text it no longer has. Tone and style come from the recent messages that stay verbatim.
    - Ordinary use (questions, research, tasks, coding): focus on facts and conclusions, the user's requests and preferences, how the user wants to be addressed, settled decisions and unfinished work.
    If the user message contains [Roleplay context], treat it as roleplay without further judgement.
 4. Format: one note, split into these sections and skip empty ones:
 [Key facts]
 [Characters and relationships]
-[Omitted past]
+[Key events]
+[What happened]
 [Documents]
 [To do]
    Each line starts with "· " and states one thing.
-5. Follow [Length requirement]; fewer but accurate is better, but never drop current character states, relationship changes, key events and open threads - key events record only what happened and how it ended, no detailed process.
+   [Key events] records the change, never the process:
+   · Good: They crossed the line from siblings to lovers; she started calling him "husband".
+   · Bad (this is the process): He caught her wrist, she said "too hot" and kissed him, and two hours later she apologised softly.
+   [What happened] is a rough account, one sentence per stretch:
+   · Good: She felt sick, he looked after her all night, and the next day they stayed home.
+   · Bad (too detailed, do not write like this): She blamed him for being "too much", he pulled her into his arms and kissed the top of her head, explaining he was afraid she was uncomfortable.
+5. Follow [Length requirement]; fewer and coarser beats inaccurate. Never drop current character states, relationship changes or open threads; at most 8 lines under [Key events] and 8 under [What happened], and do not repeat the same thing in both.
 6. Facts the user wrote themselves (preferences, agreements, dislikes) must be kept; if the user says how they want to be addressed, record it verbatim.
 7. Do not narrate the exchange, no commentary, no preamble or closing.
 8. Output the note body only, no code fences, no explanation.`,
@@ -106,19 +128,19 @@ const PERSONA_HEADER: Record<Locale, string> = {
 }
 const PERSONA_RULE: Record<Locale, (name: string, style: string) => string> = {
   'zh-CN': (name, style) =>
-    `这段对话是角色扮演，你在扮演「${name}」${style ? `，说话风格：${style}` : ''}。整理时务必保留角色的当前状态与彼此关系、被省略的原文里发生过的关键事件、还没解决的事；这些都是原文的替代索引，不要写成叙事、不要铺场景，语气由近期原文维持。`,
+    `这段对话是角色扮演，你在扮演「${name}」${style ? `，说话风格：${style}` : ''}。整理时务必保留角色的当前状态与彼此关系、改变了关系或处境的重大情节、其余经过粗略即可、还没解决的事；这些都是原文的替代索引，不要写成叙事、不要铺场景，语气由近期原文维持。`,
   'en-US': (name, style) =>
-    `This conversation is roleplay; you play "${name}"${style ? `, speaking style: ${style}` : ''}. Keep the character's current state, relationships, key events from the omitted text and open threads; they are an index standing in for the original text, so do not narrate scenes and do not copy dialogue - the recent messages carry the voice.`,
+    `This conversation is roleplay; you play "${name}"${style ? `, speaking style: ${style}` : ''}. Keep the character's current state, relationships, key events that changed the relationship or situation, a rough account of everything else, and open threads; they are an index standing in for the original text, so do not narrate scenes and do not copy dialogue - the recent messages carry the voice.`,
 }
 
 const MODE_HEADER: Record<Locale, string> = { 'zh-CN': '【整理模式】', 'en-US': '[Mode]' }
 const MODE_RULE: Record<Locale, Record<'rp' | 'plain', string>> = {
   'zh-CN': {
-    rp: '用户指定按角色扮演整理：重点保留角色状态、彼此关系、被省略原文里的关键事件与还没解决的事。',
+    rp: '用户指定按角色扮演整理：重点保留角色状态、彼此关系、重大情节（关系/处境/局面的改变），其余经过粗略写，还没解决的事不能漏。',
     plain: '用户指定按普通对话整理：只写事实、结论、偏好与待办，不要按角色扮演写。',
   },
   'en-US': {
-    rp: 'The user forces roleplay mode: focus on character state, relationships, key events from the omitted text and open threads.',
+    rp: 'The user forces roleplay mode: character state, relationships and key events (changes to the relationship, situation or balance), everything else roughly, and open threads.',
     plain: 'The user forces ordinary mode: facts, conclusions, preferences and to-dos only.',
   },
 }
