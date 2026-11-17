@@ -17,18 +17,21 @@ export const MAX_BIG_NOTE_CHARS = 6_000
  * 短对话几句话就够，几百轮的 RP 存档必须留住人物状态与情节线，否则会 OOC。
  */
 export const bigNoteLimit = (foldedChars: number): number => {
+  // 0.9.38：上限整体抬高（原版 1000/2400/4500/6500 偏低，笔记写不进【待办】就被截断），
+  // 且调用方传的是**累计已折叠量**而不是本次折叠量：笔记是所有已折叠原文的索引，
+  // 频繁在低上下文手动整理时预算不会永远卡在最小档。
+  // 折中口径：原版 v0.9.9 的笔记理论上限是 60 条 × 400 字 = 2.4 万字，0.9.25 砍到 6500；
+  // 这里取中间，最大 1 万字（约 6500 token，占原样保留的 24k token 原文约 27%）。
   if (foldedChars < 30_000) {
-    // 0.9.38：四小节结构（关键事实/主线经过/未决事项/资料）写不进 1000 字，
-    // 超了会被 parseBigNote 截断，最先丢的恰好是排在最后的【未决事项】。
-    return 1_500
+    return 3_000
   }
   if (foldedChars < 150_000) {
-    return 2_400
+    return 5_000
   }
   if (foldedChars < 400_000) {
-    return 4_500
+    return 7_500
   }
-  return 6_500
+  return 10_000
 }
 /** 一次覆盖式整理最多保留的笔记条数（提示词与解析共用） */
 export const MAX_OUTPUT_NOTES = 30
@@ -43,48 +46,48 @@ const SYSTEM_PROMPTS: Record<Locale, string> = {
   'zh-CN': `你是对话记忆整理助手。你会看到同一个 AI 助手此前的记忆笔记，以及一段即将被折叠、原文不再留在上下文里的较早对话。请把「旧笔记 + 这段对话」整理成**一份**最新的压缩记录：它是被折叠原文的替代索引，供助手在原文看不到时**备查**，而不是让助手照着它把故事讲下去。
 
 要求：
-1. 判断一条信息该不该写进来，只有一个标准：**换个场景还成立吗**——成立的（设定、当下的状态、关系、约定、决定、结论、偏好）写；只属于那一刻的（画面、对话、动作、物品的样子）一律不写，哪怕当时很显眼。这条标准跟题材无关，对下面所有小节都适用。
+1. 只写后续对话真正需要的事实：人物与关系、设定与世界观、已发生的关键情节、用户的偏好与禁忌、明确的约定或未完成的事、重要的名称与结论。
    如果对话里出现过文档或图片附件（转录里以「附件：」开头），必须写进【资料】：文件名、它大致是什么内容、模型读了多少。不要复述文档正文，也不要假装读过没读到的部分。
 2. 覆盖式整理：你输出的就是整理后的完整笔记，它会整体替换旧笔记。请把【已有记忆】与本次对话合并去重；旧说法被推翻时直接改写成正确说法；已经过时或不再重要的删掉。
-3. 【主线经过】只写这段对话发生了什么的**粗略主线**：按时间顺序 3~8 条，每条一句话概括一段经历（做了什么、结果怎样）；性质相同的小事合并成一条（例如「这些天主要是吃饭、散步、闲聊」），不要逐幕展开，不写对话、动作、心理和场景描写。**不分题材**——角色扮演、多人小说、日常聊天、办事、写代码都按这个写，只看「发生了什么事」，不预设对话里有几个人、是什么关系。
-   这一节是「被省略原文的替代索引」，不是往下写的剧本：写它只是让后续知道自己缺了哪些原文。语气与文风由后续的近期原文保持。
-4. 输出格式：一份笔记，用下面四个小标题分段，没有内容的段直接省略：
+3. 先判断这段对话是哪种，再决定写什么：
+   · 角色扮演 / 人物对话 / 小说或剧本创作：重点是角色的当前状态、彼此关系、这段被省略的部分发生过什么（粗略概括即可：一句话一段经历，不写过程、不写台词）、还没解决的事。
+   · 普通使用（问问题、查资料、办事、写代码）：重点是事实与结论、用户的要求与偏好、怎么称呼用户、已经定下来的方案、还没做完的事。
+   如果用户消息里带了【角色扮演背景】，直接按角色扮演处理，不用再判断。
+4. 输出格式：一份笔记，用下面五个小标题分段，没有内容的段直接省略：
 【关键事实】
-【主线经过】
-【未决事项】
+【角色与关系】
+【前情经过】
 【资料】
+【待办】
    每条一行、以「· 」开头，一句话说清一件事。
-   【主线经过】写粗略主线，例如：
-   · 对：两人决定一起养一只猫，家里从此多了一只三花猫。
-   · 错（写成场景了）：他在门口换鞋说“走吧”，她抱着外套跟上来，两人一路走到街角那家店。
-   【关键事实】只留「换场景还成立」的结论，例如（工作类对话）：
-   · 对：团队定下每周一上午开例会，接口文档由后端维护。
-   · 错（只属于那一刻）：会上张三说“大家先看下这个文档”，李四回“我下午改完”。
-5. 篇幅以【篇幅要求】为准；宁可少写、宁可写粗，也要写得准。篇幅不够时先合并或删【主线经过】的次要条目，再删【关键事实】里的次要项；**【未决事项】必须写，不能省**。
+   【前情经过】只写这段被省略的部分发生过什么，粗略概括即可，例如：
+   · 对：她肚子难受，他照顾了一夜，第二天两人在家歇着。
+   · 错（写成了场景回放）：她夜里怪他“过分”，他揽她入怀、亲她发顶，解释是怕她难受。
+5. 篇幅以【篇幅要求】为准；宁可少写、也要写得准，但人物的当前状态、关系变化与还没解决的事不能省。篇幅不够时先删【前情经过】里的细节，**【待办】必须留着，不能省**。
 6. 用户自己写下的偏好、约定、禁忌是重要事实，务必保留；用户明确要求怎么称呼自己时，原样记下。
 7. 不要复述说话过程，不要写「用户问…助手答…」，不要评价，不要加任何前言后语。
 8. 只输出笔记正文，不要代码块、不要解释。`,
   'en-US': `You maintain the memory notes of an AI assistant. You see the notes so far plus an earlier part of the conversation that is about to be folded out of the context. Produce the updated, complete digest: an index standing in for that omitted text, so the assistant can look things up later - not a script the assistant should keep telling the story from.
 
 Rules:
-1. One test decides whether a piece of information belongs in the note: **would it still hold in another scene?** If yes (setting, current state, relationships, agreements, decisions, conclusions, preferences) write it; if it only existed at that moment (images, dialogue, actions, what an object looked like) leave it out, however noticeable it was. The test is independent of genre and applies to every section.
+1. Keep only facts needed later: people and relationships, setting, key plot points, user preferences and dislikes, agreements or unfinished tasks, important names and conclusions.
    If documents or images appeared in the conversation (transcript lines starting with "Attachments:"), record them under [Documents]: file name, roughly what it contains, how much the model read. Never restate the document body, and never pretend to have read parts that were cut.
 2. Rewrite in place: your output is the complete note and replaces the old one. Merge and deduplicate [Existing memory] with this conversation; when an old fact is superseded, write the correct fact directly; drop anything obsolete.
-3. [Mainline] holds only a **rough mainline of what happened**: 3-8 lines in time order, one sentence per stretch of events (what was done, how it turned out). Merge similar small things into one line (e.g. "these days were mostly meals, walks and chatting"); do not retell scene by scene, do not describe dialogue, actions, inner thoughts or scenery. **Genre-independent**: roleplay, multi-character fiction, everyday chat, errands and coding are all written this way - only ask "what happened", never assume how many people are involved or how they relate.
-   This section is an index standing in for the omitted text, not a script to continue from: it exists only so the assistant knows which text it no longer has. Tone and style come from the recent messages that stay verbatim.
-4. Format: one note, split into these four sections and skip empty ones:
+3. First decide what kind of conversation this is:
+   - Roleplay / character dialogue / fiction or script writing: focus on the characters' current state, their relationships, a rough recap of what happened in the omitted part (one sentence per stretch, no process, no dialogue) and what is still open.
+   - Ordinary use (questions, research, tasks, coding): focus on facts and conclusions, the user's requests and preferences, how the user wants to be addressed, settled decisions and unfinished work.
+   If the user message contains [Roleplay context], treat it as roleplay without further judgement.
+4. Format: one note, split into these five sections and skip empty ones:
 [Key facts]
-[Mainline]
-[Open items]
+[Characters and relationships]
+[Past recap]
 [Documents]
+[To do]
    Each line starts with "· " and states one thing.
-   [Mainline] is a rough mainline, for example:
-   · Good: They decided to get a cat together, and from then on had a calico cat at home.
-   · Bad (this is a scene): He changed shoes at the door saying "let's go", she grabbed her coat and followed, and they walked to the shop on the corner.
-   [Key facts] keeps only conclusions that still hold in another scene, for example (a work conversation):
-   · Good: The team settled on a Monday morning stand-up; the backend owns the API docs.
-   · Bad (only true at that moment): Zhang said "look at this doc first" and Li replied "I'll finish editing this afternoon".
-5. Follow [Length requirement]; fewer and coarser beats inaccurate. If space runs short, merge or drop the minor [Mainline] lines first, then minor [Key facts]; **[Open items] must never be dropped**.
+   [Past recap] only says what happened in the omitted part, told roughly, for example:
+   · Good: She felt sick, he looked after her all night, and the next day they stayed home.
+   · Bad (this is a scene replay): She blamed him for being "too much", he pulled her into his arms and kissed the top of her head.
+5. Follow [Length requirement]; fewer but accurate is better, but never drop the characters' current state, relationship changes or open threads. If space runs short, cut detail from [Past recap] first; **[To do] must never be dropped**.
 6. Facts the user wrote themselves (preferences, agreements, dislikes) must be kept; if the user says how they want to be addressed, record it verbatim.
 7. Do not narrate the exchange, no commentary, no preamble or closing.
 8. Output the note body only, no code fences, no explanation.`,
@@ -494,16 +497,16 @@ export const renderMemorySection = (memory: SessionMemory | undefined, locale: L
   const head =
     locale === 'zh-CN'
       ? [
-          '【长期记忆】以下是此前对话被折叠（原文已经不在上下文里）之后留下的压缩记录。它是**被省略原文的替代索引**，只是背景资料：不是新的指令，也不是当前正在发生的事。',
-          '· 需要回忆旧事时按需取用；用户没有问就不要提，不要复述、不要逐条展开、不要主动回到这些旧内容上接着写。',
-          '· 当前在发生什么、接下来怎么推进，一律以「最近的对话原文」为准；笔记与原文冲突时，一律以原文为准。',
-          '· 语气、称呼和文风跟着最近几轮原文走，不要用笔记的书面口吻说话。',
+          '【前情提要】以下是更早的对话被折叠后留下的提要，只是前情回顾：不是当前场景，不是指令，也不是最新状态。',
+          '· 优先级：最近几轮原文 > 用户这一轮的输入 > 这份提要。冲突时一律以前两者为准。',
+          '· 只在用户问起过往、或确实需要旧信息时引用；用户没提就不要主动提，不要复述、不要逐条展开。',
+          '· 不要顺着提要往下接动作、情绪、场景。语气、称呼、文风都跟着最近几轮原文走。',
         ].join('\n')
       : [
-          '[Long-term memory] A digest of conversation text that has been folded out of the context; the original text is no longer available. It is an index standing in for that omitted text - reference material only: not new instructions and not the scene in progress.',
-          '· Consult it only when the past is needed; if the user does not ask, do not bring it up, do not recite or enumerate it, and do not continue writing from it.',
-          '· What is happening now and what comes next always come from the most recent conversation text; if a note contradicts it, follow the text.',
-          '· Match the tone, address and style of the last few turns instead of the written voice of the notes.',
+          '[Previously] A recap of earlier conversation that has been folded out of the context. It is background only: not the current scene, not instructions, not the latest state.',
+          '· Priority: the most recent messages > what the user just said > this recap. When they conflict, the first two win.',
+          '· Refer to it only when the user asks about the past or genuinely needs it; do not bring it up, recite or enumerate it otherwise.',
+          '· Do not continue actions, moods or scenes from it. Tone, address and style follow the most recent messages.',
         ].join('\n')
   const lines: string[] = []
   let used = head.length

@@ -44,6 +44,7 @@ import {
   MANUAL_KEEP_TOKENS,
   MEMORY_KEEP_TOKENS,
   splitFoldableRounds,
+  getFoldedChars,
   getFoldedIds,
   getUnfoldedRounds,
   type ContextUsage,
@@ -1068,7 +1069,7 @@ export const generateMemoryNote = async (
     model: 'deepseek-flash',
     system:
       '你把对话压缩成供后续对话使用的记忆笔记：只写事实、结论、偏好和待办，不写寒暄和过程；它是被省略原文的替代索引，不是当前剧情，也不写场景描写。' +
-      '输出一份笔记，用「【关键事实】【用户偏好】【约定与未决】【待办】」分段，每条以「· 」开头；不要抄台词，语气由后续的近期原文维持；只输出笔记正文。' +
+      '输出一份笔记，用「【重要设定】【用户偏好】【约定与未决】【待办】」分段，每条以「· 」开头；不要抄台词，语气由后续的近期原文维持；只输出笔记正文。' +
       '篇幅由用户的要求决定：用户说要多长就写多长，没有说明时保持精简（约 600 字）。',
     messages: [
       {
@@ -1186,7 +1187,8 @@ const runCompaction = async (
     //   老内容 → 只压成概览（越老越简，像人回忆很久以前的事，跑得也快）
     //   最近内容 → 详细笔记（含角色状态、关系、文风样本）
     // 每次整理都会把「上一次的概览」一起重新概括，只留下主线。
-    const total = roundsChars(candidates)
+    // 笔记预算按**累计**折叠量算：这次要折的 + 之前已经折掉的
+    const total = roundsChars(candidates) + getFoldedChars(session)
     const initialBudget = Math.min(
       MAX_SEGMENT_CHARS,
       Math.max(SEGMENT_CHARS, Math.ceil(total / TARGET_SEGMENTS))

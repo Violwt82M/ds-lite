@@ -138,6 +138,26 @@ export const getFoldableTokens = (session: Session, keepTokens = MEMORY_KEEP_TOK
 export const getFoldedIds = (session: Session): Set<string> =>
   new Set(session.memory?.foldedIds ?? [])
 
+/** 一条消息的正文长度（用户输入 / 助手的文本块）；只用于估算笔记预算 */
+const messageChars = (message: Message): number => {
+  if (message.role === 'user') {
+    return message.content.length
+  }
+  return message.blocks.reduce((sum, block) => sum + (block.type === 'text' ? block.text.length : 0), 0)
+}
+
+/**
+ * 已经折叠掉的原文总字数。
+ * 笔记预算按「累计折叠量」算，而不是只看这一次折了多少：
+ * 否则用户一直在低上下文手动整理时，预算永远停在小档，笔记越整理越挤掉早期内容。
+ */
+export const getFoldedChars = (session: Session): number => {
+  const folded = getFoldedIds(session)
+  return getContextRounds(getVisibleMessages(session))
+    .filter(([, reply]) => folded.has(reply.id))
+    .reduce((sum, [user, reply]) => sum + messageChars(user) + messageChars(reply), 0)
+}
+
 /** 当前仍会进入请求的历史轮次（提问 + 可用回答） */
 export const getUnfoldedRounds = (session: Session) => {
   const folded = getFoldedIds(session)
