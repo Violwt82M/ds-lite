@@ -597,9 +597,9 @@ export const en = {
   memoryModeRp: 'Narrative',
   memoryModePlain: 'Work',
   memoryModeHint:
-    'Only decides what the note records: Narrative keeps character state, relationships and key events (changes to the relationship or situation), plus a rough account of everything else; Work keeps facts, conclusions, preferences and to-dos. Tone is untouched - the recent messages that stay verbatim carry it.',
+    'Only decides what the note records: Narrative puts character state and the plot mainline first; Work puts facts, conclusions and open items first. Tone is untouched - the recent messages that stay verbatim carry it.',
   memoryCompactKeeps:
-    'Saved by default: key facts, how to address you and your preferences, settled decisions, open tasks; narrative chats also keep character state, relationships and key events, with everything else only roughly. The note is an index standing in for the folded text, not the current scene. The most recent messages are never condensed - tone comes from them.',
+    'Saved by default: key facts, agreements and how to address you, open items, plus a rough mainline of what happened (one sentence per stretch, no scenes or dialogue). The note is an index standing in for the folded text, not the current scene. The most recent messages are never condensed - tone comes from them.',
   memoryCompactHint: 'Merges the earlier {count} rounds into notes: each run rewrites them as one current version, dropping stale and duplicate items; notes you wrote are kept',
   memoryInstructionLabel: 'Organize instruction (optional)',
   memoryInstructionPlaceholder: 'e.g. keep technical details only, in chronological order',
