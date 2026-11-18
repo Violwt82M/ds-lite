@@ -794,6 +794,142 @@
   gap: 8px;
 }
 
+/* 「我的头像」「气泡颜色」两行：操作区放不下时整行换行，窄屏不横向溢出 */
+.appearanceCell {
+  flex-wrap: wrap;
+}
+
+.appearanceCell .text {
+  flex: 1 1 220px;
+  padding-right: 8px;
+}
+
+/* 气泡色有十几个色块，右侧一栏放不下，标题和描述占满一行、色块铺在下面 */
+.bubbleCell {
+  align-items: flex-start;
+}
+
+.bubbleCell .text {
+  flex: 1 0 100%;
+  padding-right: 0;
+}
+
+.avatarActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.avatarPreview {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--dsw-alias-markdown-placeholder, rgba(128, 128, 128, 0.15));
+  color: var(--dsw-alias-label-secondary, #5c5c5c);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  svg {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+.bubbleActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding-top: 4px;
+}
+
+.bubbleSwatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.bubbleSwatch {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background-color: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  outline: none;
+
+  svg {
+    display: block;
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.55));
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--dsw-alias-brand-primary, #4d6bfe);
+    outline-offset: 2px;
+  }
+}
+
+/* 跟随主题的那一格直接显示主题气泡色，一眼能看出「恢复默认」会变成什么样 */
+.bubbleSwatchTheme {
+  background-color: var(--dsw-specific-bubble);
+  color: var(--dsw-alias-label-primary);
+
+  svg {
+    filter: none;
+  }
+}
+
+.bubbleSwatchSelected {
+  outline: 2px solid var(--dsw-alias-brand-primary, #4d6bfe);
+  outline-offset: 2px;
+}
+
+/* 调色盘：彩虹底提示可以自己取色；选中自定义色后整格换成当前色 */
+.bubbleCustom {
+  background: conic-gradient(#ff8a8a, #ffd479, #a6e3a1, #7fd1ff, #c7a6ff, #ff8a8a);
+
+  &:focus-within {
+    outline: 2px solid var(--dsw-alias-brand-primary, #4d6bfe);
+    outline-offset: 2px;
+  }
+}
+
+/* 真正的 <input type="color"> 透明铺满整格：点哪都能唤起系统取色器 */
+.bubbleColorInput {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .troubleTitle {
   margin: 14px 0 6px;
   font-size: 13px;

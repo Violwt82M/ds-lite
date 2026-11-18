@@ -11,7 +11,6 @@
   cursor: copy;
   pointer-events: none;
   background-color: rgba(255, 255, 255, 0.7);
-  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
 
   [data-ds-dark-theme] & {

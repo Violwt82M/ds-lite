@@ -1,0 +1,71 @@
+/* 覆盖式滚动条：轨道铺满滚动区右缘（命中区 20px），视觉 thumb 只有 6px。
+   聊天消息区的原生滚动条已在 MessageList.module.css 里隐藏，这里负责让它看得见、拖得动。 */
+.root {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 20px;
+  /* 手指按住时由 JS 接管滑动；不写 none 的话安卓会先当成页面滚动，pointermove 直接被打断 */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+/* 内容不超过一屏时没有可拖的，连右侧的点击也不能拦 */
+.root[data-visible='false'] {
+  display: none;
+}
+
+.thumb {
+  position: absolute;
+  right: 2px;
+  width: 6px;
+  border-radius: 999px;
+  background: var(--scroll-color);
+  opacity: 0;
+  transition:
+    opacity 160ms ease,
+    background-color 160ms ease;
+  /* 命中区由 .root 的透明 20px 负责，视觉 thumb 本身不接事件（坐标统一在根节点算） */
+  pointer-events: none;
+}
+
+/* 键盘 Tab 到滑块时也要看得见（桌面默认是 hover 才显示） */
+.root:focus-visible .thumb {
+  opacity: 1;
+}
+
+/* 桌面：鼠标靠近或停在右侧时浮现，移开淡出 */
+@media (hover: hover) {
+  .root:hover .thumb {
+    opacity: 1;
+    background: var(--scroll-color-hover);
+  }
+}
+
+/* 触摸设备没有 hover：常驻半透明提示「这里能拖」，滚动/拖动时变清晰 */
+@media (hover: none) {
+  .thumb {
+    opacity: 0.35;
+  }
+
+  .root[data-active='true'] .thumb {
+    opacity: 1;
+  }
+}
+
+/* 拖动中不要过渡，否则 thumb 会慢半拍追手指 */
+.root[data-dragging='true'] .thumb {
+  opacity: 1;
+  background: var(--scroll-color-hover);
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb {
+    transition: none;
+  }
+}

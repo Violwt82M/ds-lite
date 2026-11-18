@@ -28,6 +28,7 @@ import { Toast } from '../components/base/Toast.js'
 import { showToast } from '../components/base/toastState.js'
 import { onUploadNotice } from '../services/attachments.js'
 import { setupWallpaper } from '../services/wallpaper.js'
+import { setupAppearance } from '../services/appearance.js'
 import { initSharedArchive, useSharedArchive } from '../services/chat/history/sharedArchive.js'
 import { warmSearchIndex } from '../services/chat/searchIndex.js'
 import { requestPersistentStorage } from '../services/storage.js'
@@ -85,6 +86,9 @@ export const App = () => {
 
   // 背景图：预设走 CSS，自定义图从 IndexedDB 读回来
   useEffect(setupWallpaper, [])
+
+  // 头像和气泡色：读回本机设置，转成 body 上的 data 属性和 CSS 变量
+  useEffect(setupAppearance, [])
 
   // 申请持久化存储：网页版的对话/附件都在浏览器里，别让系统清理时把数据一起收走
   useEffect(() => {

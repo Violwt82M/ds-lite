@@ -5,6 +5,7 @@ import { useIsMobile } from '../../app/viewport.js'
 import { IconEditOutline16 } from '../base/icons.js'
 import { editMessage, retryUpload } from '../../services/chat/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
+import { useAppearance } from '../../services/appearance.js'
 import type { UserMessage as UserMessageType } from '../../services/chat/types.js'
 import { Button } from '../base/Button.js'
 import { IconButton } from '../base/IconButton.js'
@@ -43,6 +44,8 @@ export const UserMessage = memo(function UserMessage({
   const [draft, setDraft] = useState(message.content)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isMobile = useIsMobile()
+  // 自定义头像属于外观设置，直接订阅 store，不用从 MessageList 一层层传
+  const userAvatar = useAppearance((state) => state.userAvatar)
   const canSend = !busy && (draft.trim() !== '' || message.files.length > 0)
 
   useLayoutEffect(() => {
@@ -62,9 +65,16 @@ export const UserMessage = memo(function UserMessage({
 
   return (
     <div
-      className={clsx(styles.container, isFirst && styles.isFirst)}
+      className={clsx(
+        styles.container,
+        isFirst && styles.isFirst,
+        userAvatar !== null && styles.withAvatar
+      )}
       data-message-id={message.id}
     >
+      {userAvatar !== null ? (
+        <img className={styles.avatar} src={userAvatar} alt="" aria-hidden />
+      ) : null}
       {message.files.length > 0 ? (
         <div
           className={clsx(

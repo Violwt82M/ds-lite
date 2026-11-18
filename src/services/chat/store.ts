@@ -56,7 +56,12 @@ import {
 } from '../memory/context.js'
 import { setCompactProgress, setCompacting, setMemoryError, setMemoryNotice } from '../memory/state.js'
 import { createLatestReminder } from './latestReminder.js'
-import { buildInternalRequest, buildRequest } from './request.js'
+import {
+  buildInternalRequest,
+  buildRequest,
+  EXTENDED_INPUT_LIMIT_TOKENS,
+  wantsExtendedRequest,
+} from './request.js'
 import {
   applyEvent,
   canContinueReply,
@@ -1731,6 +1736,81 @@ const waitForRetry = (attempt: number, signal: AbortSignal) =>
     signal.addEventListener('abort', onAbort, { once: true })
   })
 
+/** 扩展模式裁剪的余量：本地估算允许 10%~20% 误差，还要给服务端的工具结果留位置 */
+const EXTENDED_TRIM_MARGIN_TOKENS = 1_000
+
+/**
+ * 为扩展模式（联网搜索 / 阅读链接 / 严格审查）裁剪一份「只用于本次请求」的历史视图。
+ *
+ * 服务端在这类请求上的输入上限只有 32768 token，而历史附件按体积折算后会一直占着本地估算，
+ * 不裁剪的话「发过一次大文档」就会让联网从此用不了。所以这里宁可少发一些旧上下文，
+ * 也要保住用户明确点过的扩展能力：
+ * - 历史附件（图片和文档）都不进入本次请求：正文与原件都还在本地，只是这次不带；
+ * - 从最旧的轮次开始丢，用 folded 集合让 toRequestMessages 跳过，绝不写回会话；
+ * - 至少保留最近一轮历史，本轮提问的附件保留（用户刚发的文件不能悄悄丢掉）。
+ * 返回 null 表示裁完仍然装不下（例如本轮提问本身就超限），调用方走原有的降级路径。
+ */
+const trimHistoryForExtended = (
+  session: Session,
+  history: Message[],
+  question: UserMessage,
+  folded: ReadonlySet<string>
+): { history: Message[]; folded: Set<string>; tokens: number } | null => {
+  const rounds = getContextRounds(history).filter(([, reply]) => !folded.has(reply.id))
+  // 系统提示、记忆笔记与协议头的固定开销：总用量减去历史轮次，剩下的就是它
+  const fixedTokens =
+    getContextUsage(session).usedTokens -
+    rounds.reduce(
+      (sum, [user, reply]) => sum + estimateMessageTokens(user) + estimateMessageTokens(reply),
+      0
+    )
+  const questionTokens = estimateMessageTokens(question)
+  // 连「系统提示 + 记忆 + 本轮提问」都超过硬上限：没有裁剪空间，别伪装成功
+  if (fixedTokens + questionTokens > EXTENDED_INPUT_LIMIT_TOKENS) {
+    return null
+  }
+  // 历史附件一律先踢掉（图片按官方惯例 1024 token，文档按体积折算，都是大头），正文照旧保留
+  const stripped = rounds.map(([user, reply]) => ({
+    replyId: reply.id,
+    tokens: estimateMessageTokens({ ...user, files: [] }) + estimateMessageTokens(reply),
+  }))
+  const budget = EXTENDED_INPUT_LIMIT_TOKENS - EXTENDED_TRIM_MARGIN_TOKENS
+  const droppedReplyIds: string[] = []
+  let keptCount = 0
+  let tokens = fixedTokens + questionTokens
+  for (let index = stripped.length - 1; index >= 0; index--) {
+    const next = tokens + stripped[index].tokens
+    if (next > budget) {
+      if (keptCount > 0) {
+        // 预算不够了：这一条和更旧的轮次都不用发了
+        droppedReplyIds.push(...stripped.slice(0, index + 1).map((round) => round.replyId))
+        break
+      }
+      // 最近一轮就吃满安全预算：本地估算偏保守，只要没超硬上限就先留着
+      if (next > EXTENDED_INPUT_LIMIT_TOKENS) {
+        return null
+      }
+    }
+    tokens = next
+    keptCount += 1
+  }
+  // 什么都没裁掉（例如超限来自本轮提问自身）：交回现有降级逻辑，不制造假动作
+  if (droppedReplyIds.length === 0 && !rounds.some(([user]) => user.files.length > 0)) {
+    return null
+  }
+  const foldedForRequest = new Set(folded)
+  for (const id of droppedReplyIds) {
+    foldedForRequest.add(id)
+  }
+  return {
+    history: history.map((message) =>
+      message.role === 'user' && message.files.length > 0 ? { ...message, files: [] } : message
+    ),
+    folded: foldedForRequest,
+    tokens,
+  }
+}
+
 /**
  * 请求并消费流：先补齐附件的 serverId，再发请求；流式增量按动画帧刷新内存，完成、失败或停止后落盘。
  * 补传失败时回复记为 upload 错误，可重试。
@@ -1753,6 +1833,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
 
   /** 撞上扩展模式的 32768 token 上限后，本轮改用标准模式重发一次（估算可能偏小） */
   let standardForced = false
+  /** 本轮为保住扩展能力裁剪了上下文：确认请求被接受后再提示，失败时别给误导信息 */
+  let trimmedForExtended = false
   try {
     for (let attempt = 0; ; attempt += 1) {
       /** 附件补齐前出错属于上传失败，请求还没有发出 */
@@ -1803,13 +1885,36 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         const requestTokens =
           (activeSession ? getContextUsage(activeSession).usedTokens : 0) +
           estimateMessageTokens(prepared.question)
+        const folded = activeSession ? getFoldedIds(activeSession) : undefined
+        /**
+         * 本轮用户明确点了联网 / 提问带链接 / 开着严格审查时，宁可裁掉较早的上下文也要保住这些能力：
+         * 服务端扩展模式只有 32768 token，不裁的话「发过一次大文档」就会让联网从此被悄悄关掉。
+         * 裁剪只影响这一次请求，历史附件和轮次都不写回会话；估算仍偏小时走下面的 400 兜底。
+         */
+        const trimmed =
+          activeSession &&
+          !standardForced &&
+          requestTokens > EXTENDED_INPUT_LIMIT_TOKENS &&
+          wantsExtendedRequest({
+            questionText: prepared.question.content,
+            search: initial.search ?? false,
+            safety: prefs.safety,
+          })
+            ? trimHistoryForExtended(
+                activeSession,
+                prepared.history,
+                prepared.question,
+                folded ?? new Set<string>()
+              )
+            : null
+        trimmedForExtended = trimmed !== null
         const messages = toRequestMessages(
-          prepared.history,
+          trimmed ? trimmed.history : prepared.history,
           prepared.question,
           prepared.prefix,
           initial.thinking ?? false,
           latestReminder,
-          activeSession ? getFoldedIds(activeSession) : undefined,
+          trimmed ? trimmed.folded : folded,
           // v4 pro 不支持图片：历史里的图片块直接不发（用户选择「发得出去但看不见图」）
           initial.model === 'deepseek-v4-pro'
         )
@@ -1834,7 +1939,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           thinking: initial.thinking ?? false,
           effort: prefs.thinkingEffort,
           wantTitle: titleRequests.has(controller),
-          inputTokens: requestTokens,
+          // 传裁剪后的估算值：degraded 只该反映「真的降级了」，裁完还能联网就不算降级
+          inputTokens: trimmed ? trimmed.tokens : requestTokens,
           forceStandard: standardForced,
         })
         if (built.degraded) {
@@ -1857,6 +1963,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         const events = streamMessage(prefs.apiKey ?? '', built.body, controller.signal)
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {
+          // 等服务端真的开始响应再提示：请求被拒时这条「已自动裁剪」的说明会误导用户
+          if (trimmedForExtended) {
+            showToast({ key: 'replySearchTrimmed' })
+            trimmedForExtended = false
+          }
           receivedContent ||= event.type === 'content_block_start'
           if (
             event.type === 'message_delta' &&

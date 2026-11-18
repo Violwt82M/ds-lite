@@ -59,6 +59,7 @@ import { ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { ApiOriginField } from './ApiOriginField.js'
 import { BalanceField, ShowBalanceField } from './BalanceField.js'
 import { PersonaSetting } from './PersonaSetting.js'
+import { AppearanceSetting } from './AppearanceSetting.js'
 import { AboutPanel } from '../about/AboutPanel.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
 import type { ChatModel } from '../../services/api/types.js'
@@ -151,6 +152,7 @@ const SettingsContent = () => {
             <>
               <ThemeSetting />
               <WallpaperSetting />
+              <AppearanceSetting />
               <FontScaleSetting />
               <DocumentBudgetSetting />
               <ModelSetting />

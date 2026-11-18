@@ -14,10 +14,24 @@ import { getCustomModel, usesOpenAiProtocol } from '../api/protocol.js'
  */
 export const EXTENDED_INPUT_LIMIT_TOKENS = 30_000
 
-/** 本轮提问里是否带链接：只有带链接才需要阅读链接工具 */
-const URL_PATTERN = /https?:\/\/[^\s"'<>]+/i
+/** 本轮提问里是否带链接：只有带链接才需要阅读链接工具；store 判断扩展意图时也要用，导出复用 */
+export const URL_PATTERN = /https?:\/\/[^\s"'<>]+/i
 
 export type SafetyLevel = 'low' | 'high'
+
+/**
+ * 用户是否在本轮显式要求扩展能力（联网搜索 / 严格审查 / 阅读链接）。
+ * 这三者都会让请求落进服务端 32768 token 的「扩展模式」小房间，
+ * 所以「能不能开」和「要不要为它裁剪上下文」都以这里为准，避免两处判定走偏。
+ */
+export const wantsExtendedRequest = (options: {
+  questionText?: string
+  search?: boolean
+  safety?: SafetyLevel
+}): boolean => {
+  const { questionText = '', search = false, safety = 'low' } = options
+  return !usesOpenAiProtocol() && (search || safety === 'high' || URL_PATTERN.test(questionText))
+}
 
 export type BuildRequestOptions = {
   model: ChatModel
@@ -109,7 +123,7 @@ export const buildRequest = (options: BuildRequestOptions): BuiltRequest => {
   const openAi = usesOpenAiProtocol()
   const hasUrl = !openAi && URL_PATTERN.test(questionText)
   /** 只要出现任意扩展字段，本轮就落进 32768 token 的小房间 */
-  const wantsExtended = !openAi && (search || safety === 'high' || hasUrl)
+  const wantsExtended = wantsExtendedRequest({ questionText, search, safety })
   const tooLong = inputTokens > EXTENDED_INPUT_LIMIT_TOKENS
   /** 长输入一律标准模式：扩展能力全部让位，否则请求必被拒 */
   const standardOnly = tooLong || forceStandard

@@ -13,6 +13,29 @@
   }
 }
 
+/* 自定义头像：固定在消息右上角，整条消息左移让出头像位。
+   没设头像时不会加这个类，布局和以前完全一致。 */
+.withAvatar {
+  position: relative;
+  padding-right: 48px;
+}
+
+.avatar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--dsw-alias-markdown-placeholder, rgba(128, 128, 128, 0.15));
+}
+
+/* 首条用户消息上方多了 34px 会话间距，头像跟着下移，否则会浮在气泡上方 */
+.withAvatar.isFirst .avatar {
+  top: 34px;
+}
+
 .files {
   display: flex;
   flex-wrap: wrap;

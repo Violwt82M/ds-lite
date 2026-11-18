@@ -41,30 +41,35 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  scrollbar-gutter: stable both-edges;
-  scrollbar-color: var(--scroll-color) transparent;
+  overflow: hidden;
+}
+
+/* 滚动区的定位容器：滚动条在这里绝对定位，才不会跟着消息一起滚。
+   桌面和移动端统一由 .scroll 滚动，外面这层只管尺寸和给滚动条定位。 */
+.scrollWrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .scroll {
-  display: contents;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  /* 原生滚动条换成 <Scrollbar> 画的覆盖式滑块，这里必须彻底藏掉。
+     没了原生滚动条，原来 scrollbar-gutter: stable both-edges 给滚动条留的两侧空位也就没意义了，
+     一并去掉，否则消息列两侧会白多出十几像素。 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-@media not all and (min-width: 768px) {
-  .container {
-    overflow: hidden;
-    scrollbar-gutter: auto;
-  }
-
-  .scroll {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior-y: contain;
-    scrollbar-color: var(--scroll-color) transparent;
-  }
+.scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .loadEarlier {

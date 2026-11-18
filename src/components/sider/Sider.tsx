@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { IconPanelLeftOutline16, IconSettingsOutline16, NewChatIcon } from '../base/icons.js'
 import { setSiderCollapsed } from '../../services/settings.js'
@@ -179,7 +179,6 @@ export const MobileSider = () => {
   const open = useMobileSider((state) => state.open)
   const progress = useMobileSider((state) => state.progress)
   const dragging = useMobileSider((state) => state.dragging)
-  const drawerRef = useRef<HTMLDivElement>(null)
   // 关的时候要留在 DOM 里把动画放完，不然抽屉会"啪"地消失
   const [rendered, setRendered] = useState(open || progress > 0)
   /**
@@ -208,8 +207,24 @@ export const MobileSider = () => {
     const frame = window.requestAnimationFrame(() => setEntered(true))
     return () => window.cancelAnimationFrame(frame)
   }, [rendered, dragging])
-  // 抽屉开着时可以在抽屉上左划关回去（官方行为；以前只能划出来、划不回去）
-  useSwipeSiderClose(drawerRef, rendered)
+  /**
+   * 左滑关闭手势结束时，浏览器可能还会补发一次 click 打在遮罩上：
+   * 如果这一滑没滑够、抽屉弹回打开，紧跟的 click 就会把抽屉关掉，用户会觉得「滑了一下反而被关」。
+   * 用一个短命标记吃掉紧跟着的那次 click；没等到 click（touchend 的 preventDefault 生效）时
+   * 到点自动放开，免得下一次正常点击被吞。
+   */
+  const ignoreMaskClick = useRef(false)
+  const maskClickGuard = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const markSwipeEnded = useCallback(() => {
+    ignoreMaskClick.current = true
+    clearTimeout(maskClickGuard.current)
+    maskClickGuard.current = setTimeout(() => {
+      ignoreMaskClick.current = false
+    }, 320)
+  }, [])
+  useEffect(() => () => clearTimeout(maskClickGuard.current), [])
+  // 抽屉开着时可以从任意位置左划关回去（官方行为；以前只能从列表区划）
+  useSwipeSiderClose(rendered, markSwipeEnded)
   if (!rendered) {
     return null
   }
@@ -218,14 +233,20 @@ export const MobileSider = () => {
     <>
       <div
         className={styles.drawerMask}
-        onClick={closeMobileSider}
+        onClick={() => {
+          if (ignoreMaskClick.current) {
+            ignoreMaskClick.current = false
+            clearTimeout(maskClickGuard.current)
+            return
+          }
+          closeMobileSider()
+        }}
         style={{
           opacity: shown,
           transition: dragging ? 'none' : 'opacity 220ms ease',
         }}
       />
       <div
-        ref={drawerRef}
         className={styles.drawer}
         style={{
           transform: `translateX(${(shown - 1) * 100}%)`,

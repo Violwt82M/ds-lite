@@ -113,14 +113,18 @@ export const useSwipeSider = (ref: RefObject<HTMLElement>, enabled: boolean) => 
 }
 
 /**
- * 抽屉开着时，在抽屉上向左划关回聊天界面（官方就是这样）。
+ * 抽屉开着时，从任意位置向左划关回聊天界面（官方就是这样）。
  * 以前只能从正文右划拉出来，拉出来之后手指划不回去，只能点遮罩或左上角「收起」。
- * 竖划一律让给会话列表滚动，只有明确横向左拖才接管。
+ *
+ * 监听挂在 document 上而不是抽屉上：抽屉打开后右侧对话区被遮罩盖住，
+ * 挂在抽屉元素上收不到从那边开始的滑动，用户就会觉得「只有列表区能滑」。
+ *
+ * onSwipeEnd 在横向手势结束时回调：touchend 之后浏览器仍可能补发一次 click（落在遮罩上），
+ * 调用方据此忽略紧跟着的那次遮罩点击，避免「没滑够、抽屉弹回打开」又被 click 顺手关掉。
  */
-export const useSwipeSiderClose = (ref: RefObject<HTMLElement>, enabled: boolean) => {
+export const useSwipeSiderClose = (enabled: boolean, onSwipeEnd: () => void) => {
   useEffect(() => {
-    const el = ref.current
-    if (!enabled || !el) {
+    if (!enabled) {
       return
     }
     let startX = 0
@@ -130,6 +134,10 @@ export const useSwipeSiderClose = (ref: RefObject<HTMLElement>, enabled: boolean
 
     const onStart = (event: TouchEvent) => {
       if (event.touches.length !== 1 || !useMobileSider.getState().open) {
+        return
+      }
+      // 横向滚动区域里的左滑是用户在翻内容，不能拿来关抽屉
+      if (startedInHScroller(event.target)) {
         return
       }
       const touch = event.touches[0]
@@ -165,27 +173,41 @@ export const useSwipeSiderClose = (ref: RefObject<HTMLElement>, enabled: boolean
       }
     }
 
-    const onEnd = () => {
+    const onEnd = (event: TouchEvent) => {
       if (!tracking) {
         return
       }
+      const wasHorizontal = horizontal
       tracking = false
-      if (!horizontal) {
+      horizontal = false
+      if (!wasHorizontal) {
         return
       }
-      // progress 还大于 0.68 说明没拖够，弹回打开
-      settleSider(useMobileSider.getState().progress > 1 - CLOSE_THRESHOLD)
+      const staysOpen = useMobileSider.getState().progress > 1 - CLOSE_THRESHOLD
+      // 主要手段：阻止这次触摸序列补发鼠标事件。touchcancel 不会补发 click，别跟着抑制
+      if (event.type === 'touchend') {
+        if (event.cancelable) {
+          event.preventDefault()
+        }
+        // 「没拖够、抽屉弹回打开」时才需要调用方吃掉跟手的 click：
+        // 否则遮罩的 click 会把抽屉关掉，用户会觉得「滑了一下反而被关」
+        if (staysOpen) {
+          onSwipeEnd()
+        }
+      }
+      settleSider(staysOpen)
     }
 
-    el.addEventListener('touchstart', onStart, { passive: true })
-    el.addEventListener('touchmove', onMove, { passive: false })
-    el.addEventListener('touchend', onEnd)
-    el.addEventListener('touchcancel', onEnd)
+    // bubble 阶段监听 document：抽屉和遮罩上的触摸都能收到，也不用给抽屉元素再挂一套
+    document.addEventListener('touchstart', onStart, { passive: true })
+    document.addEventListener('touchmove', onMove, { passive: false })
+    document.addEventListener('touchend', onEnd)
+    document.addEventListener('touchcancel', onEnd)
     return () => {
-      el.removeEventListener('touchstart', onStart)
-      el.removeEventListener('touchmove', onMove)
-      el.removeEventListener('touchend', onEnd)
-      el.removeEventListener('touchcancel', onEnd)
+      document.removeEventListener('touchstart', onStart)
+      document.removeEventListener('touchmove', onMove)
+      document.removeEventListener('touchend', onEnd)
+      document.removeEventListener('touchcancel', onEnd)
     }
-  }, [enabled, ref])
+  }, [enabled, onSwipeEnd])
 }

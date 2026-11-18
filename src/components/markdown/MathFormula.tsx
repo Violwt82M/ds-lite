@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { ensureKatex, type Katex } from '../../services/markdown/katex.js'
+import { KATEX_MACROS, prepareLatex } from '../../services/markdown/latex.js'
 
 /** renderToString 外层包裹的标签，组件自己渲染外层，这里切掉 */
 const KATEX_WRAPPER = {
@@ -32,16 +33,34 @@ const useMathHtml = (input: string, isInline: boolean): MathHtmlResult => {
     if (!katex) {
       return { html: input, renderMode: 'fallback' }
     }
+    const [prefix, suffix] = KATEX_WRAPPER[isInline ? 'inline' : 'display']
+    /** 渲染一次 KaTeX，把组件自己的外层包掉（MathBlock/InlineMath 会自己套） */
+    const render = (source: string): MathHtmlResult => ({
+      html: katex
+        .renderToString(source, {
+          throwOnError: true,
+          strict: false,
+          displayMode: !isInline,
+          macros: { ...KATEX_MACROS },
+        })
+        .slice(prefix.length, -suffix.length),
+      renderMode: 'katex',
+    })
     try {
-      const [prefix, suffix] = KATEX_WRAPPER[isInline ? 'inline' : 'display']
-      const html = katex
-        .renderToString(input, { throwOnError: true, strict: false, displayMode: !isInline })
-        .slice(prefix.length, -suffix.length)
-      const result = { html, renderMode: 'katex' } as const
+      const result = render(input)
       previousResultRef.current = result
       return result
     } catch {
-      return previousResultRef.current ?? { html: input, renderMode: 'fallback' }
+      // 「美化包」会把数学符号塞进 \text、\raisebox 这类文本模式参数里，KaTeX 不像
+      // 真 LaTeX 会自动补 $，直接报 Undefined control sequence。先按原样渲染一次，
+      // 失败再用兼容层补数学岛重试；兼容层只在失败路径上跑，不影响普通公式。
+      try {
+        const result = render(prepareLatex(input))
+        previousResultRef.current = result
+        return result
+      } catch {
+        return previousResultRef.current ?? { html: input, renderMode: 'fallback' }
+      }
     }
   }, [input, isInline, katex])
 }

@@ -13,6 +13,23 @@ import { CodeBlock } from './CodeBlock.js'
 import { ImageAsLink, Link } from './Link.js'
 import { InlineMath, MathBlock } from './MathFormula.js'
 
+/**
+ * 白名单内联 HTML 的元素节点：解析阶段（parse.ts 的 groupInlineHtml）已经把
+ * <u>文字</u> 这种跨节点的开闭标签收成一个节点，这里只负责换成真正的标签。
+ * 是白名单标签，属性在解析时已全部丢弃，不存在注入面。
+ */
+const HtmlElement = memo(function HtmlElement({
+  node,
+}: {
+  node: Extract<PhrasingContent, { type: 'htmlElement' }>
+}) {
+  return createElement(node.tag, null, <MarkdownPhrasingContent nodes={node.children} />)
+})
+
+/**
+ * 没被解析阶段收走的内联 HTML（注释、未知标签等）：保持原文显示。
+ * <br> 最常见，直接换成真正的换行。
+ */
 const Html = memo(function Html({ value }: { value: string }) {
   if (/^<br\s*\/?>$/i.test(value)) {
     return <br />
@@ -137,6 +154,8 @@ const MarkdownPhrasingContentItem = memo(function MarkdownPhrasingContentItem({
       )
     case 'text':
       return <TextContent>{node.value}</TextContent>
+    case 'htmlElement':
+      return <HtmlElement node={node} />
     case 'citation':
       return <CitationLink source={node.source} />
     default:

@@ -11,6 +11,7 @@ import { usePersona } from '../../services/persona/store.js'
 import type { Session } from '../../services/chat/types.js'
 import { useTranslate } from '../../i18n/index.js'
 import { closeSearchPanel } from '../search/searchPanelState.js'
+import { Scrollbar } from '../base/Scrollbar.js'
 import { AssistantMessage } from './AssistantMessage.js'
 import { ScrollToBottomContext } from './scrollContext.js'
 import { clearJump, useJumpTarget } from '../../services/chat/jumpTarget.js'
@@ -43,6 +44,8 @@ const RENDER_PAGE = 200
  * Markdown 组件，这就是「点结果跳转卡半天」的根因。
  */
 const JUMP_CONTEXT = 30
+/** 滚动元素的 id：滚动条用它做 aria-controls，也能让读屏软件知道滑块控制的是消息区 */
+const SCROLLER_ID = 'message-list-scroller'
 const EMPTY_VERSIONS: MessageVersions = { ids: [], index: -1 }
 
 /** 当前渲染窗口：从 start 开始渲染，尾部留 tail 条不渲染（tail>0 说明跳进了历史里） */
@@ -151,6 +154,12 @@ export const MessageList = ({
       el.scrollTop = el.scrollHeight
       scrollTopRef.current = el.scrollTop
     }
+  }, [])
+
+  // 用户开始操作滚动条（拖动/点轨道/键盘翻页）就停止跟随底部：
+  // 只靠 onScroll 判断「向上滚」不够，流式输出会在拖动途中把视图再拽回底部。
+  const stopFollowing = useCallback(() => {
+    stickyRef.current = false
   }, [])
 
   // 内容、键盘和输入框高度变化时，继续遵循当前跟随状态。
@@ -315,80 +324,87 @@ export const MessageList = ({
   }
   return (
     <ScrollToBottomContext.Provider value={scrollToBottom}>
-      <div ref={isMobile ? undefined : scrollRef} className={styles.container}>
-        <div ref={isMobile ? scrollRef : undefined} className={styles.scroll}>
-          <div ref={contentRef} className={styles.column}>
-            {showJumpUp ? (
-              <button
-                type="button"
-                className={`${styles.jumpDown} ${styles.jumpUp}`}
-                aria-label={t('scrollToTop')}
-                title={t('scrollToTop')}
-                onClick={jumpToTop}
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-                  <path
-                    d="M8 13V4m0 0 4 4m-4-4-4 4"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+      <div className={styles.container}>
+        <div className={styles.scrollWrap}>
+          <div ref={scrollRef} id={SCROLLER_ID} className={styles.scroll}>
+            <div ref={contentRef} className={styles.column}>
+              {showJumpUp ? (
+                <button
+                  type="button"
+                  className={`${styles.jumpDown} ${styles.jumpUp}`}
+                  aria-label={t('scrollToTop')}
+                  title={t('scrollToTop')}
+                  onClick={jumpToTop}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                    <path
+                      d="M8 13V4m0 0 4 4m-4-4-4 4"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              ) : null}
+              {hiddenCount > 0 ? (
+                <button type="button" className={styles.loadEarlier} onClick={loadEarlier}>
+                  {t('loadEarlierMessages', { count: hiddenCount })}
+                </button>
+              ) : null}
+              {shown.map((message, index) =>
+                message.role === 'user' ? (
+                  <UserMessage
+                    key={message.id}
+                    sessionId={session.id}
+                    message={message}
+                    retryUploadId={uploadRetryId}
+                    isFirst={start === 0 && index === 0}
+                    isLast={index === lastIndex || index === lastIndex - 1}
+                    busy={streaming}
+                    versions={versions.get(message.id) ?? EMPTY_VERSIONS}
+                    onSelectVersion={selectVersion}
                   />
-                </svg>
-              </button>
-            ) : null}
-            {hiddenCount > 0 ? (
-              <button type="button" className={styles.loadEarlier} onClick={loadEarlier}>
-                {t('loadEarlierMessages', { count: hiddenCount })}
-              </button>
-            ) : null}
-            {shown.map((message, index) =>
-              message.role === 'user' ? (
-                <UserMessage
-                  key={message.id}
-                  sessionId={session.id}
-                  message={message}
-                  retryUploadId={uploadRetryId}
-                  isFirst={start === 0 && index === 0}
-                  isLast={index === lastIndex || index === lastIndex - 1}
-                  busy={streaming}
-                  versions={versions.get(message.id) ?? EMPTY_VERSIONS}
-                  onSelectVersion={selectVersion}
-                />
-              ) : (
-                <AssistantMessage
-                  key={message.id}
-                  sessionId={session.id}
-                  message={message}
-                  isLast={index === lastIndex}
-                  streaming={streaming && index === lastIndex && tail === 0}
-                  busy={streaming}
-                  versions={versions.get(message.id) ?? EMPTY_VERSIONS}
-                  onSelectVersion={selectVersion}
-                  avatar={avatar}
-                />
-              )
-            )}
-            {showJumpDown || tail > 0 ? (
-              <button
-                type="button"
-                className={styles.jumpDown}
-                aria-label={t('scrollToBottom')}
-                title={t('scrollToBottom')}
-                onClick={jumpToBottom}
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-                  <path
-                    d="M8 3v9m0 0 4-4m-4 4-4-4"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                ) : (
+                  <AssistantMessage
+                    key={message.id}
+                    sessionId={session.id}
+                    message={message}
+                    isLast={index === lastIndex}
+                    streaming={streaming && index === lastIndex && tail === 0}
+                    busy={streaming}
+                    versions={versions.get(message.id) ?? EMPTY_VERSIONS}
+                    onSelectVersion={selectVersion}
+                    avatar={avatar}
                   />
-                </svg>
-              </button>
-            ) : null}
+                )
+              )}
+              {showJumpDown || tail > 0 ? (
+                <button
+                  type="button"
+                  className={styles.jumpDown}
+                  aria-label={t('scrollToBottom')}
+                  title={t('scrollToBottom')}
+                  onClick={jumpToBottom}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                    <path
+                      d="M8 3v9m0 0 4-4m-4 4-4-4"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              ) : null}
+            </div>
           </div>
+          <Scrollbar
+            scrollerRef={scrollRef}
+            scrollerId={SCROLLER_ID}
+            onUserScroll={stopFollowing}
+          />
         </div>
         {footer}
       </div>
