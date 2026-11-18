@@ -25,6 +25,12 @@ apk/
 *.jks
 *.keystore
 *.p12
+*.p7b
+*.pem
+*.cer
+*.crt
+*.key
+*.p8
 
 # 临时文件
 .memtest/

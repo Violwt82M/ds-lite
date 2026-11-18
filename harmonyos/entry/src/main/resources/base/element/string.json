@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "DS Lite 鸿蒙外壳，通过 Web 组件加载随包本地前端"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "DS Lite 入口"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "DS Lite"
+    }
+  ]
+}
