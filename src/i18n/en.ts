@@ -664,8 +664,10 @@ export const en = {
   memoryCompactTooShort:
     'This chat is still short: recent messages stay verbatim in the context, only older ones go into the note. Organize again once it grows.',
   memoryCompactFailed: 'Failed to organize: {message}',
+  memoryCompactNotStream:
+    'Compact failed: the server did not return a streaming response (HTTP 200{host}), so the request never reached the DeepSeek API — a network portal, WAF page or a proxy took it over. Check that the custom API address is the official one (api.deepseek.com), or try another network.',
   memoryCompactFailedWithStatus:
-    'Organize failed (HTTP {status}). Usually a temporary server issue — retry later; if it keeps failing, check the API address and key.',
+    'Organize failed (HTTP {status}{host}). Usually a temporary server issue — retry later; if it keeps failing, check the API address and key.',
   memoryCompactMethodNotAllowed: 'The server rejected this request (HTTP 405{host}). A custom API address must support POST /anthropic/v1/messages; the official address never returns 405',
   memoryNotesTitle: 'Memory notes ({count})',
   memoryNotesEmpty: 'No notes yet. Tap "Organize memory now" to turn earlier rounds into one note list; each later run rewrites that same list.',

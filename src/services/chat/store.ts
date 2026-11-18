@@ -1425,9 +1425,14 @@ const isTooLongError = (error: unknown): boolean =>
 /** 整理失败时把「哪个服务、什么状态码」一起说出来，405 单独给提示 */
 const describeCompactFailure = (error: unknown): TranslationMessage => {
   if (error instanceof ApiError) {
-    const host = error.url === undefined ? '' : safeHost(error.url)
+    const host = error.url === undefined ? '' : ` · ${safeHost(error.url)}`
     if (error.status === 405) {
       return { key: 'memoryCompactMethodNotAllowed', params: { host } }
+    }
+    // HTTP 200 却进了错误分支：说明对方回的不是流式响应，请求根本没打到 DeepSeek 接口
+    // （校园网/公司网关的登录页、WAF 拦截页、中转或反代都会这样）
+    if (error.status === 200) {
+      return { key: 'memoryCompactNotStream', params: { host } }
     }
     if (error.status !== undefined) {
       return {

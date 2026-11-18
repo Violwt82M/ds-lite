@@ -647,7 +647,9 @@ export const zh = {
     '这个对话还不够长：最近的内容会原样保留在上下文里，只有更早的部分才进笔记。再聊久一些再整理吧',
   memoryCompactFailed: '整理失败：{message}',
   memoryCompactFailedWithStatus:
-    '整理失败（HTTP {status}）。多半是服务端暂时不可用，稍后重试；反复失败请先确认 API 地址和 Key。',
+    '整理失败（HTTP {status}{host}）。多半是服务端暂时不可用，稍后重试；反复失败请先确认 API 地址和 Key。',
+  memoryCompactNotStream:
+    '整理失败：对方返回的不是流式响应（HTTP 200{host}），说明请求没打到 DeepSeek 的接口，而是被网络中间页、WAF 拦截页或某个中转/反代接走了。请确认「自定义 API 地址」是官方（api.deepseek.com），或者换个网络再试。',
   memoryCompactMethodNotAllowed: '服务器不接受这个请求（HTTP 405{host}）。如果设置了自定义 API 地址，它必须支持 POST /anthropic/v1/messages；官方地址不会返回 405',
   memoryNotesTitle: '记忆笔记（{count}）',
   memoryNotesEmpty: '还没有笔记。点「立即整理记忆」，模型会把较早的对话整理成一份笔记；之后每次整理都会覆盖更新这一份。',
