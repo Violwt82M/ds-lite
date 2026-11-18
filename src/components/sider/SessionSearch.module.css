@@ -165,7 +165,7 @@
   gap: 6px;
   box-sizing: border-box;
   width: 100%;
-  padding: 8px 10px 2px;
+  padding: 10px 10px 4px;
   border: none;
   border-radius: 10px 10px 0 0;
   background: none;
@@ -184,9 +184,18 @@
   }
 }
 
+/* 会话行（组头）比正文命中行大一号、加粗：一眼分清「会话」和「消息」（0.9.38 用户反馈） */
 .groupHead .hitTitle {
   flex: 1;
   min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+/* 会话之间留点空隙，避免上下两组贴成一片 */
+.group + .group {
+  margin-top: 4px;
 }
 
 .groupCount {

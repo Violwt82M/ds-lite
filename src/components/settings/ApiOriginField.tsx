@@ -110,8 +110,10 @@ const ApiOriginDialog = ({ onClose }: { onClose: () => void }) => {
       closable
       className={styles.apiOriginDialog}
       onClose={onClose}
-      footer={
-        <div className={styles.apiOriginFooter}>
+    >
+      <div className={styles.apiOriginBody}>
+        {/* 按钮放最上面（0.9.38 反馈：放底部被键盘挡住、不好点） */}
+        <div className={styles.apiOriginActions}>
           <Button
             size="m"
             variant="outlined"
@@ -124,16 +126,15 @@ const ApiOriginDialog = ({ onClose }: { onClose: () => void }) => {
           >
             {t('apiOriginReset')}
           </Button>
-          <Button size="m" variant="outlined" disabled={testing} onClick={() => void test()}>
-            {testing ? t('apiTestTesting') : t('apiTestButton')}
-          </Button>
-          <Button size="m" variant="primary" disabled={invalid} onClick={save}>
-            {t('confirm')}
-          </Button>
+          <div className={styles.apiOriginActionsRight}>
+            <Button size="m" variant="outlined" disabled={testing} onClick={() => void test()}>
+              {testing ? t('apiTestTesting') : t('apiTestButton')}
+            </Button>
+            <Button size="m" variant="primary" disabled={invalid} onClick={save}>
+              {t('confirm')}
+            </Button>
+          </div>
         </div>
-      }
-    >
-      <div className={styles.apiOriginBody}>
         <div className={styles.apiOriginLabelRow}>{t('apiProtocolLabel')}</div>
         <div className={styles.apiProtocolRow}>
           <Button
