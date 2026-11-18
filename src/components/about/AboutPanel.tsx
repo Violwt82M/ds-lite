@@ -17,6 +17,9 @@ import settingsStyles from '../settings/Settings.module.css'
  */
 export const FEEDBACK_URL = 'https://docs.qq.com/form/page/DTENxZkVYWVFwVE9y'
 
+/** 作者的小红书昵称：目前只有昵称，没有主页直达链接，先只展示文字（不放假按钮） */
+export const XIAOHONGSHU_NAME = '波江座锚点'
+
 /** 上游开源项目与版本信息：二次开发必须保留出处 */
 export const OFFICIAL_REPO = 'https://github.com/deepseek-ai/chat-demo'
 export const OFFICIAL_LICENSE = 'https://github.com/deepseek-ai/chat-demo/blob/main/LICENSE'
@@ -77,6 +80,14 @@ export const AboutPanel = () => {
           </Button>
         </div>
       ) : null}
+      <div className={clsx(settingsStyles.cell, settingsStyles.row)}>
+        <div className={settingsStyles.text}>
+          <div className={settingsStyles.label}>{t('aboutSocial')}</div>
+          <div className={settingsStyles.description}>
+            {t('aboutSocialDescription', { name: XIAOHONGSHU_NAME })}
+          </div>
+        </div>
+      </div>
       <div className={clsx(settingsStyles.cell, settingsStyles.row)}>
         <div className={settingsStyles.text}>
           <div className={settingsStyles.label}>{t('aboutSponsor')}</div>

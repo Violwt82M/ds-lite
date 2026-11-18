@@ -1,11 +1,13 @@
 import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
 import { memo } from 'react'
-import { IconRefreshOutline16, IconWarningOutline16 } from '../base/icons.js'
+import { IconForkOutline16, IconRefreshOutline16, IconWarningOutline16 } from '../base/icons.js'
 import { describeReply } from '../../services/chat/describe.js'
 import { canContinueReply } from '../../services/chat/reply.js'
-import { continueReply, regenerateReply } from '../../services/chat/store.js'
+import { continueReply, forkSession, regenerateReply } from '../../services/chat/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
+import { showToast } from '../base/toastState.js'
+import { closeMobileSider } from '../sider/mobileSiderState.js'
 import type { AssistantMessage as AssistantMessageType } from '../../services/chat/types.js'
 
 import { openSettings } from '../settings/settingsDialogState.js'
@@ -173,6 +175,19 @@ export const AssistantMessage = memo(function AssistantMessage({
             {responseText && !refused ? (
               <ReadAloudButton messageId={message.id} text={responseText} />
             ) : null}
+            <IconButton
+              icon={<IconForkOutline16 />}
+              tooltip={t('forkChat')}
+              tooltipPlacement="bottom"
+              disabled={busy}
+              onClick={() => {
+                stopReadAloud()
+                if (forkSession(sessionId, message.id)) {
+                  showToast({ key: 'forkedToast' })
+                  closeMobileSider()
+                }
+              }}
+            />
             <IconButton
               icon={<IconRefreshOutline16 />}
               tooltip={t('regenerate')}

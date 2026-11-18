@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { TranslationMessage } from '../../i18n/index.js'
+import { translate, type TranslationMessage } from '../../i18n/index.js'
 import { createId } from '../../utils/id.js'
 import { safeTail, truncatePercent } from '../../utils/safeText.js'
 import { ApiError, streamMessage } from '../api/client.js'
@@ -20,7 +20,12 @@ import {
   prepareDraftMessage,
 } from './drafts.js'
 import { buildSystemPrompt } from '../persona/prompt.js'
-import { bindPersonaForNewSession, resolveSessionPersona } from '../persona/scope.js'
+import {
+  bindPersonaForNewSession,
+  resolveSessionPersona,
+  setSessionPersona,
+  usePersonaScope,
+} from '../persona/scope.js'
 import { usePersona } from '../persona/store.js'
 import {
   buildTranscript,
@@ -753,6 +758,58 @@ export const sendMessage = (targetSessionId: string | null) => {
   }
   void streamReply(sessionId, reply, { history, question })
   return true
+}
+
+/**
+ * 从某条回答分叉：把「到这条消息为止」的可见记录、记忆笔记、人设绑定复制到一个新会话。
+ * 原会话完全不动，用户可以在新会话里换一种写法接着聊。
+ */
+export const forkSession = (sessionId: string, messageId: string): string | null => {
+  const state = get()
+  if (state.importingHistory || deletingSessions.has(sessionId)) {
+    return null
+  }
+  const session = getSession(sessionId)
+  if (!session) {
+    return null
+  }
+  const path = getVisibleMessages(session)
+  const index = path.findIndex((message) => message.id === messageId)
+  if (index < 0) {
+    return null
+  }
+  const now = Date.now()
+  // 消息是纯 JSON 结构（附件只存 id，原件在 files 表里共用），深拷贝一份即可，两边互不影响
+  const messages = path
+    .slice(0, index + 1)
+    .map((message) => JSON.parse(JSON.stringify(message)) as Message)
+  const baseTitle = session.title.trim() || translate('untitledChat')
+  const forked: Session = {
+    id: createId(),
+    title: `${baseTitle}${translate('forkTitleSuffix')}`,
+    createdAt: now,
+    updatedAt: now,
+    messages,
+    rootMessageId: messages[0]?.id ?? null,
+    ...(session.memory
+      ? { memory: JSON.parse(JSON.stringify(session.memory)) as SessionMemory }
+      : {}),
+  }
+  // 人设：源会话显式绑过就照抄；没绑过（用全局默认）则让新会话沿用当前默认
+  const scope = usePersonaScope.getState().map[sessionId]
+  if (scope !== undefined) {
+    setSessionPersona(forked.id, scope)
+  } else {
+    bindPersonaForNewSession(forked.id)
+  }
+  touchSession(forked.id)
+  set((current) => ({
+    sessions: [toSessionSummary(forked), ...current.sessions],
+    sessionCache: { ...current.sessionCache, [forked.id]: forked },
+    activeId: forked.id,
+  }))
+  persist(forked.id)
+  return forked.id
 }
 
 /** 重新生成当前路径上的回答：在原问题下新增版本，不覆盖旧回答和后续对话。 */

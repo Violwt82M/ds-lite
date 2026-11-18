@@ -556,3 +556,19 @@ export const IconNotebookOutline16 = () => (
     />
   </svg>
 )
+
+/** 分叉：从这条回答另开一个对话 */
+export const IconForkOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx={4.5} cy={3} r={1.6} stroke="currentColor" strokeWidth={1.2} />
+    <circle cx={4.5} cy={13} r={1.6} stroke="currentColor" strokeWidth={1.2} />
+    <circle cx={11.5} cy={5.5} r={1.6} stroke="currentColor" strokeWidth={1.2} />
+    <path d="M4.5 4.6v6.8" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" />
+    <path
+      d="M4.5 7.4c0-1.3 1-2 2.3-2h3.1"
+      stroke="currentColor"
+      strokeWidth={1.2}
+      strokeLinecap="round"
+    />
+  </svg>
+)
