@@ -79,24 +79,20 @@ export const ApiKeyField = ({ editor }: { editor: ApiKeyEditor }) => {
           </div>
         )}
         {showInput && form.error ? <div className={styles.error}>{form.error}</div> : null}
+        {/* 移动端：确定键紧贴输入框（0.9.38 反馈：原来在最底部，够不到） */}
+        {isMobile && showInput && form.value.trim() ? (
+          <button
+            type="button"
+            className={styles.mobileConfirm}
+            disabled={form.verifying}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void form.submit()}
+          >
+            {form.verifying ? t('apiKeyVerifying') : t('confirm')}
+          </button>
+        ) : null}
       </div>
       <ApiKeyGuide />
     </div>
   )
-}
-
-/** 移动端：输入 API Key 时在选项下方显示整行「确定」 */
-export const ApiKeyConfirm = ({ editor: { showInput, form } }: { editor: ApiKeyEditor }) => {
-  const t = useTranslate()
-  return showInput && form.value.trim() ? (
-    <button
-      type="button"
-      className={styles.mobileConfirm}
-      disabled={form.verifying}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={() => void form.submit()}
-    >
-      {form.verifying ? t('apiKeyVerifying') : t('confirm')}
-    </button>
-  ) : null
 }

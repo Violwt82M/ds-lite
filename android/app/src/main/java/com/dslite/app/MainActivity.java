@@ -12,5 +12,7 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         // 深色壁纸下状态栏图标要反过来，否则时间和电量在黑色底上看不见
         getBridge().getWebView().addJavascriptInterface(new StatusBarBridge(this), "DSLiteNative");
+        // 应用内更新：下载 APK + 拉起系统安装器
+        getBridge().getWebView().addJavascriptInterface(new ApkUpdaterBridge(this), "DSLiteUpdater");
     }
 }
