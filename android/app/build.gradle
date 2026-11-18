@@ -14,7 +14,7 @@ android {
         applicationId "com.dslite.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 93
+        versionCode 94
         versionName "0.9.38"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
