@@ -70,6 +70,55 @@
   }
 }
 
+/* 气泡皮肤：气泡 + 右侧「已读」标签一字排开 */
+.bubbleRow {
+  display: flex;
+  width: 100%;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.readMark {
+  flex-shrink: 0;
+  margin-bottom: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
+}
+
+/* 气泡皮肤：圆角更大 + 右侧小尾巴（颜色跟随气泡底色，有自定义色也一致） */
+:global(body[data-bubble-skin='1']) .bubble {
+  position: relative;
+  border-radius: 18px;
+}
+
+/* 小尾巴用旋转方块做：外沿带 1px 描边，浅色主题下白底气泡的尾巴也不会糊掉 */
+:global(body[data-bubble-skin='1']) .bubble::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  bottom: 14px;
+  width: 10px;
+  height: 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 0 2px 0 0;
+  background: var(--ds-user-bubble-bg, var(--dsw-specific-bubble));
+  transform: rotate(45deg);
+}
+
+/* 有背景图时气泡是半透明的，尾巴也要用半透明色，否则会露出一块实心色 */
+:global(body[data-bubble-skin='1'][data-wallpaper]:not([data-wallpaper='none'])) .bubble::after {
+  background: var(--ds-user-bubble-bg-soft, var(--dsw-specific-bubble));
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(body[data-bubble-skin='1'][data-wallpaper]:not([data-wallpaper='none']).dark) .bubble::after {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
 .bottom {
   display: flex;
   align-items: center;

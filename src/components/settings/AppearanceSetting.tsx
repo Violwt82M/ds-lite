@@ -9,6 +9,7 @@ import {
 } from '../../services/appearance.js'
 import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
 import { toAvatarDataUrl } from '../../utils/image.js'
+import { setBubbleSkin, useSettings } from '../../services/settings.js'
 import { Button } from '../base/Button.js'
 import { IconCheckOutline16 } from '../base/icons.js'
 import { ImageCropDialog } from '../base/ImageCropDialog.js'
@@ -76,6 +77,7 @@ export const AppearanceSetting = () => {
   const t = useTranslate()
   const userAvatar = useAppearance((state) => state.userAvatar)
   const bubbleColor = useAppearance((state) => state.bubbleColor)
+  const bubbleSkin = useSettings((state) => state.bubbleSkin)
   const fileRef = useRef<HTMLInputElement>(null)
   const [cropFile, setCropFile] = useState<File | null>(null)
   // 取色器里挑过、且不属于预设色的颜色：只有它需要把色块染成当前色
@@ -215,6 +217,20 @@ export const AppearanceSetting = () => {
               {t('bubbleColorReset')}
             </Button>
           </div>
+        }
+      />
+      <Row
+        label={t('settingsBubbleSkin')}
+        description={t('bubbleSkinHint')}
+        action={
+          <Button
+            variant={bubbleSkin ? 'primary' : 'outlined'}
+            size="m"
+            className={settingsStyles.cellButton}
+            onClick={() => setBubbleSkin(!bubbleSkin)}
+          >
+            {t(bubbleSkin ? 'bubbleSkinOn' : 'bubbleSkinOff')}
+          </Button>
         }
       />
       {cropFile !== null ? (

@@ -3,6 +3,7 @@ import clsx from 'clsx'
 import { memo } from 'react'
 import { IconForkOutline16, IconRefreshOutline16, IconWarningOutline16 } from '../base/icons.js'
 import { describeReply } from '../../services/chat/describe.js'
+import { useSettings } from '../../services/settings.js'
 import { canContinueReply } from '../../services/chat/reply.js'
 import { continueReply, forkSession, regenerateReply } from '../../services/chat/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
@@ -49,6 +50,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   avatar?: { src: string | null; label: string } | null
 }) {
   const t = useTranslate()
+  const bubbleSkin = useSettings((state) => state.bubbleSkin)
   const view = useReplyView(message, streaming)
   const panelEntry = useSearchPanel((state) => state.entry)
   const notice = streaming ? null : describeReply(message)
@@ -75,6 +77,8 @@ export const AssistantMessage = memo(function AssistantMessage({
           <span className={clsx(styles.avatar, styles.avatarText)}>{avatar.label.slice(0, 1)}</span>
         )
       ) : null}
+      {/* 气泡皮肤：整段内容由客户端画成一个气泡，模型只输出纯文本 */}
+      <div className={bubbleSkin ? styles.bubbleBody : styles.bubbleBodyOff}>
       {refused ? null : (
         <ReplyArea
           message={message}
@@ -166,6 +170,10 @@ export const AssistantMessage = memo(function AssistantMessage({
           </span>
         </div>
       ) : null}
+      {bubbleSkin && !streaming && responseText ? (
+        <span className={styles.readMark}>{t('readMark')}</span>
+      ) : null}
+      </div>
       {streaming ? null : (
         <div className={styles.bottom}>
 

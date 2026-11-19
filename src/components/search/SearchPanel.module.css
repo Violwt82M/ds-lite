@@ -46,10 +46,14 @@
 .item {
   margin-bottom: 6px;
   padding: 12px;
-  border-radius: 12px;
-  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+  border: 1px solid transparent;
+  border-radius: 14px;
+  transition:
+    background-color var(--ds-transition-duration) var(--ds-ease-in-out),
+    border-color var(--ds-transition-duration) var(--ds-ease-in-out);
 
   &:hover {
+    border-color: var(--dsw-alias-border-l2);
     background: var(--dsw-alias-interactive-bg-hover);
   }
 }

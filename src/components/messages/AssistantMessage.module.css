@@ -135,6 +135,72 @@
   }
 }
 
+/* ===== 气泡皮肤（body[data-bubble-skin='1']）=====
+   模型只输出纯文本，气泡、小尾巴、「已读」都由这里画。
+   关掉时用 display:contents，保证和旧布局完全一致。 */
+.bubbleBodyOff {
+  display: contents;
+}
+
+:global(body[data-bubble-skin='1']) .bubbleBody {
+  position: relative;
+  display: inline-block;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+  border-radius: 18px;
+  background: var(--dsl-bubble-fill, var(--dsw-alias-bg-layer-3, #fff));
+  text-align: left;
+}
+
+/* 左侧小尾巴：旋转方块，外沿带 1px 描边，浅色主题下也能看见 */
+:global(body[data-bubble-skin='1']) .bubbleBody::before {
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: -5px;
+  width: 10px;
+  height: 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+  border-left: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+  border-radius: 0 0 0 2px;
+  background: var(--dsl-bubble-fill, var(--dsw-alias-bg-layer-3, #fff));
+  transform: rotate(45deg);
+}
+
+/* 有背景图时气泡半透明 + 模糊，和用户气泡观感一致 */
+:global(body[data-bubble-skin='1'][data-wallpaper]:not([data-wallpaper='none'])) .bubbleBody {
+  --dsl-bubble-fill: rgba(255, 255, 255, 0.92);
+  border-color: rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(16px) saturate(120%);
+}
+
+:global(body[data-bubble-skin='1'][data-wallpaper]:not([data-wallpaper='none']).dark) .bubbleBody {
+  --dsl-bubble-fill: rgba(24, 26, 31, 0.9);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* 气泡里不要再套一层「纸」：背景图模式下原来给助手正文加的底板 */
+:global(body[data-bubble-skin='1'][data-wallpaper]:not([data-wallpaper='none'])) .bubbleBody :global(.ds-assistant-message-main-content) {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+:global(body[data-bubble-skin='1']) .readMark {
+  display: block;
+  margin-top: 6px;
+  text-align: right;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
+}
+
 .bottom {
   position: relative;
   left: -6px;

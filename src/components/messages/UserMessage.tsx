@@ -6,6 +6,7 @@ import { IconEditOutline16 } from '../base/icons.js'
 import { editMessage, retryUpload } from '../../services/chat/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import { useAppearance } from '../../services/appearance.js'
+import { useSettings } from '../../services/settings.js'
 import type { UserMessage as UserMessageType } from '../../services/chat/types.js'
 import { Button } from '../base/Button.js'
 import { IconButton } from '../base/IconButton.js'
@@ -46,6 +47,8 @@ export const UserMessage = memo(function UserMessage({
   const isMobile = useIsMobile()
   // 自定义头像属于外观设置，直接订阅 store，不用从 MessageList 一层层传
   const userAvatar = useAppearance((state) => state.userAvatar)
+  // 气泡皮肤：消息由客户端画气泡，模型只输出纯文本
+  const bubbleSkin = useSettings((state) => state.bubbleSkin)
   const canSend = !busy && (draft.trim() !== '' || message.files.length > 0)
 
   useLayoutEffect(() => {
@@ -126,8 +129,11 @@ export const UserMessage = memo(function UserMessage({
       ) : (
         <>
           {message.content ? (
-        <div className={`${styles.bubble} ds-user-bubble`}>{message.content}</div>
-      ) : null}
+            <div className={styles.bubbleRow}>
+              <div className={`${styles.bubble} ds-user-bubble`}>{message.content}</div>
+              {bubbleSkin ? <span className={styles.readMark}>{t('readMark')}</span> : null}
+            </div>
+          ) : null}
           <div className={styles.bottom}>
             <div className={clsx(styles.actions, isLast && styles.alwaysShow)}>
               {message.content ? <CopyButton text={message.content} /> : null}

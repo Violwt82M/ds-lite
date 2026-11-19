@@ -45,6 +45,7 @@ export const App = () => {
   const isMobile = useIsMobile()
   const webUpdateAvailable = useWebUpdate((state) => state.available)
   const locale = useSettings((state) => state.locale)
+  const bubbleSkin = useSettings((state) => state.bubbleSkin)
   // 移动端侧边栏以独立抽屉管理开合状态
   const siderCollapsed = useSettings((state) => state.siderCollapsed) && !isMobile
   const ready = useChatStore((state) => state.ready)
@@ -72,6 +73,11 @@ export const App = () => {
   useEffect(() => {
     document.documentElement.lang = locale
   }, [locale])
+
+  // 消息气泡：CSS 靠 body 上的 data 属性切换，避免每个消息组件都判断一次
+  useEffect(() => {
+    document.body.dataset.bubbleSkin = bubbleSkin ? '1' : '0'
+  }, [bubbleSkin])
 
   // 文件数、存储空间达到上限时，附件上只显示「上传失败」，原因用 toast 说明
   useEffect(() => onUploadNotice(showToast), [])

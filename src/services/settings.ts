@@ -51,6 +51,8 @@ type Settings = {
   recordModel: ChatModel
   /** 单份文档的 token 预算（设置里无级滑杆可调），决定「模型最多读多少字」 */
   documentBudget: number
+  /** 消息气泡：用客户端画的气泡显示消息（模型只输出纯文本），关掉是紧凑的旧样式 */
+  bubbleSkin: boolean
 }
 
 /** 记忆整理模式：auto 让模型自己判断对话类型 */
@@ -77,6 +79,7 @@ const KEYS = {
   recordModel: 'chat-demo:record-model',
   memoryMode: 'chat-demo:memory-mode',
   documentBudget: 'chat-demo:document-budget',
+  bubbleSkin: 'chat-demo:bubble-skin',
 } as const
 
 const read = (key: string) => {
@@ -185,7 +188,15 @@ export const useSettings = create<Settings>(() => ({
   })(),
   // 默认 flash：更快更便宜，而且支持图片
   model: read(KEYS.model) === 'deepseek-v4-pro' ? 'deepseek-v4-pro' : 'deepseek-flash',
+  // 默认开启：消息由客户端画成气泡（模型只输出纯文本），和「美化包」的观感一致
+  bubbleSkin: read(KEYS.bubbleSkin) !== 'false',
 }))
+
+/** 消息气泡开关：模型输出纯文本，气泡由客户端绘制 */
+export const setBubbleSkin = (bubbleSkin: boolean) => {
+  write(KEYS.bubbleSkin, String(bubbleSkin))
+  useSettings.setState({ bubbleSkin })
+}
 
 export const setDocumentBudget = (value: number) => {
   const next = clampDocumentBudget(value)
