@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { Modal } from '../base/Modal.js'
 import { SyncTransport, decodePairing } from '../../services/sync/transport.js'
 import { SyncEngine } from '../../services/sync/engine.js'
 import type { SyncMessage } from '../../services/sync/protocol.js'
+import { closeSyncPanel, useSyncPanel } from './syncPanelState.js'
 import styles from './SyncPanel.module.css'
 
 type Tab = 'code' | 'lan'
@@ -341,5 +343,16 @@ export function SyncPanel() {
         </button>
       )}
     </div>
+  )
+}
+
+/** 同步面板对话框 —— 类似 SettingsDialog：open 时挂载 Modal，关闭时 unmount */
+export const SyncDialog = () => {
+  const open = useSyncPanel((s) => s.open)
+  if (!open) return null
+  return (
+    <Modal title="📡 局域网同步" closable onClose={closeSyncPanel}>
+      <SyncPanel />
+    </Modal>
   )
 }

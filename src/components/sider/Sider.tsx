@@ -11,6 +11,7 @@ import { IconButton } from '../base/IconButton.js'
 import { Modal } from '../base/Modal.js'
 import { showToast } from '../base/toastState.js'
 import { openSettings } from '../settings/settingsDialogState.js'
+import { openSyncPanel } from '../sync/syncPanelState.js'
 import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
 import { useSwipeSiderClose } from '../../app/swipeSider.js'
 import { SessionItem } from './SessionItem.js'
@@ -122,6 +123,10 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
         </ScrollPane>
       </div>
       <div className={styles.bottom}>
+        <button type="button" className={styles.settings} onClick={openSyncPanel}>
+          <span className={styles.settingsIcon}>📡</span>
+          <span className={styles.settingsLabel}>{t('sync', '同步')}</span>
+        </button>
         <button type="button" className={styles.settings} onClick={() => openSettings('general')}>
           <span className={styles.settingsIcon}>
             <IconSettingsOutline16 />
