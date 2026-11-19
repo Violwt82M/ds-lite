@@ -15,6 +15,7 @@ import { IconButton } from '../base/IconButton.js'
 import { IconChevronRightOutline14, IconTrashOutline16 } from '../base/icons.js'
 import { openSettings } from '../settings/settingsDialogState.js'
 import { Modal } from '../base/Modal.js'
+import { ScrollPane } from '../base/ScrollPane.js'
 import { closeRecordsPanel } from './recordsPanelState.js'
 import styles from './RecordsPanel.module.css'
 
@@ -189,11 +190,11 @@ export const RecordsPanel = ({ session }: { session: Session }) => {
       {records.length === 0 ? (
         <div className={styles.empty}>{t('recordsEmpty')}</div>
       ) : (
-        <div className={styles.list}>
+        <ScrollPane contentClassName={styles.list}>
           {records.map((record) => (
             <RecordItem key={record.id} sessionId={session.id} record={record} />
           ))}
-        </div>
+        </ScrollPane>
       )}
     </Modal>
   )

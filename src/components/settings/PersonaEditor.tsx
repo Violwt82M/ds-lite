@@ -98,6 +98,7 @@ export const PersonaEditor = ({
       title={t(id ? 'personaEditorTitleEdit' : 'personaEditorTitleNew')}
       className={styles.dialog}
       mainClassName={styles.body}
+      scrollable
       onClose={onClose}
       footer={
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

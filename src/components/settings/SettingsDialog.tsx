@@ -53,6 +53,7 @@ import {
 import { translate, useTranslate, type TranslationKey, type TranslationMessage } from '../../i18n/index.js'
 import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
+import { ScrollPane } from '../base/ScrollPane.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
@@ -147,7 +148,7 @@ const SettingsContent = () => {
             </button>
           ))}
         </div>
-        <div role="tabpanel" className={styles.content}>
+        <ScrollPane role="tabpanel" contentClassName={styles.content}>
           {section === 'general' ? (
             <>
               <ThemeSetting />
@@ -192,7 +193,7 @@ const SettingsContent = () => {
               />
             </>
           )}
-        </div>
+        </ScrollPane>
       </Modal>
       {historyImport.file ? <ImportPicker historyImport={historyImport} /> : null}
       <ImportProgress />
@@ -644,7 +645,7 @@ const ImportPicker = ({
               <span className={styles.importPickerHint}>{t('importPickerSelectHint')}</span>
             ) : null}
           </div>
-          <div className={styles.importList}>
+          <ScrollPane contentClassName={styles.importList}>
             {shown.map((item) => (
               <label key={item.id} className={styles.importRow}>
                 <input
@@ -674,7 +675,7 @@ const ImportPicker = ({
             {filtered.length === 0 ? (
               <div className={styles.importPickerLoading}>{t('importPickerEmpty')}</div>
             ) : null}
-          </div>
+          </ScrollPane>
         </>
       )}
       <label className={styles.importSkip}>

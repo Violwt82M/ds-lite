@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useTranslate } from '../../i18n/index.js'
 import { IconCloseOutline16 } from './icons.js'
 import { IconButton } from './IconButton.js'
+import { ScrollPane } from './ScrollPane.js'
 import styles from './Modal.module.css'
 
 /** 当前打开的弹窗，后打开的在末尾；叠放时 Esc 只关闭最上层 */
@@ -17,6 +18,7 @@ export const Modal = ({
   closable = false,
   className,
   mainClassName,
+  scrollable = false,
   onClose,
 }: {
   title: ReactNode
@@ -27,6 +29,8 @@ export const Modal = ({
   className?: string
   /** 内容区的 class */
   mainClassName?: string
+  /** 内容区自身是滚动容器（自带 max-height + overflow-y）时给可拖滚动条 */
+  scrollable?: boolean
   onClose: () => void
 }) => {
   const t = useTranslate()
@@ -73,7 +77,13 @@ export const Modal = ({
             />
           ) : null}
         </div>
-        {children ? <div className={clsx(styles.main, mainClassName)}>{children}</div> : null}
+        {children ? (
+          scrollable ? (
+            <ScrollPane contentClassName={clsx(styles.main, mainClassName)}>{children}</ScrollPane>
+          ) : (
+            <div className={clsx(styles.main, mainClassName)}>{children}</div>
+          )
+        ) : null}
         {footer ? <div className={styles.footer}>{footer}</div> : null}
       </div>
     </div>,

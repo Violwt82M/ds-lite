@@ -8,6 +8,7 @@ import {
 import type { PersonaCard } from '../../services/persona/card.js'
 import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
+import { ScrollPane } from '../base/ScrollPane.js'
 import styles from './PersonaGenerateDialog.module.css'
 
 /**
@@ -121,7 +122,7 @@ export const PersonaGenerateDialog = ({
         </>
       }
     >
-      <div className={styles.body}>
+      <ScrollPane contentClassName={styles.body}>
         <p className={styles.hint}>{t('personaGenerateHint')}</p>
         {FIELDS.map((field) => (
           <label key={field.key} className={styles.field}>
@@ -159,7 +160,7 @@ export const PersonaGenerateDialog = ({
             ) : null}
           </div>
         ) : null}
-      </div>
+      </ScrollPane>
     </Modal>
   )
 }

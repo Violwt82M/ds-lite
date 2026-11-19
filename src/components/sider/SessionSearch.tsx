@@ -14,6 +14,7 @@ import { formatDate } from '../../utils/format.js'
 import { selectSession, useChatStore } from '../../services/chat/store.js'
 import { requestJump } from '../../services/chat/jumpTarget.js'
 import { IconCloseOutline16, IconSearchOutline16 } from '../base/icons.js'
+import { ScrollPane } from '../base/ScrollPane.js'
 import { closeMobileSider } from './mobileSiderState.js'
 import styles from './SessionSearch.module.css'
 
@@ -260,7 +261,7 @@ export const SessionSearch = ({
                   : t('sessionSearchAll', { count: allSessions.length })}
           </div>
         ) : null}
-        <div className={styles.list}>
+        <ScrollPane contentClassName={styles.list}>
           {allSessions.map((session) => (
             <button
               key={session.id}
@@ -351,7 +352,7 @@ export const SessionSearch = ({
           {keyword && settled === keyword && (!result || result.groups.length === 0) && !building ? (
             <div className={styles.empty}>{t('sessionSearchNoResult')}</div>
           ) : null}
-        </div>
+        </ScrollPane>
       </div>
     </div>
   )

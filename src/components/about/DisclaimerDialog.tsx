@@ -25,6 +25,7 @@ export const DisclaimerDialog = () => {
       title={t('disclaimerTitle')}
       className={styles.dialog}
       mainClassName={styles.body}
+      scrollable
       onClose={() => {
         if (accepted) {
           useDisclaimer.setState({ open: false })

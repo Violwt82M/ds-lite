@@ -5,6 +5,7 @@ import { useSettings } from '../../services/settings.js'
 import { useDisclaimer } from './disclaimerState.js'
 import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
+import { ScrollPane } from '../base/ScrollPane.js'
 import { Changelog } from './Changelog.js'
 import { openChangelogDialog, markChangelogSeen, useChangelogSeen } from './changelogSeen.js'
 import styles from './ChangelogDialog.module.css'
@@ -49,9 +50,9 @@ export const ChangelogDialog = () => {
         </Button>
       }
     >
-      <div className={styles.body}>
+      <ScrollPane contentClassName={styles.body}>
         <Changelog current={APP_VERSION} only={APP_VERSION} withHead={false} />
-      </div>
+      </ScrollPane>
     </Modal>
   )
 }

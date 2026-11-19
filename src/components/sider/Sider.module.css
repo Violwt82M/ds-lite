@@ -86,6 +86,10 @@
   margin-top: 20px;
 }
 
+.listPane {
+  height: 100%;
+}
+
 .list {
   height: 100%;
   margin: 0 -2px;

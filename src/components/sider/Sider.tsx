@@ -14,6 +14,7 @@ import { openSettings } from '../settings/settingsDialogState.js'
 import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
 import { useSwipeSiderClose } from '../../app/swipeSider.js'
 import { SessionItem } from './SessionItem.js'
+import { ScrollPane } from '../base/ScrollPane.js'
 import { SessionSearch } from './SessionSearch.js'
 import { openSearchPage } from './searchPageState.js'
 import styles from './Sider.module.css'
@@ -103,7 +104,7 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
       />
       {/* 搜索时只把里面的列表藏起来，外层仍占着 flex:1，底部「设置」才不会浮上去 */}
       <div className={styles.listWrap}>
-        <div className={styles.list} hidden={searchActive}>
+        <ScrollPane className={styles.listPane} contentClassName={styles.list} hidden={searchActive}>
           {groups.map((group) => (
             <div key={group.key} className={styles.section}>
               <div className={styles.sectionHeader}>{group.label}</div>
@@ -118,7 +119,7 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
               ))}
             </div>
           ))}
-        </div>
+        </ScrollPane>
       </div>
       <div className={styles.bottom}>
         <button type="button" className={styles.settings} onClick={() => openSettings('general')}>

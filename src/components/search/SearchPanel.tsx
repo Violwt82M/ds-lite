@@ -1,6 +1,7 @@
 import { useTranslate } from '../../i18n/index.js'
 import { IconCloseOutline16 } from '../base/icons.js'
 import { IconButton } from '../base/IconButton.js'
+import { ScrollPane } from '../base/ScrollPane.js'
 import { closeSearchPanel, useSearchPanel } from './searchPanelState.js'
 import { SourceCard } from './SourceCard.js'
 import styles from './SearchPanel.module.css'
@@ -25,11 +26,11 @@ export const SearchPanel = () => {
           onClick={closeSearchPanel}
         />
       </div>
-      <div className={styles.content}>
+      <ScrollPane contentClassName={styles.content}>
         {sources.map((source) => (
           <SourceCard key={source.url} source={source} className={styles.item} />
         ))}
-      </div>
+      </ScrollPane>
     </aside>
   )
 }

@@ -141,6 +141,7 @@ const MemoryPanel = ({ session }: { session: Session }) => {
       closable
       className={styles.dialog}
       mainClassName={styles.main}
+      scrollable
       onClose={closeMemoryPanel}
       footer={
         <div className={styles.footer}>
