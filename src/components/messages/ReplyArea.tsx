@@ -1,6 +1,6 @@
 import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
-import { memo, useEffect, useState, type ReactNode } from 'react'
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   IconBrowseOutline16,
   IconBrowseWarningOutline16,
@@ -65,7 +65,15 @@ export const ReplyArea = memo(function ReplyArea({
   hasResponse: boolean
 }) {
   useTranslate()
-  const [open, setOpen] = useState(true)
+  // 流式进行中展开思考；发完自动折叠（对齐原版）。历史消息默认折叠，点标题可再展开。
+  const [open, setOpen] = useState(() => streaming)
+  const previousStreaming = useRef(streaming)
+  useEffect(() => {
+    if (streaming !== previousStreaming.current) {
+      previousStreaming.current = streaming
+      setOpen(streaming)
+    }
+  }, [streaming])
   const titleActive = streaming && !hasResponse
   useTicker(titleActive, 1000)
   if (view.steps.length === 0 && !(message.thinking && streaming)) {

@@ -3,8 +3,11 @@ import clsx from 'clsx'
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  IconCameraOutline16,
   IconGlobeLanguageOutline14,
   IconPaperclipOutline16,
+  IconPhotoOutline16,
+  IconPlusOutline16,
   IconSendOutline16,
   IconStopFill16,
   IconThinkOutline14,
@@ -31,6 +34,7 @@ import {
 } from '../../services/chat/drafts.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import { IconButton } from '../base/IconButton.js'
+import { Menu, type MenuOption } from '../base/Menu.js'
 import { Tooltip } from '../base/Tooltip.js'
 import { ensureApiKey } from '../settings/settingsDialogState.js'
 import { DragMask, useFileDrop } from './DragMask.js'
@@ -74,6 +78,8 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const search = useSettings((state) => state.search)
   const thinkingEffort = useSettings((state) => state.thinkingEffort)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const togglesRef = useRef<HTMLDivElement>(null)
   // 思考强度的选择菜单 + 「点 ▾ 可以调强度」的一次性提示
@@ -268,6 +274,40 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     }
   }
 
+  /** 「更多」入口：对齐原版的拍照 / 照片 / 文件三个选项 */
+  const moreOptions: MenuOption[] = [
+    {
+      key: 'camera',
+      label: t('moreCamera'),
+      icon: <IconCameraOutline16 />,
+      onSelect: () => {
+        if (ensureApiKey()) {
+          cameraInputRef.current?.click()
+        }
+      },
+    },
+    {
+      key: 'photo',
+      label: t('morePhoto'),
+      icon: <IconPhotoOutline16 />,
+      onSelect: () => {
+        if (ensureApiKey()) {
+          photoInputRef.current?.click()
+        }
+      },
+    },
+    {
+      key: 'file',
+      label: t('moreFile'),
+      icon: <IconPaperclipOutline16 />,
+      onSelect: () => {
+        if (ensureApiKey()) {
+          fileInputRef.current?.click()
+        }
+      },
+    },
+  ]
+
   return (
     <div
       className={clsx(styles.wrapper, sessionId === null ? styles.home : styles.session)}
@@ -405,13 +445,18 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               aria-label={t('search')}
               aria-pressed={search}
               onClick={() => {
-              // OpenAI 兼容通道没有联网搜索工具：说清楚，别让人以为开了
-              if (usesOpenAiProtocol()) {
-                showToast({ key: 'openAiSearchUnsupported' })
-                return
-              }
-              setSearch(!search)
-            }}
+                // OpenAI 兼容通道没有联网搜索工具：说清楚，别让人以为开了
+                if (usesOpenAiProtocol()) {
+                  showToast({ key: 'openAiSearchUnsupported' })
+                  return
+                }
+                // v4 pro 已关闭服务端联网/读链接：点一下就说清楚，不假装能开
+                if (useSettings.getState().model === 'deepseek-v4-pro') {
+                  showToast({ key: 'modelProNoSearch' })
+                  return
+                }
+                setSearch(!search)
+              }}
             >
               <IconGlobeLanguageOutline14 />
               <span className={styles.toggleLabel}>{t('search')}</span>
@@ -432,13 +477,43 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               }
             }}
           />
-          <IconButton
-            size="m"
-            tone="primary"
-            icon={<IconPaperclipOutline16 />}
-            tooltip={t('uploadFile')}
-            disabled={importingHistory}
-            onClick={() => ensureApiKey() && fileInputRef.current?.click()}
+          <Menu options={moreOptions}>
+            {({ toggle }) => (
+              <IconButton
+                size="m"
+                tone="primary"
+                icon={<IconPlusOutline16 />}
+                tooltip={t('moreAttach')}
+                disabled={importingHistory}
+                onClick={() => {
+                  if (ensureApiKey()) {
+                    toggle()
+                  }
+                }}
+              />
+            )}
+          </Menu>
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={HIDDEN_FILE_INPUT_STYLE}
+            onChange={(event) => {
+              acceptFiles(Array.from(event.target.files ?? []))
+              event.target.value = ''
+            }}
+          />
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={HIDDEN_FILE_INPUT_STYLE}
+            onChange={(event) => {
+              acceptFiles(Array.from(event.target.files ?? []))
+              event.target.value = ''
+            }}
           />
           <input
             ref={fileInputRef}

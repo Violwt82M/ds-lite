@@ -149,20 +149,19 @@ export const loadSessionSummaries = async (): Promise<SessionSummary[]> => {
 export const loadSession = async (id: string): Promise<Session | undefined> =>
   (await getDB()).get('sessions', id)
 
-export const saveSession = async (
-  session: Session,
-  files: StoredFile[] = []
-): Promise<void> => {
+/**
+ * 写会话正文与列表摘要。
+ * 和附件分成两个事务：空间不足时附件可能写不进去，但正文先落地，
+ * 用户至少不会因为一张图片丢掉整轮对话（0.9.52 用户反馈「保存失败，重试没反应」）。
+ */
+export const saveSessionRecord = async (session: Session): Promise<void> => {
   // 写库前清洗异常字符与漏进来的协议标记；没有改动时返回原对象，不影响流式期间的引用比较
   session = cleanSessionText(session)
   const summary = storedSummary(session)
-  const tx = (await getDB()).transaction(['sessions', 'sessionSummaries', 'files'], 'readwrite')
+  const tx = (await getDB()).transaction(['sessions', 'sessionSummaries'], 'readwrite')
   await Promise.all([
     (async () => {
       try {
-        for (const file of files) {
-          await tx.objectStore('files').put(file)
-        }
         await tx.objectStore('sessions').put(session)
         await tx.objectStore('sessionSummaries').put(summary)
       } catch (error) {
@@ -238,7 +237,8 @@ const putFiles = async (store: 'files' | 'filesStaging', files: StoredFile[]) =>
   await Promise.all([...files.map((file) => tx.store.put(file)), tx.done])
 }
 
-export const saveFiles = (files: StoredFile[]): Promise<void> => putFiles('files', files)
+/** 附件原件单独写：失败只影响缩略图/补传，正文已经在上一步落地 */
+export const saveSessionFiles = (files: StoredFile[]): Promise<void> => putFiles('files', files)
 
 export const loadFile = async (id: string): Promise<Blob | undefined> =>
   (await (await getDB()).get('files', id))?.blob

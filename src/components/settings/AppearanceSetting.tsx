@@ -12,7 +12,7 @@ import {
 } from '../../services/appearance.js'
 import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
 import { toAvatarDataUrl } from '../../utils/image.js'
-import { setBubbleSkin, useSettings } from '../../services/settings.js'
+import { setAiBubble, setBubbleSkin, useSettings } from '../../services/settings.js'
 import { Button } from '../base/Button.js'
 import { IconCheckOutline16 } from '../base/icons.js'
 import { ImageCropDialog } from '../base/ImageCropDialog.js'
@@ -180,6 +180,7 @@ export const AppearanceSetting = () => {
   const bubbleColor = useAppearance((state) => state.bubbleColor)
   const aiBubbleColor = useAppearance((state) => state.aiBubbleColor)
   const bubbleSkin = useSettings((state) => state.bubbleSkin)
+  const aiBubble = useSettings((state) => state.aiBubble)
   const fileRef = useRef<HTMLInputElement>(null)
   const [cropFile, setCropFile] = useState<File | null>(null)
 
@@ -270,6 +271,20 @@ export const AppearanceSetting = () => {
             onClick={() => setBubbleSkin(!bubbleSkin)}
           >
             {t(bubbleSkin ? 'bubbleSkinOn' : 'bubbleSkinOff')}
+          </Button>
+        }
+      />
+      <Row
+        label={t('settingsAiBubble')}
+        description={t('aiOutputBubbleHint')}
+        action={
+          <Button
+            variant={aiBubble ? 'primary' : 'outlined'}
+            size="m"
+            className={settingsStyles.cellButton}
+            onClick={() => setAiBubble(!aiBubble)}
+          >
+            {t(aiBubble ? 'bubbleSkinOn' : 'bubbleSkinOff')}
           </Button>
         }
       />

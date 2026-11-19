@@ -184,6 +184,8 @@ export type CreateMessageRequest = {
   /** low 为官方默认行为；high 额外复检输入输出 */
   safety_check: { level: 'low' | 'high' }
   title?: { enabled: boolean }
+  /** 采样温度（0~2，官方默认 1.0）；思考模式下服务端固定 1.0 */
+  temperature?: number
 }
 
 // ---------- 响应：流式事件 ----------

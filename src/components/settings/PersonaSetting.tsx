@@ -14,7 +14,7 @@ import {
   usePersona,
 } from '../../services/persona/store.js'
 import { toAvatarDataUrl } from '../../utils/image.js'
-import { setSafety, useSettings } from '../../services/settings.js'
+import { setPersonalityTemperature, setSafety, useSettings } from '../../services/settings.js'
 import { usesOpenAiProtocol } from '../../services/api/protocol.js'
 import { Button } from '../base/Button.js'
 import { IconEditOutline16, IconUploadOutline14 } from '../base/icons.js'
@@ -68,6 +68,7 @@ export const PersonaSetting = () => {
   const activeId = usePersona((state) => state.activeId)
   const showAvatar = usePersona((state) => state.showAvatar)
   const safety = useSettings((state) => state.safety)
+  const personalityTemperature = useSettings((state) => state.personalityTemperature)
   const active = cards.find((entry) => entry.id === activeId)
 
   const onPick = async (file: File | undefined) => {
@@ -109,6 +110,29 @@ export const PersonaSetting = () => {
           >
             {t(enabled ? 'personaTurnOff' : 'personaTurnOn')}
           </Button>
+        }
+      />
+      <Row
+        label={t('settingsPersonalityTemp')}
+        description={t('settingsPersonalityTempHint')}
+        action={
+          <div className={settingsStyles.rangeWrap}>
+            <input
+              className={settingsStyles.range}
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={personalityTemperature}
+              aria-label={t('settingsPersonalityTemp')}
+              onChange={(event) => setPersonalityTemperature(Number(event.currentTarget.value))}
+            />
+            <span className={settingsStyles.rangeValue}>
+              {t('settingsPersonalityTempValue', {
+                value: (personalityTemperature / 50).toFixed(1),
+              })}
+            </span>
+          </div>
         }
       />
       <Row

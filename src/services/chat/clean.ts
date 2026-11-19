@@ -3,7 +3,7 @@ import { stripSpecialTokens } from '../../utils/specialTokens.js'
 import type { Message, ReplyBlock, Session } from './types.js'
 
 /**
- * 会话文本清洗：写库前（db.saveSession）与加载后（store.ensureSessionLoaded）各跑一次。
+ * 会话文本清洗：写库前（db.saveSessionRecord）与加载后（store.ensureSessionLoaded）各跑一次。
  *
  * 为什么需要：
  * - 0.9.50 之前的版本会把 DSML 工具标记、特殊 token 原样写进消息；加载后用这里清掉旧脏数据，

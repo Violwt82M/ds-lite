@@ -53,6 +53,10 @@ type Settings = {
   documentBudget: number
   /** 消息气泡：用客户端画的气泡显示消息（模型只输出纯文本），关掉是紧凑的旧样式 */
   bubbleSkin: boolean
+  /** AI 输出气泡：AI 回答单独画成圆角气泡（原版默认不画），默认关；「消息气泡」关闭时也一起关 */
+  aiBubble: boolean
+  /** 人格温度（0~100）：映射到 API temperature 0~2，默认 50 = 官方默认 1.0 */
+  personalityTemperature: number
 }
 
 /** 记忆整理模式：auto 让模型自己判断对话类型 */
@@ -80,6 +84,8 @@ const KEYS = {
   memoryMode: 'chat-demo:memory-mode',
   documentBudget: 'chat-demo:document-budget',
   bubbleSkin: 'chat-demo:bubble-skin',
+  aiBubble: 'chat-demo:ai-bubble',
+  personalityTemperature: 'chat-demo:personality-temperature',
 } as const
 
 const read = (key: string) => {
@@ -150,6 +156,20 @@ const clampDocumentBudget = (value: number) => {
   return Math.min(DOCUMENT_BUDGET_MAX, Math.max(DOCUMENT_BUDGET_MIN, stepped))
 }
 
+/** 人格温度滑杆：0~100，50 为官方默认（temperature 1.0） */
+export const PERSONALITY_TEMPERATURE_DEFAULT = 50
+
+/**
+ * 与 clampDocumentBudget 同理：必须定义在 useSettings 之前，
+ * zustand 的 initializer 是同步执行的，放在后面会在存过温度值的机器上 TDZ。
+ */
+const clampPersonalityTemperature = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return PERSONALITY_TEMPERATURE_DEFAULT
+  }
+  return Math.min(100, Math.max(0, Math.round(value)))
+}
+
 export const useSettings = create<Settings>(() => ({
   apiKey: read(KEYS.apiKey),
   locale: initialLocale(),
@@ -190,6 +210,10 @@ export const useSettings = create<Settings>(() => ({
   model: read(KEYS.model) === 'deepseek-v4-pro' ? 'deepseek-v4-pro' : 'deepseek-flash',
   // 默认开启：消息由客户端画成气泡（模型只输出纯文本），和「美化包」的观感一致
   bubbleSkin: read(KEYS.bubbleSkin) !== 'false',
+  // 默认关闭：AI 输出气泡对齐原版（原版 AI 回答是纯文本，只有用户消息带气泡）
+  aiBubble: read(KEYS.aiBubble) === 'true',
+  // 默认 50 = temperature 1.0（官方默认）；存 0~100 整数，请求时按 /50 映射到 0~2
+  personalityTemperature: clampPersonalityTemperature(Number(read(KEYS.personalityTemperature))),
 }))
 
 /** 消息气泡开关：模型输出纯文本，气泡由客户端绘制 */
@@ -197,6 +221,25 @@ export const setBubbleSkin = (bubbleSkin: boolean) => {
   write(KEYS.bubbleSkin, String(bubbleSkin))
   useSettings.setState({ bubbleSkin })
 }
+
+/** AI 输出气泡开关：AI 回答是否单独画气泡，默认关（对齐原版） */
+export const setAiBubble = (aiBubble: boolean) => {
+  write(KEYS.aiBubble, String(aiBubble))
+  useSettings.setState({ aiBubble })
+}
+
+/** 人格温度滑杆：0~100，50 为官方默认（temperature 1.0） */
+export const setPersonalityTemperature = (personalityTemperature: number) => {
+  const next = clampPersonalityTemperature(personalityTemperature)
+  write(KEYS.personalityTemperature, String(next))
+  useSettings.setState({ personalityTemperature: next })
+}
+
+/** 请求用的 temperature（0~2）；等于官方默认 1.0 时不发字段，保持旧行为 */
+export const requestTemperature = (personalityTemperature: number): number | undefined =>
+  personalityTemperature === PERSONALITY_TEMPERATURE_DEFAULT
+    ? undefined
+    : personalityTemperature / 50
 
 export const setDocumentBudget = (value: number) => {
   const next = clampDocumentBudget(value)

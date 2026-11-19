@@ -47,3 +47,19 @@ export const isStorageWriteError = (error: unknown): boolean => {
   }
   return /quota|blob\/file data|object store|storage (is )?(full|exceeded)|disk full/i.test(message)
 }
+
+/** 落盘失败的归类：界面按 quota 说「空间不足」，其余说「写入失败」并附原始错误 */
+export type StorageWriteFailure = {
+  kind: 'quota' | 'other'
+  /** 原始错误（错误名 + 文案），只用于控制台与「技术详情」 */
+  message: string
+}
+
+export const classifyStorageWriteFailure = (error: unknown): StorageWriteFailure => {
+  const name = error instanceof Error ? error.name : ''
+  const text = error instanceof Error ? error.message : String(error ?? '')
+  return {
+    kind: isStorageWriteError(error) ? 'quota' : 'other',
+    message: (name ? `${name}: ` : '') + (text || 'unknown error'),
+  }
+}

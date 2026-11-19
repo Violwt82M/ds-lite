@@ -337,16 +337,19 @@ export const toRequestMessages = (
   /** 已折叠进记忆的回答消息 id：原文仍在本机，但不再进入请求上下文 */
   folded?: ReadonlySet<string>,
   /** 只发文字附件（v4 pro 不支持图片） */
-  textOnly = false
+  textOnly = false,
+  /** v4 pro 不支持 latest_reminder：跳过所有提醒消息（时间信息改由 system 携带） */
+  dropReminder = false
 ): MessageParam[] => {
   const messages: MessageParam[] = []
   let previousReminder: string | undefined
   const appendReminder = (reminder: string | undefined) => {
     // 仅在当前分支首次出现或内容变化时插入快照；缺少快照的消息保持原有内容。
-    if (reminder && reminder !== previousReminder) {
-      messages.push({ role: 'latest_reminder', content: reminder })
-      previousReminder = reminder
+    if (dropReminder || !reminder || reminder === previousReminder) {
+      return
     }
+    messages.push({ role: 'latest_reminder', content: reminder })
+    previousReminder = reminder
   }
   for (const [user, reply] of getContextRounds(history)) {
     if (folded?.has(reply.id)) {

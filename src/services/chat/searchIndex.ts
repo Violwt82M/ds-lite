@@ -250,7 +250,9 @@ export const searchAll = async (
     }
     const hits: SearchHit[] = []
     let count = 0
-    for (const doc of record.docs) {
+    // 由新到旧扫描：预览和展开列表都按「最新的消息在最上面」展示（对齐原版搜索页）
+    for (let i = record.docs.length - 1; i >= 0; i--) {
+      const doc = record.docs[i]
       const index = findInDoc(doc.text, keyword, keywordLower, ascii)
       if (index < 0) {
         continue
@@ -300,7 +302,9 @@ export const searchSessionHits = async (
   const ascii = /[a-z]/i.test(keyword)
   const keywordLower = ascii ? keyword.toLowerCase() : keyword
   const hits: SearchHit[] = []
-  for (const doc of record.docs) {
+  // 由新到旧：列表从上到下是最新 → 最早（对齐原版搜索页）
+  for (let i = record.docs.length - 1; i >= 0; i--) {
+    const doc = record.docs[i]
     const index = findInDoc(doc.text, keyword, keywordLower, ascii)
     if (index < 0) {
       continue

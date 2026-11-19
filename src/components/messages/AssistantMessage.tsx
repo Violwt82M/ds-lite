@@ -51,6 +51,9 @@ export const AssistantMessage = memo(function AssistantMessage({
 }) {
   const t = useTranslate()
   const bubbleSkin = useSettings((state) => state.bubbleSkin)
+  // AI 输出气泡：单独开关，默认关（对齐原版：AI 回答是纯文本）；「消息气泡」关掉时它也一起关
+  const aiBubble = useSettings((state) => state.aiBubble)
+  const showBubble = bubbleSkin && aiBubble
   const view = useReplyView(message, streaming)
   const panelEntry = useSearchPanel((state) => state.entry)
   const notice = streaming ? null : describeReply(message)
@@ -77,8 +80,8 @@ export const AssistantMessage = memo(function AssistantMessage({
           <span className={clsx(styles.avatar, styles.avatarText)}>{avatar.label.slice(0, 1)}</span>
         )
       ) : null}
-      {/* 气泡皮肤：整段内容由客户端画成一个气泡，模型只输出纯文本 */}
-      <div className={bubbleSkin ? `${styles.bubbleBody} ds-ai-bubble` : styles.bubbleBodyOff}>
+      {/* 气泡皮肤：AI 输出气泡由「AI 输出气泡」开关控制（默认关），模型只输出纯文本 */}
+      <div className={showBubble ? `${styles.bubbleBody} ds-ai-bubble` : styles.bubbleBodyOff}>
       {refused ? null : (
         <ReplyArea
           message={message}
@@ -170,7 +173,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           </span>
         </div>
       ) : null}
-      {bubbleSkin && !streaming && responseText ? (
+      {showBubble && !streaming && responseText ? (
         <span className={styles.readMark}>{t('readMark')}</span>
       ) : null}
       </div>

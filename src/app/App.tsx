@@ -6,7 +6,6 @@ import { useSwipeSider } from './swipeSider.js'
 import {
   bindChatPersistence,
   initChat,
-  retrySaveSessions,
   selectSession,
   useChatStore,
 } from '../services/chat/store.js'
@@ -33,6 +32,7 @@ import { initSharedArchive, useSharedArchive } from '../services/chat/history/sh
 import { warmSearchIndex } from '../services/chat/searchIndex.js'
 import { requestPersistentStorage } from '../services/storage.js'
 import { Button } from '../components/base/Button.js'
+import { SaveErrorBanner } from './SaveErrorBanner.js'
 import { stopReadAloud } from '../services/speech/readAloud.js'
 import { CollapsedSider } from '../components/sider/CollapsedSider.js'
 import { closeMobileSider } from '../components/sider/mobileSiderState.js'
@@ -50,8 +50,6 @@ export const App = () => {
   const siderCollapsed = useSettings((state) => state.siderCollapsed) && !isMobile
   const ready = useChatStore((state) => state.ready)
   const initError = useChatStore((state) => state.initError)
-  const saveError = useChatStore((state) => Object.values(state.sessionSaveErrors).some(Boolean))
-  const importingHistory = useChatStore((state) => state.importingHistory)
   const session = useChatStore((state) =>
     state.activeId !== null && Object.hasOwn(state.sessionCache, state.activeId)
       ? state.sessionCache[state.activeId]
@@ -154,19 +152,7 @@ export const App = () => {
         {isMobile ? <MobileSider /> : siderCollapsed ? null : <Sider />}
         <SearchPage />
         <main className={styles.main}>
-          {saveError ? (
-            <div className={styles.saveError} role="alert">
-              <span>{t('sessionSaveFailed')}</span>
-              <Button
-                variant="outlined"
-                size="s"
-                disabled={importingHistory}
-                onClick={retrySaveSessions}
-              >
-                {t('retry')}
-              </Button>
-            </div>
-          ) : null}
+          <SaveErrorBanner />
           <div className={styles.content}>
             {siderCollapsed ? <CollapsedSider /> : null}
             {!ready || (activeId !== null && !session) ? (
