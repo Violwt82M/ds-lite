@@ -12,6 +12,12 @@ type TransportState = 'idle' | 'offer_generated' | 'connecting' | 'connected' | 
 
 interface LogEntry { time: string; text: string; cls?: string }
 
+interface EnvCheck {
+  webRTC: 'ok' | 'no' | 'unknown'
+  secureContext: 'ok' | 'no' | 'unknown'
+  details: string
+}
+
 export function SyncPanel() {
   const [tab, setTab] = useState<Tab>('code')
   const [role, setRole] = useState<Role>(null)
@@ -20,6 +26,22 @@ export function SyncPanel() {
   const [remoteCode, setRemoteCode] = useState('')
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [pongMs, setPongMs] = useState<number | null>(null)
+  const [errorBanner, setErrorBanner] = useState<string | null>(null)
+  const [env, setEnv] = useState<EnvCheck>({ webRTC: 'unknown', secureContext: 'unknown', details: '' })
+
+  // 环境预检（挂载时跑一次）
+  useEffect(() => {
+    const hasRTCPeer = typeof window.RTCPeerConnection !== 'undefined' || typeof window.webkitRTCPeerConnection !== 'undefined'
+    const secure = window.isSecureContext
+    const ua = navigator.userAgent
+    setEnv({
+      webRTC: hasRTCPeer ? 'ok' : 'no',
+      secureContext: secure ? 'ok' : 'no',
+      details: `WebRTC=${hasRTCPeer ? '✅' : '❌'}, SecureContext=${secure ? '✅' : '❌'}, UA=${ua.slice(0, 60)}`,
+    })
+    if (!hasRTCPeer) setErrorBanner('当前浏览器不支持 WebRTC，请换 Chrome / Edge / Safari')
+    else if (!secure) setErrorBanner('⚠️ 当前页面不是安全上下文（非 HTTPS / 非 localhost），部分浏览器会拦截 WebRTC')
+  }, [])
 
   // LAN 模式
   const [lanUrl, setLanUrl] = useState('http://192.168.1.100:7321')
@@ -84,13 +106,17 @@ export function SyncPanel() {
 
   async function createOffer() {
     try {
+      setErrorBanner(null)
+      if (env.webRTC !== 'ok') throw new Error('浏览器不支持 WebRTC')
       const t = ensureTransport()
       setRole('host')
       const code = await t.createPairingCode()
       setLocalCode(code)
       log('✅ Offer 已生成，把上面的码发给对方', 'ok')
     } catch (e) {
-      log('❌ 创建 Offer 失败: ' + (e as Error).message, 'err')
+      const msg = '❌ 创建 Offer 失败: ' + (e as Error).message
+      setErrorBanner(msg)
+      log(msg, 'err')
     }
   }
 
@@ -165,6 +191,28 @@ export function SyncPanel() {
           {pongMs !== null && ` · RTT ${pongMs}ms`}
         </div>
       </div>
+
+      {/* 环境预检 —— 挂载时立刻显示 */}
+      <div className={styles['sync-section']}>
+        <h3>🔍 环境检测</h3>
+        <div className={styles['sync-info']}>
+          WebRTC: <b>{env.webRTC === 'ok' ? '✅ 支持' : env.webRTC === 'no' ? '❌ 不支持' : '...'}</b> &nbsp;
+          安全上下文: <b>{env.secureContext === 'ok' ? '✅' : env.secureContext === 'no' ? '⚠️ 非安全（http://IP）' : '...'}</b>
+        </div>
+        {env.secureContext === 'no' && (
+          <div className={styles['sync-info']} style={{ color: '#ff4d4f', marginTop: 6, fontSize: 11 }}>
+            ⚠️ 手机浏览器（Chrome/Safari）在 <code>http://IP地址:端口</code> 下会把 WebRTC 部分 API 标成实验性。
+            如果创建 Offer 报错，尝试：① 电脑上用 localhost 测试 ② 或给 dev server 配 HTTPS
+          </div>
+        )}
+      </div>
+
+      {/* 显眼的红色错误条 */}
+      {errorBanner && (
+        <div style={{ background: '#fff2f0', border: '1px solid #ffccc7', color: '#cf1322', padding: '10px 12px', borderRadius: 8, fontSize: 13, fontWeight: 500 }}>
+          {errorBanner}
+        </div>
+      )}
 
       <div className={styles['sync-tab']}>
         <button
@@ -279,29 +327,27 @@ export function SyncPanel() {
       {tab === 'lan' && (
         <>
           <div className={styles['sync-section']}>
-            <h3>局域网 HTTP 信令</h3>
+            <h3>局域网自动发现</h3>
             <div className={styles['sync-info']} style={{ marginBottom: 8 }}>
-              Phase 1 需要其中一端开一个 HTTP server（Node 小脚本）。<br/>
-              URL 形如 <code>http://192.168.1.xxx:7321</code>。
+              ⚠️ <b>Phase 2 功能，暂不可用</b>。<br/>
+              现在请切换到 Tab A「配对码」，手动交换一次 SDP 即可连通。<br/>
+              Phase 2 会加 Capacitor 原生 HTTP server 插件 + WiFi Direct 自动发现。
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <input
                 className={styles['sync-input']}
                 value={lanUrl}
                 onChange={(e) => setLanUrl(e.target.value)}
-                placeholder="输入对方的局域网 HTTP URL"
+                placeholder="（Phase 2 启用）对方 HTTP URL"
+                disabled
               />
               <button
-                className={`${styles['sync-btn']} ${styles.primary}`}
-                onClick={() => {
-                  log('LAN HTTP 信令 Phase 2 实现。当前请切换到 A「配对码」入口。', 'info')
-                }}
+                className={styles['sync-btn']}
+                disabled
+                title="Phase 2 实现"
               >
-                连接
+                连接（不可用）
               </button>
-            </div>
-            <div className={styles['sync-info']} style={{ marginTop: 8 }}>
-              Phase 2 会加 Capacitor HTTP server 插件，两端自动发现，无需输入 URL。
             </div>
           </div>
         </>
