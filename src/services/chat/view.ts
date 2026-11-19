@@ -1,4 +1,5 @@
 import { translate } from '../../i18n/index.js'
+import { stripSpecialTokens } from '../../utils/specialTokens.js'
 import type {
   ServerToolKind,
   TextCitation,
@@ -158,17 +159,19 @@ const joinTextBlocks = (
   let markdown = ''
   let text = ''
   for (const block of blocks) {
-    text += block.text
+    // 显示兜底：库里可能存着 0.9.50 之前漏进来的 DSML/特殊 token，渲染前再清一次
+    const source = stripSpecialTokens(block.text)
+    text += source
     const indexes = new Set<number>()
     for (const citation of block.citations ?? []) {
       indexes.add(registry.add(citation.url, citation.title, null).index)
     }
-    const body = indexes.size > 0 ? block.text.trimEnd() : block.text
+    const body = indexes.size > 0 ? source.trimEnd() : source
     markdown += body
     for (const index of indexes) {
       markdown += `[citation:${index}]`
     }
-    markdown += block.text.slice(body.length)
+    markdown += source.slice(body.length)
   }
   return { markdown, text }
 }
@@ -186,6 +189,12 @@ export const buildReplyView = (reply: AssistantMessage, streaming: boolean): Rep
   const steps: Step[] = []
   const mergedSearch = new Map<ServerToolKind, SearchStep>()
   let mergedThinking: ThinkingStep | null = null
+  /**
+   * 思考块只在显示时清洗、原块不动：思考原文和 signature 一起回传给服务端做续写前缀，
+   * 改原文有被判定前缀不一致的风险。所以复制一份清洗后的块给界面用即可。
+   */
+  const displayThinking = (block: ThinkingPart): ThinkingPart =>
+    block.thinking.includes('<') ? { ...block, thinking: stripSpecialTokens(block.thinking) } : block
   let pendingText: { index: number; text: string; citations?: TextCitation[] }[] = []
 
   // 来源编号按搜索结果、打开的网页在回复中出现的顺序，与正文引用无关
@@ -238,10 +247,10 @@ export const buildReplyView = (reply: AssistantMessage, streaming: boolean): Rep
     if (block.type === 'thinking') {
       // 相邻思考块沿用同一个圆点和 Markdown；原始块与签名不变。
       if (mergedThinking) {
-        mergedThinking.blocks.push(block)
+        mergedThinking.blocks.push(displayThinking(block))
       } else if (block.thinking) {
         flushPreamble()
-        mergedThinking = { type: 'thinking', key: `thinking-${index}`, blocks: [block] }
+        mergedThinking = { type: 'thinking', key: `thinking-${index}`, blocks: [displayThinking(block)] }
         steps.push(mergedThinking)
       }
       return

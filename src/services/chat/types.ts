@@ -66,6 +66,11 @@ export type ThinkingPart = {
 export type TextPart = {
   type: 'text'
   text: string
+  /**
+   * 流式过滤的尾部待定片段：可能是被切开的 DSML/特殊 token 前半截（见 utils/specialTokens.ts）。
+   * 只在本轮流式期间存在，收尾时 flush 掉；不参与渲染与请求。
+   */
+  pendingText?: string
   citations?: TextCitation[]
   /** 服务端提示文案，仅用于展示，不作为模型回答参与上下文或续写。 */
   isTemplate?: boolean

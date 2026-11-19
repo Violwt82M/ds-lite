@@ -1,3 +1,4 @@
+import { filterStreamChunk, flushStreamPending } from '../../utils/specialTokens.js'
 import type {
   AssistantBlockParam,
   FileBlockParam,
@@ -33,8 +34,16 @@ const toFileBlocks = (files: FileAttachment[]): FileBlockParam[] =>
 
 const toReplyBlock = (block: OutputBlockStart, now: number): ReplyBlock | null => {
   switch (block.type) {
-    case 'text':
-      return { type: 'text', text: block.text, citations: block.citations ?? [] }
+    case 'text': {
+      // 首块正文也可能带标记；和增量走同一套流式过滤，pending 留给后续 delta
+      const chunk = filterStreamChunk('', block.text)
+      return {
+        type: 'text',
+        text: chunk.text,
+        citations: block.citations ?? [],
+        ...(chunk.pending ? { pendingText: chunk.pending } : {}),
+      }
+    }
     case 'thinking':
       return {
         type: 'thinking',
@@ -98,7 +107,13 @@ export const applyEvent = (
       const { delta } = event
       return updateBlock(next, index, (block) => {
         if (block.type === 'text' && delta.type === 'text_delta') {
-          return { ...block, text: block.text + delta.text }
+          // 流式安全过滤：标记可能被切在两个 delta 之间，尾部可疑前缀先缓冲（见 utils/specialTokens.ts）
+          const chunk = filterStreamChunk(block.pendingText ?? '', delta.text)
+          return {
+            ...block,
+            text: block.text + chunk.text,
+            pendingText: chunk.pending === '' ? undefined : chunk.pending,
+          }
         }
         if (block.type === 'thinking' && delta.type === 'thinking_delta') {
           return { ...block, thinking: block.thinking + delta.thinking }
@@ -118,11 +133,15 @@ export const applyEvent = (
         return next
       }
       blockIndexes.delete(event.index)
-      return updateBlock(next, index, (block) =>
-        block.type === 'thinking' && block.startedAt !== undefined && block.endedAt === undefined
+      return updateBlock(next, index, (block) => {
+        // 块结束时把缓冲的尾巴收掉：半截标记直接丢，不显示也不进库
+        if (block.type === 'text' && block.pendingText !== undefined) {
+          return { ...block, text: block.text + flushStreamPending(block.pendingText), pendingText: undefined }
+        }
+        return block.type === 'thinking' && block.startedAt !== undefined && block.endedAt === undefined
           ? { ...block, endedAt: now }
           : block
-      )
+      })
     }
     case 'message_delta':
       return {
@@ -152,6 +171,12 @@ export const settleReply = (
   blocks: reply.blocks.flatMap((block): ReplyBlock[] => {
     if (reply.stopReason === 'refusal' && (block.type === 'thinking' || block.type === 'text')) {
       return []
+    }
+    // 收尾兜底：异常/中止时可能没收到 content_block_stop，缓冲的正文尾巴在这里吐掉
+    if (block.type === 'text' && block.pendingText !== undefined) {
+      return [
+        { ...block, text: block.text + flushStreamPending(block.pendingText), pendingText: undefined },
+      ]
     }
     return block.type === 'thinking' && block.startedAt !== undefined && block.endedAt === undefined
       ? [{ ...block, endedAt: now }]

@@ -78,7 +78,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         )
       ) : null}
       {/* 气泡皮肤：整段内容由客户端画成一个气泡，模型只输出纯文本 */}
-      <div className={bubbleSkin ? styles.bubbleBody : styles.bubbleBodyOff}>
+      <div className={bubbleSkin ? `${styles.bubbleBody} ds-ai-bubble` : styles.bubbleBodyOff}>
       {refused ? null : (
         <ReplyArea
           message={message}

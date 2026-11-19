@@ -1,4 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import { cleanSessionText } from './clean.js'
 import { toSessionSummary, type Session, type SessionSummary } from './types.js'
 
 /**
@@ -70,8 +71,11 @@ const storedSummary = (session: Session): StoredSessionSummary => ({
   ...toSessionSummary(session),
   fileIds: [
     ...new Set(
+      // 旧数据/导入数据可能缺 files；这里容错，避免一条坏记录让整条会话永远存不进去
       session.messages.flatMap((message) =>
-        message.role === 'user' ? message.files.map((file) => file.id) : []
+        message.role === 'user' && Array.isArray(message.files)
+          ? message.files.map((file) => file.id)
+          : []
       )
     ),
   ],
@@ -114,13 +118,43 @@ const getDB = () =>
     throw error
   }))
 
-export const loadSessionSummaries = async (): Promise<SessionSummary[]> =>
-  (await (await getDB()).getAll('sessionSummaries')).map(toSessionSummary)
+/**
+ * 读取会话列表。正常情况一次 getAll；只要有一条记录反序列化失败，getAll 会整体报错，
+ * 列表就全空、界面显示「对话列表加载失败」——用户看到的就是「重启后会话全没了」。
+ * 所以失败后退化成按 key 逐条读：坏的那条跳过，其它会话照常列出来。
+ */
+export const loadSessionSummaries = async (): Promise<SessionSummary[]> => {
+  const db = await getDB()
+  try {
+    return (await db.getAll('sessionSummaries')).map(toSessionSummary)
+  } catch (error) {
+    reportStorageError('read local sessions')(error)
+  }
+  const keys = await db.getAllKeys('sessionSummaries')
+  const summaries: SessionSummary[] = []
+  for (const key of keys) {
+    try {
+      const value = await db.get('sessionSummaries', key)
+      if (value) {
+        summaries.push(toSessionSummary(value))
+      }
+    } catch (error) {
+      // 单条坏记录只丢这一个会话，不影响其它记录
+      reportStorageError('read session summary')(error)
+    }
+  }
+  return summaries
+}
 
 export const loadSession = async (id: string): Promise<Session | undefined> =>
   (await getDB()).get('sessions', id)
 
-export const saveSession = async (session: Session, files: StoredFile[] = []): Promise<void> => {
+export const saveSession = async (
+  session: Session,
+  files: StoredFile[] = []
+): Promise<void> => {
+  // 写库前清洗异常字符与漏进来的协议标记；没有改动时返回原对象，不影响流式期间的引用比较
+  session = cleanSessionText(session)
   const summary = storedSummary(session)
   const tx = (await getDB()).transaction(['sessions', 'sessionSummaries', 'files'], 'readwrite')
   await Promise.all([

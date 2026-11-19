@@ -29,17 +29,17 @@ type Metrics = {
   viewportHeight: number
 }
 
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
-
-/** 让 thumb 的抓取点对齐指针 y（相对轨道顶部）；拖动中内容变高也能按最新比例换算 */
-const scrollToPointer = (el: HTMLElement, y: number, grab: number) => {
-  const next = measure(el)
-  if (!next) {
-    return
-  }
-  const travel = next.viewportHeight - next.thumbHeight
-  el.scrollTop = (travel > 0 ? clamp((y - grab) / travel, 0, 1) : 0) * next.maxScroll
+type DragState = {
+  pointerId: number
+  /** 手指按下时的 clientY，之后所有位移都相对它算 */
+  startY: number
+  /** 按下时的 scrollTop：拖动只在这个基础上加位移，不按「thumb 顶到哪」反推 */
+  startScrollTop: number
+  /** 手指每移动 1px，内容滚多少 px（= maxScroll / thumb 可走距离），按下时算好固定住 */
+  ratio: number
 }
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 
 /** 从滚动元素读几何；内容不超过一屏时返回 null（整个滚动条隐藏） */
 const measure = (el: HTMLElement): Metrics | null => {
@@ -66,8 +66,12 @@ const measure = (el: HTMLElement): Metrics | null => {
 /**
  * 消息区的可拖动滚动条（overlay）。
  * 安卓 WebView 的原生 overlay 滚动条用手根本拖不动，只能看进度，所以自己画一条：
- * thumb 高度按可视比例算，按住拖动时直接改滚动元素的 scrollTop（跟手），点轨道跳到对应位置。
- * 组件不持有滚动状态，每次从 scrollerRef 现读，所以切换会话、分页、搜索跳转后位置都由原生滚动驱动刷新。
+ * thumb 高度按可视比例算，拖动时按「手指位移」换算成 scrollTop（跟手），点轨道跳到对应位置。
+ *
+ * 拖动必须是相对位移，不能按「指针当前在轨道上的位置」反算 scrollTop：
+ * 之前那样写，手指按在 thumb 偏下/偏上的位置时，一移动就会先跳一下，越拖越飘。
+ * 现在按下时记下 scrollTop 和 clientY，之后 scrollTop = 起点 + 位移 × 比例，
+ * 所以「手指往下一厘米，滑块也往下走一厘米」，和拖原生滑块的手感一致。
  */
 export const Scrollbar = ({
   scrollerRef,
@@ -86,7 +90,7 @@ export const Scrollbar = ({
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [dragging, setDragging] = useState(false)
   const [active, setActive] = useState(false)
-  const dragRef = useRef<{ pointerId: number; grab: number; rectTop: number } | null>(null)
+  const dragRef = useRef<DragState | null>(null)
   const activeTimerRef = useRef(0)
 
   const refresh = useCallback(() => {
@@ -161,6 +165,9 @@ export const Scrollbar = ({
    * 实测：手指一旦离开右侧这条二十几像素的竖条，浏览器就可能不再把 pointermove 送到滚动条上，
    * 表现就是「手一横移就失去控制」。挂到 window 后，无论手指跑到哪都继续跟手；
    * 同时在这个阶段吞掉 touchmove，避免消息列表把这次拖动当成滚动。
+   *
+   * 拖动一旦开始就只认 pointerId：中途别的手指点上来、列表滚动、布局变化（键盘/tooltip）
+   * 都不会把这次拖动抢走，直到抬手或 pointercancel。
    */
   useEffect(() => {
     const onMove = (event: globalThis.PointerEvent) => {
@@ -170,7 +177,11 @@ export const Scrollbar = ({
         return
       }
       event.preventDefault()
-      scrollToPointer(el, event.clientY - drag.rectTop, drag.grab)
+      if (drag.ratio === 0) {
+        return
+      }
+      const next = drag.startScrollTop + (event.clientY - drag.startY) * drag.ratio
+      el.scrollTop = clamp(next, 0, el.scrollHeight - el.clientHeight)
     }
     const onEnd = (event: globalThis.PointerEvent) => {
       if (dragRef.current?.pointerId !== event.pointerId) {
@@ -178,6 +189,7 @@ export const Scrollbar = ({
       }
       dragRef.current = null
       setDragging(false)
+      markActive()
     }
     const onTouchMove = (event: TouchEvent) => {
       if (dragRef.current === null) {
@@ -199,7 +211,7 @@ export const Scrollbar = ({
       window.removeEventListener('pointercancel', onEnd)
       window.removeEventListener('touchmove', onTouchMove, true)
     }
-  }, [scrollerRef])
+  }, [markActive, scrollerRef])
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     // 只接管主键/单指；右键、多指缩放保持浏览器默认行为
@@ -214,18 +226,26 @@ export const Scrollbar = ({
     }
     const rect = node.getBoundingClientRect()
     const y = event.clientY - rect.top
+    const travel = next.viewportHeight - next.thumbHeight
+    const ratio = travel > 0 ? next.maxScroll / travel : 0
     const onThumb = y >= next.thumbTop && y <= next.thumbTop + next.thumbHeight
-    // 按在 thumb 上保住手指相对 thumb 的位置；按在轨道上先把 thumb 中心挪到手指处，再接着拖
-    const grab = onThumb ? y - next.thumbTop : next.thumbHeight / 2
     if (!onThumb) {
-      scrollToPointer(el, y, grab)
+      // 按在轨道上：先把 thumb 中心挪到手指处（点哪跳哪），后续再按位移继续拖
+      const target = travel > 0 ? clamp((y - next.thumbHeight / 2) / travel, 0, 1) : 0
+      el.scrollTop = target * next.maxScroll
     }
-    dragRef.current = { pointerId: event.pointerId, grab, rectTop: rect.top }
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startScrollTop: el.scrollTop,
+      ratio,
+    }
     node.setPointerCapture(event.pointerId)
     // 拖动期间不要选中文字，也不要让触摸滚动/页面手势插进来
     event.preventDefault()
     event.stopPropagation()
     onUserScroll?.()
+    markActive()
     setDragging(true)
   }
 

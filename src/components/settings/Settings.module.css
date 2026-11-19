@@ -908,6 +908,16 @@
   }
 }
 
+/* AI 气泡的「默认」格：显示主题默认的 AI 气泡底色（白/深灰），和用户气泡那格区分开 */
+.bubbleSwatchAi {
+  background-color: var(--dsl-bubble-fill, var(--dsw-alias-bg-layer-3, #fff));
+  color: var(--dsw-alias-label-primary);
+
+  svg {
+    filter: none;
+  }
+}
+
 .bubbleSwatchSelected {
   outline: 2px solid var(--dsw-alias-brand-primary, #4d6bfe);
   outline-offset: 2px;

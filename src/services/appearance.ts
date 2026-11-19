@@ -8,6 +8,7 @@ import type { TranslationKey } from '../i18n/index.js'
  */
 const AVATAR_KEY = 'chat-demo:user-avatar'
 const BUBBLE_KEY = 'chat-demo:user-bubble'
+const AI_BUBBLE_KEY = 'chat-demo:ai-bubble'
 
 const AVATAR_PREFIX = 'data:image/'
 const HEX_COLOR = /^#[0-9a-f]{6}$/i
@@ -41,11 +42,30 @@ export const BUBBLE_PRESETS: readonly BubblePreset[] = [
   { id: 'deep', color: '#2c2c2e', labelKey: 'bubbleColorDeep' },
 ]
 
+/**
+ * AI 气泡预设色：AI 回答正文长、气泡大，底色比用户气泡再淡一档，读起来不刺眼。
+ * 结构和 BUBBLE_PRESETS 一致（含中性灰和深色，深色会触发白字）。
+ */
+export const AI_BUBBLE_PRESETS: readonly BubblePreset[] = [
+  { id: 'blue', color: '#e6f1ff', labelKey: 'bubbleColorBlue' },
+  { id: 'gray', color: '#edeef0', labelKey: 'bubbleColorGray' },
+  { id: 'pink', color: '#fdeaf2', labelKey: 'bubbleColorPink' },
+  { id: 'purple', color: '#efe7ff', labelKey: 'bubbleColorPurple' },
+  { id: 'green', color: '#e6f5ea', labelKey: 'bubbleColorGreen' },
+  { id: 'yellow', color: '#fdf5dc', labelKey: 'bubbleColorYellow' },
+  { id: 'orange', color: '#fdebda', labelKey: 'bubbleColorOrange' },
+  { id: 'red', color: '#fde9e9', labelKey: 'bubbleColorRed' },
+  { id: 'cyan', color: '#e3f4f6', labelKey: 'bubbleColorCyan' },
+  { id: 'deep', color: '#2c2c2e', labelKey: 'bubbleColorDeep' },
+]
+
 export type AppearanceState = {
   /** 128px PNG data URL；null = 不显示头像 */
   userAvatar: string | null
   /** #rrggbb；null = 跟随主题默认气泡色 */
   bubbleColor: string | null
+  /** #rrggbb；null = 跟随主题默认气泡色（AI 回答侧） */
+  aiBubbleColor: string | null
 }
 
 /** 坏数据一律按没设置处理：外观设置坏了不能阻塞启动 */
@@ -61,6 +81,7 @@ const readSaved = (key: string, isValid: (value: string) => boolean): string | n
 export const useAppearance = create<AppearanceState>(() => ({
   userAvatar: readSaved(AVATAR_KEY, isAvatar),
   bubbleColor: readSaved(BUBBLE_KEY, isBubbleColor),
+  aiBubbleColor: readSaved(AI_BUBBLE_KEY, isBubbleColor),
 }))
 
 const parseRgb = (hex: string): [number, number, number] => [
@@ -82,22 +103,34 @@ const textColorFor = (hex: string): string => {
     : 'var(--dsw-static-neutral-bluish-1000)'
 }
 
-/** 把外观写到 body 上：CSS 只认 data 属性和变量，气泡组件不用重复算颜色 */
-const applyAppearance = () => {
-  const { bubbleColor } = useAppearance.getState()
+/**
+ * 自定义气泡色统一写三样东西：body 上的 data 开关（CSS 靠它决定要不要覆盖默认外观）、
+ * 不透明底色、有背景图时的 0.82 半透明版本（保留气泡后面的模糊）；
+ * 字色按底色亮度算好，深色主题配浅色气泡也不会白字浅底。
+ * 用户气泡和 AI 气泡只差前缀，抽出来免得以后改一处漏一处。
+ */
+const applyBubbleColor = (kind: 'user' | 'ai', color: string | null) => {
   const body = document.body
-  body.dataset.userBubble = bubbleColor === null ? '0' : '1'
-  if (bubbleColor === null) {
-    body.style.removeProperty('--ds-user-bubble-bg')
-    body.style.removeProperty('--ds-user-bubble-bg-soft')
-    body.style.removeProperty('--ds-user-bubble-text')
+  body.dataset[kind === 'user' ? 'userBubble' : 'aiBubble'] = color === null ? '0' : '1'
+  const prefix = `--ds-${kind}-bubble`
+  if (color === null) {
+    body.style.removeProperty(`${prefix}-bg`)
+    body.style.removeProperty(`${prefix}-bg-soft`)
+    body.style.removeProperty(`${prefix}-text`)
     return
   }
-  const [r, g, b] = parseRgb(bubbleColor)
-  body.style.setProperty('--ds-user-bubble-bg', bubbleColor)
+  const [r, g, b] = parseRgb(color)
+  body.style.setProperty(`${prefix}-bg`, color)
   // 有背景图时气泡要透一点，底下的模糊才看得见；0.82 和现有默认气泡的透明度对齐
-  body.style.setProperty('--ds-user-bubble-bg-soft', `rgba(${r}, ${g}, ${b}, 0.82)`)
-  body.style.setProperty('--ds-user-bubble-text', textColorFor(bubbleColor))
+  body.style.setProperty(`${prefix}-bg-soft`, `rgba(${r}, ${g}, ${b}, 0.82)`)
+  body.style.setProperty(`${prefix}-text`, textColorFor(color))
+}
+
+/** 把外观写到 body 上：CSS 只认 data 属性和变量，气泡组件不用重复算颜色 */
+const applyAppearance = () => {
+  const { bubbleColor, aiBubbleColor } = useAppearance.getState()
+  applyBubbleColor('user', bubbleColor)
+  applyBubbleColor('ai', aiBubbleColor)
 }
 
 export const setupAppearance = () => {
@@ -130,4 +163,10 @@ export const setBubbleColor = (color: string | null) => {
   const next = color !== null && isBubbleColor(color) ? color.toLowerCase() : null
   useAppearance.setState({ bubbleColor: next })
   persist(BUBBLE_KEY, next)
+}
+
+export const setAiBubbleColor = (color: string | null) => {
+  const next = color !== null && isBubbleColor(color) ? color.toLowerCase() : null
+  useAppearance.setState({ aiBubbleColor: next })
+  persist(AI_BUBBLE_KEY, next)
 }

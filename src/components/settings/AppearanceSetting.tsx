@@ -2,10 +2,13 @@ import clsx from 'clsx'
 import { useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import {
+  AI_BUBBLE_PRESETS,
   BUBBLE_PRESETS,
+  setAiBubbleColor,
   setBubbleColor,
   setUserAvatar,
   useAppearance,
+  type BubblePreset,
 } from '../../services/appearance.js'
 import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
 import { toAvatarDataUrl } from '../../utils/image.js'
@@ -72,17 +75,113 @@ const Row = ({
   </div>
 )
 
-/** 设置 - 通用：我的头像、气泡颜色。改完立即生效，存在本机 */
+/**
+ * 一行气泡色选择：默认色 + 预设色板 + 调色盘 + 恢复默认。
+ * 用户气泡和 AI 气泡只差文案、色板和「默认」那格的预览色，抽出来共用一套；
+ * 取色器里挑过、且不属于预设色的颜色，只有它需要把色块染成当前色。
+ */
+const BubbleColorRow = ({
+  label,
+  description,
+  presets,
+  color,
+  themeSwatchClassName,
+  fallbackColor,
+  onChange,
+}: {
+  label: string
+  description: string
+  presets: readonly BubblePreset[]
+  color: string | null
+  themeSwatchClassName: string
+  fallbackColor: string
+  onChange: (color: string | null) => void
+}) => {
+  const t = useTranslate()
+  const customColor = color !== null && !presets.some((preset) => preset.color === color)
+
+  return (
+    <Row
+      label={label}
+      description={description}
+      className={settingsStyles.bubbleCell}
+      action={
+        <div className={settingsStyles.bubbleActions}>
+          <div role="group" aria-label={label} className={settingsStyles.bubbleSwatches}>
+            <button
+              type="button"
+              className={clsx(
+                settingsStyles.bubbleSwatch,
+                themeSwatchClassName,
+                color === null && settingsStyles.bubbleSwatchSelected
+              )}
+              aria-label={t('bubbleColorDefault')}
+              aria-pressed={color === null}
+              onClick={() => onChange(null)}
+            >
+              {color === null ? <IconCheckOutline16 /> : null}
+            </button>
+            {presets.map((preset) => {
+              const selected = color === preset.color
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  className={clsx(
+                    settingsStyles.bubbleSwatch,
+                    selected && settingsStyles.bubbleSwatchSelected
+                  )}
+                  style={{ backgroundColor: preset.color }}
+                  aria-label={t(preset.labelKey)}
+                  aria-pressed={selected}
+                  onClick={() => onChange(preset.color)}
+                >
+                  {selected ? <IconCheckOutline16 /> : null}
+                </button>
+              )
+            })}
+            <span
+              className={clsx(
+                settingsStyles.bubbleSwatch,
+                settingsStyles.bubbleCustom,
+                customColor && settingsStyles.bubbleSwatchSelected
+              )}
+              style={customColor && color !== null ? { background: color } : undefined}
+            >
+              <PaletteIcon />
+              <input
+                type="color"
+                className={settingsStyles.bubbleColorInput}
+                aria-label={t('bubbleColorCustom')}
+                value={color ?? fallbackColor}
+                onChange={(event) => onChange(event.currentTarget.value)}
+              />
+            </span>
+          </div>
+          <Button
+            variant="outlined"
+            size="m"
+            className={settingsStyles.cellButton}
+            disabled={color === null}
+            onClick={() => onChange(null)}
+          >
+            {t('bubbleColorReset')}
+          </Button>
+        </div>
+      }
+    />
+  )
+}
+
+/** 设置 - 通用：我的头像、用户/AI 气泡颜色、消息气泡开关。改完立即生效，存在本机 */
 export const AppearanceSetting = () => {
   const t = useTranslate()
   const userAvatar = useAppearance((state) => state.userAvatar)
   const bubbleColor = useAppearance((state) => state.bubbleColor)
+  const aiBubbleColor = useAppearance((state) => state.aiBubbleColor)
   const bubbleSkin = useSettings((state) => state.bubbleSkin)
   const fileRef = useRef<HTMLInputElement>(null)
   const [cropFile, setCropFile] = useState<File | null>(null)
-  // 取色器里挑过、且不属于预设色的颜色：只有它需要把色块染成当前色
-  const customColor =
-    bubbleColor !== null && !BUBBLE_PRESETS.some((preset) => preset.color === bubbleColor)
 
   /** 裁好的方图再压成 128px 的 data URL 存本机；失败给提示，不静默当没选 */
   const applyCrop = async (blob: Blob) => {
@@ -142,82 +241,23 @@ export const AppearanceSetting = () => {
           </div>
         }
       />
-      <Row
+      <BubbleColorRow
         label={t('settingsBubbleColor')}
         description={t('bubbleColorHint')}
-        className={settingsStyles.bubbleCell}
-        action={
-          <div className={settingsStyles.bubbleActions}>
-            <div
-              role="group"
-              aria-label={t('settingsBubbleColor')}
-              className={settingsStyles.bubbleSwatches}
-            >
-              <button
-                type="button"
-                className={clsx(
-                  settingsStyles.bubbleSwatch,
-                  settingsStyles.bubbleSwatchTheme,
-                  bubbleColor === null && settingsStyles.bubbleSwatchSelected
-                )}
-                aria-label={t('bubbleColorDefault')}
-                aria-pressed={bubbleColor === null}
-                onClick={() => setBubbleColor(null)}
-              >
-                {bubbleColor === null ? <IconCheckOutline16 /> : null}
-              </button>
-              {BUBBLE_PRESETS.map((preset) => {
-                const selected = bubbleColor === preset.color
-                return (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    className={clsx(
-                      settingsStyles.bubbleSwatch,
-                      selected && settingsStyles.bubbleSwatchSelected
-                    )}
-                    style={{ backgroundColor: preset.color }}
-                    aria-label={t(preset.labelKey)}
-                    aria-pressed={selected}
-                    onClick={() => setBubbleColor(preset.color)}
-                  >
-                    {selected ? <IconCheckOutline16 /> : null}
-                  </button>
-                )
-              })}
-              <span
-                className={clsx(
-                  settingsStyles.bubbleSwatch,
-                  settingsStyles.bubbleCustom,
-                  customColor && settingsStyles.bubbleSwatchSelected
-                )}
-                style={
-                  customColor && bubbleColor !== null
-                    ? { background: bubbleColor }
-                    : undefined
-                }
-              >
-                <PaletteIcon />
-                <input
-                  type="color"
-                  className={settingsStyles.bubbleColorInput}
-                  aria-label={t('bubbleColorCustom')}
-                  value={bubbleColor ?? '#dbefff'}
-                  onChange={(event) => setBubbleColor(event.currentTarget.value)}
-                />
-              </span>
-            </div>
-            <Button
-              variant="outlined"
-              size="m"
-              className={settingsStyles.cellButton}
-              disabled={bubbleColor === null}
-              onClick={() => setBubbleColor(null)}
-            >
-              {t('bubbleColorReset')}
-            </Button>
-          </div>
-        }
+        presets={BUBBLE_PRESETS}
+        color={bubbleColor}
+        themeSwatchClassName={settingsStyles.bubbleSwatchTheme}
+        fallbackColor="#dbefff"
+        onChange={setBubbleColor}
+      />
+      <BubbleColorRow
+        label={t('settingsAiBubbleColor')}
+        description={t('aiBubbleHint')}
+        presets={AI_BUBBLE_PRESETS}
+        color={aiBubbleColor}
+        themeSwatchClassName={settingsStyles.bubbleSwatchAi}
+        fallbackColor="#ffffff"
+        onChange={setAiBubbleColor}
       />
       <Row
         label={t('settingsBubbleSkin')}

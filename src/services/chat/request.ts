@@ -1,5 +1,6 @@
 import type { ChatModel, CreateMessageRequest, MessageParam } from '../api/types.js'
 import { sanitizeSurrogates } from '../../utils/safeText.js'
+import { stripSpecialTokens } from '../../utils/specialTokens.js'
 import { getCustomModel, usesOpenAiProtocol } from '../api/protocol.js'
 
 /**
@@ -79,18 +80,28 @@ export const buildInternalRequest = (options: {
 }): { body: CreateMessageRequest } => ({ body: buildRequest(options).body })
 
 /** 孤立代理会让服务端 JSON 解析直接 400，所有字符串出口都过一遍 */
+const cleanSurrogates = (text: string) => sanitizeSurrogates(text)
+
+/**
+ * 已经是协议标记/脏数据的文本（历史里的 DSML 泄漏、特殊 token）不能再回传给服务端：
+ * 服务端会把它当成残缺的工具调用，后面的请求就全部被拒。用户自己输入的内容不动
+ * （只兜孤立代理），那是用户的原话。
+ */
+const cleanOutputText = (text: string) => stripSpecialTokens(sanitizeSurrogates(text))
+
 const cleanMessages = (messages: MessageParam[]): MessageParam[] =>
   messages.map((message) => {
     // latest_reminder 的 content 一定是字符串，单独处理保持联合类型收窄
     if (message.role === 'latest_reminder') {
-      return { role: 'latest_reminder' as const, content: sanitizeSurrogates(message.content) }
+      return { role: 'latest_reminder' as const, content: cleanOutputText(message.content) }
     }
     const { content } = message
+    const cleanText = message.role === 'assistant' ? cleanOutputText : cleanSurrogates
     const cleaned =
       typeof content === 'string'
-        ? sanitizeSurrogates(content)
+        ? cleanText(content)
         : content.map((block) =>
-            block.type === 'text' ? { ...block, text: sanitizeSurrogates(block.text) } : block
+            block.type === 'text' ? { ...block, text: cleanText(block.text) } : block
           )
     return { ...message, content: cleaned } as MessageParam
   })
@@ -141,7 +152,8 @@ export const buildRequest = (options: BuildRequestOptions): BuiltRequest => {
   const body: CreateMessageRequest = {
     // OpenAI 通道的模型名由用户在设置里填（别家服务不认识 deepseek-flash）
     model: openAi ? getCustomModel() : model,
-    system: sanitizeSurrogates(system),
+    // 系统提示里可能带模型生成的记忆笔记，同样不能把标记回传
+    system: cleanOutputText(system),
     messages: cleanMessages(messages),
     thinking: { type: thinking ? 'enabled' : 'disabled' },
     ...(thinking && effort ? { output_config: { effort } } : {}),

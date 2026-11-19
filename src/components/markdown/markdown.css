@@ -233,6 +233,37 @@
   padding: 4px;
 }
 
+/*
+ * KaTeX 排不了的公式（美化包那类）由 MicroTeX 排成 SVG 再显示，这两组规则照官方前端的
+ * .ds-markdown-math-svg 写：行内跟着基线走，块级居中、超宽自己横向滚动，SVG 按容器宽度缩。
+ */
+.ds-markdown-math-svg {
+  display: inline-flex;
+}
+
+.ds-markdown-math-svg svg {
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.ds-markdown-math-display.ds-markdown-math-svg {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-width: 100%;
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.ds-markdown-math-display.ds-markdown-math-svg svg {
+  max-width: 100%;
+  height: auto;
+  padding: 4px;
+  overflow: visible;
+}
+
 .ds-markdown > * .ds-markdown-math {
   margin: 16px 0;
 }

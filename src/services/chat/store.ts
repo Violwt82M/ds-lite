@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { translate, type TranslationMessage } from '../../i18n/index.js'
 import { createId } from '../../utils/id.js'
 import { safeTail, truncatePercent } from '../../utils/safeText.js'
+import { stripSpecialTokens } from '../../utils/specialTokens.js'
+import { cleanSessionText } from './clean.js'
 import { ApiError, streamMessage } from '../api/client.js'
 import type { ChatModel } from '../api/types.js'
 import { isCustomApiOrigin } from '../api/base.js'
@@ -320,6 +322,61 @@ const persist = (sessionId: string) => {
   }
 }
 
+/**
+ * 流意外中断时的强制复位：把还挂在 pending/streaming 的消息收尾、摘掉流控制器、落盘。
+ * 正常结束在 streamReply 的 finally 里做；这里兜的是「连 finally 都没走到」的意外
+ * （未处理的异常/第三方代码抛错），否则输入框会一直锁在「停止生成」上，用户只能重启。
+ */
+const forceResetStream = (sessionId: string) => {
+  const session = getSession(sessionId)
+  if (session) {
+    updateSession(sessionId, (current) => {
+      if (
+        !current.messages.some(
+          (message) =>
+            message.role === 'assistant' &&
+            (message.status === 'pending' || message.status === 'streaming')
+        )
+      ) {
+        return current
+      }
+      return {
+        ...current,
+        messages: current.messages.map((message) =>
+          message.role === 'assistant' &&
+          (message.status === 'pending' || message.status === 'streaming')
+            ? settleReply(message, 'error', Date.now(), { kind: 'protocol', message: '' })
+            : message
+        ),
+      }
+    })
+    persist(sessionId)
+  }
+  streamFlushes.delete(sessionId)
+  set((state) =>
+    Object.hasOwn(state.streaming, sessionId)
+      ? {
+          streaming: Object.fromEntries(
+            Object.entries(state.streaming).filter(([id]) => id !== sessionId)
+          ),
+        }
+      : state
+  )
+}
+
+/** 启动一条回复流；异常逃出 streamReply 时兜底复位，保证界面永远能继续发消息 */
+const runReplyStream = (
+  sessionId: string,
+  reply: AssistantMessage,
+  request: Request
+): void => {
+  void streamReply(sessionId, reply, request).catch((error: unknown) => {
+    // eslint-disable-next-line no-console
+    console.error('[chat] reply stream failed', error)
+    forceResetStream(sessionId)
+  })
+}
+
 export const retrySaveSessions = () => {
   if (!get().importingHistory) {
     unsavedSessions.forEach(persist)
@@ -447,7 +504,8 @@ const ensureSessionLoaded = (id: string): Promise<void> => {
       if (!stored) {
         throw new Error(`Session ${id} is missing from local storage`)
       }
-      const settled = settleInterrupted(normalizeSession(stored))
+      // 加载兜底：清掉旧版本漏写进库的 DSML/特殊 token 与孤立代理；有改动会随下面的 persist 写回
+      const settled = cleanSessionText(settleInterrupted(normalizeSession(stored)))
       // 读取期间可能已在列表重命名，保留最新元数据，不能让旧读取覆盖它。
       const session = sameSummary(settled, summary) ? settled : { ...settled, ...summary }
       touchSession(id)
@@ -761,7 +819,7 @@ export const sendMessage = (targetSessionId: string | null) => {
       },
     })
   }
-  void streamReply(sessionId, reply, { history, question })
+  runReplyStream(sessionId, reply, { history, question })
   return true
 }
 
@@ -840,7 +898,7 @@ export const regenerateReply = (sessionId: string, messageId?: string) => {
     updatedAt: Date.now(),
   }))
   persist(sessionId)
-  void streamReply(sessionId, reply, { history, question })
+  runReplyStream(sessionId, reply, { history, question })
 }
 
 /** 编辑提问后新增同父版本，保留原文件；旧问题的所有回答与后续对话仍可切回。 */
@@ -872,7 +930,7 @@ export const editMessage = (sessionId: string, messageId: string, content: strin
     updatedAt: Date.now(),
   }))
   persist(sessionId)
-  void streamReply(sessionId, reply, { history: path.slice(0, index), question })
+  runReplyStream(sessionId, reply, { history: path.slice(0, index), question })
   return true
 }
 
@@ -922,7 +980,7 @@ export const continueReply = (sessionId: string, messageId: string) => {
   updateReply(sessionId, reply)
   updateSession(sessionId, (s) => ({ ...s, updatedAt: Date.now() }))
   persist(sessionId)
-  void streamReply(sessionId, reply, { history: path.slice(0, -2), question, prefix: previous })
+  runReplyStream(sessionId, reply, { history: path.slice(0, -2), question, prefix: previous })
 }
 
 /** 附件补传失败后重试：保留原回答位置，重新补传并请求 */
@@ -948,7 +1006,7 @@ export const retryUpload = (sessionId: string, messageId: string) => {
   const reply: AssistantMessage = { ...previous, status: 'pending', error: undefined }
   updateReply(sessionId, reply)
   persist(sessionId)
-  void streamReply(sessionId, reply, { history: path.slice(0, index - 1), question })
+  runReplyStream(sessionId, reply, { history: path.slice(0, index - 1), question })
 }
 
 // ---------------- 外置记忆 ----------------
@@ -1090,7 +1148,8 @@ export const generateSessionRecord = async (
         text += event.delta.text
       }
     }
-    const trimmed = parseBigNote(text, MAX_MANUAL_NOTE_CHARS)
+    // 记录也是展示文本，模型偶尔会把特殊 token 一起吐出来；入库前统一清掉
+    const trimmed = parseBigNote(stripSpecialTokens(text), MAX_MANUAL_NOTE_CHARS)
     if (trimmed === '') {
       return { ok: false, reason: 'empty' }
     }
@@ -1158,7 +1217,7 @@ export const generateMemoryNote = async (
         text += event.delta.text
       }
     }
-    const trimmed = text.trim()
+    const trimmed = stripSpecialTokens(text).trim()
     if (trimmed === '') {
       return { ok: false, reason: 'empty' }
     }
@@ -2051,6 +2110,13 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
     titleRequests.delete(controller)
     streamFlushes.delete(sessionId)
     cancelAnimationFrame(frame)
+    // 兜底：任何提前退出都不该把消息留在 pending/streaming（输入框会一直锁着）
+    if (reply.status === 'pending' || reply.status === 'streaming') {
+      reply = settleReply(reply, controller.signal.aborted ? 'stopped' : 'error', Date.now(), {
+        kind: 'protocol',
+        message: '',
+      })
+    }
     updateReply(sessionId, reply)
     set((state) => ({
       streaming: Object.fromEntries(

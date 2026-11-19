@@ -150,7 +150,8 @@
   padding: 12px 16px;
   border: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
   border-radius: 18px;
-  background: var(--dsl-bubble-fill, var(--dsw-alias-bg-layer-3, #fff));
+  /* 自定义 AI 气泡色（设置 - 通用）走 --ds-ai-bubble-bg，没设置时回退到原来的主题气泡色 */
+  background: var(--ds-ai-bubble-bg, var(--dsl-bubble-fill, var(--dsw-alias-bg-layer-3, #fff)));
   text-align: left;
 }
 
@@ -165,7 +166,7 @@
   border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
   border-left: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
   border-radius: 0 0 0 2px;
-  background: var(--dsl-bubble-fill, var(--dsw-alias-bg-layer-3, #fff));
+  background: var(--ds-ai-bubble-bg, var(--dsl-bubble-fill, var(--dsw-alias-bg-layer-3, #fff)));
   transform: rotate(45deg);
 }
 
@@ -179,6 +180,20 @@
 :global(body[data-bubble-skin='1'][data-wallpaper]:not([data-wallpaper='none']).dark) .bubbleBody {
   --dsl-bubble-fill: rgba(24, 26, 31, 0.9);
   border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* 自定义 AI 气泡色的壁纸半透明版本和字色规则在 global.css（搜「自定义 AI 气泡色」）：
+   气泡本体带 ds-ai-bubble 类，壁纸模式下换成 --ds-ai-bubble-bg-soft，上面的模糊保持不变 */
+
+/* 气泡里的辅助小字/等待点没有自己的底色，跟着气泡字色走，深浅主题下都看得清
+   （搜索卡片这类自带底色的保留主题色） */
+:global(body[data-bubble-skin='1'][data-ai-bubble='1']) .readMark,
+:global(body[data-bubble-skin='1'][data-ai-bubble='1']) .charCount {
+  color: var(--ds-ai-bubble-text);
+}
+
+:global(body[data-bubble-skin='1'][data-ai-bubble='1']) .waitingDot {
+  background-color: var(--ds-ai-bubble-text);
 }
 
 /* 气泡里不要再套一层「纸」：背景图模式下原来给助手正文加的底板 */

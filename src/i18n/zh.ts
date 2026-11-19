@@ -339,6 +339,8 @@ export const zh = {
   bubbleColorRed: '红色',
   bubbleColorCyan: '青色',
   bubbleColorDeep: '深色',
+  settingsAiBubbleColor: 'AI 气泡颜色',
+  aiBubbleHint: 'AI 回答的气泡底色；「消息气泡」开启时才生效，有背景图时会自动半透明 + 模糊',
   settingsBubbleSkin: '消息气泡',
   bubbleSkinHint: 'AI 和你的消息都由客户端画成气泡（模型只输出纯文本）；关掉就是紧凑的旧样式',
   bubbleSkinOn: '已开启',

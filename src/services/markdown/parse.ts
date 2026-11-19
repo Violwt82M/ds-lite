@@ -13,6 +13,7 @@ import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { mathFromMarkdown } from 'mdast-util-math'
 import { gfm } from 'micromark-extension-gfm'
 import { math } from 'micromark-extension-llm-math'
+import { stripSpecialTokens } from '../../utils/specialTokens.js'
 import type { Source } from '../chat/view.js'
 
 /** 正文里的 [citation:N]，已换成对应来源 */
@@ -51,7 +52,10 @@ export function toMdAst(
   input: string,
   { sources, disableLink }: { sources: Source[] | undefined; disableLink: boolean }
 ): Root {
-  const ast = fromMarkdown(input, {
+  // 最后一道显示兜底：流式/加载路径漏过来的 DSML 与特殊 token 不进 markdown
+  // （思考、模板提示等所有走 markdown 渲染的文本都经过这里）
+  const source = stripSpecialTokens(input)
+  const ast = fromMarkdown(source, {
     extensions: [
       // codeIndented 语法导致有前导空格的列表无法正常渲染
       { ...gfm(), disable: { null: ['codeIndented'] } },
@@ -74,7 +78,7 @@ export function toMdAst(
     )
   }
   groupInlineHtml(ast)
-  const raw = (node: Nodes) => input.slice(node.position?.start.offset, node.position?.end.offset)
+  const raw = (node: Nodes) => source.slice(node.position?.start.offset, node.position?.end.offset)
   // 先处理子节点，再按需把当前节点换成若干节点
   const simplify = (node: Nodes): Nodes[] => {
     if ('children' in node) {

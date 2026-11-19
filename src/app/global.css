@@ -175,6 +175,49 @@ body[data-user-bubble='1'][data-wallpaper]:not([data-wallpaper='none']) .ds-user
 }
 
 /*
+ * 自定义 AI 气泡色：AI 气泡本体带 ds-ai-bubble 类（见 AssistantMessage.tsx）。
+ * 和用户气泡一样只换背景和字色；有背景图时用同一个 0.82 透明版本，
+ * 气泡自己的 backdrop-filter 模糊在 AssistantMessage.module.css 里已按 data-bubble-skin 设好。
+ */
+body[data-bubble-skin='1'][data-ai-bubble='1'] .ds-ai-bubble {
+  background-color: var(--ds-ai-bubble-bg);
+  color: var(--ds-ai-bubble-text);
+}
+
+/* 正文的 markdown 自带 color，统一改成气泡字色；行内代码/代码块自己有底色，保留主题字色 */
+body[data-bubble-skin='1'][data-ai-bubble='1'] .ds-ai-bubble .ds-markdown {
+  color: var(--ds-ai-bubble-text);
+}
+
+body[data-bubble-skin='1'][data-ai-bubble='1'] .ds-ai-bubble .ds-markdown code {
+  color: var(--dsw-alias-label-primary);
+}
+
+body[data-bubble-skin='1'][data-ai-bubble='1'] .ds-ai-bubble .ds-markdown li::marker {
+  color: var(--ds-ai-bubble-text);
+}
+
+body[data-bubble-skin='1'][data-ai-bubble='1'][data-wallpaper]:not([data-wallpaper='none'])
+  .ds-ai-bubble {
+  background-color: var(--ds-ai-bubble-bg-soft);
+}
+
+body[data-bubble-skin='1'][data-ai-bubble='1'][data-wallpaper]:not([data-wallpaper='none'])
+  .ds-ai-bubble::before {
+  background-color: var(--ds-ai-bubble-bg-soft);
+}
+
+/* 系统要求减少透明效果时退回不透明色，保证对比度 */
+@media (prefers-reduced-transparency: reduce) {
+  body[data-bubble-skin='1'][data-ai-bubble='1'][data-wallpaper]:not([data-wallpaper='none'])
+    .ds-ai-bubble,
+  body[data-bubble-skin='1'][data-ai-bubble='1'][data-wallpaper]:not([data-wallpaper='none'])
+    .ds-ai-bubble::before {
+    background-color: var(--ds-ai-bubble-bg);
+  }
+}
+
+/*
  * 顶栏：有背景时给它一层"纸"，否则标题和图标直接压在照片上。
  * 深色背景必须把字反过来——不然就是黑底黑字，状态栏和时间电量同理（系统图标由原生侧处理）。
  */
