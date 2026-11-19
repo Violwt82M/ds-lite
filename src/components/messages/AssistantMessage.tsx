@@ -171,10 +171,7 @@ export const AssistantMessage = memo(function AssistantMessage({
 
           <BranchSwitcher versions={versions} disabled={busy} onSelect={onSelectVersion} />
           <div className={clsx(styles.actions, isLast && styles.alwaysShow)}>
-            {copyText ? <CopyButton text={copyText} /> : null}
-            {responseText && !refused ? (
-              <ReadAloudButton messageId={message.id} text={responseText} />
-            ) : null}
+            {/* 分叉放最左边：它以前紧挨着「重新生成」，手机上连点容易误触（0.9.50 反馈） */}
             <IconButton
               icon={<IconForkOutline16 />}
               tooltip={t('forkChat')}
@@ -188,6 +185,10 @@ export const AssistantMessage = memo(function AssistantMessage({
                 }
               }}
             />
+            {copyText ? <CopyButton text={copyText} /> : null}
+            {responseText && !refused ? (
+              <ReadAloudButton messageId={message.id} text={responseText} />
+            ) : null}
             <IconButton
               icon={<IconRefreshOutline16 />}
               tooltip={t('regenerate')}

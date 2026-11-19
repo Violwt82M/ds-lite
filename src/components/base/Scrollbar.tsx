@@ -31,6 +31,16 @@ type Metrics = {
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 
+/** 让 thumb 的抓取点对齐指针 y（相对轨道顶部）；拖动中内容变高也能按最新比例换算 */
+const scrollToPointer = (el: HTMLElement, y: number, grab: number) => {
+  const next = measure(el)
+  if (!next) {
+    return
+  }
+  const travel = next.viewportHeight - next.thumbHeight
+  el.scrollTop = (travel > 0 ? clamp((y - grab) / travel, 0, 1) : 0) * next.maxScroll
+}
+
 /** 从滚动元素读几何；内容不超过一屏时返回 null（整个滚动条隐藏） */
 const measure = (el: HTMLElement): Metrics | null => {
   const { scrollTop, scrollHeight, clientHeight } = el
@@ -140,29 +150,56 @@ export const Scrollbar = ({
     const onTouchStart = (event: TouchEvent) => {
       event.stopPropagation()
     }
+    node.addEventListener('touchstart', onTouchStart, { passive: true })
+    return () => {
+      node.removeEventListener('touchstart', onTouchStart)
+    }
+  }, [])
+
+  /**
+   * 拖动期间把 move/up 挂到 window，而不是只靠元素自身的 pointer 事件。
+   * 实测：手指一旦离开右侧这条二十几像素的竖条，浏览器就可能不再把 pointermove 送到滚动条上，
+   * 表现就是「手一横移就失去控制」。挂到 window 后，无论手指跑到哪都继续跟手；
+   * 同时在这个阶段吞掉 touchmove，避免消息列表把这次拖动当成滚动。
+   */
+  useEffect(() => {
+    const onMove = (event: globalThis.PointerEvent) => {
+      const drag = dragRef.current
+      const el = scrollerRef.current
+      if (!drag || !el || drag.pointerId !== event.pointerId) {
+        return
+      }
+      event.preventDefault()
+      scrollToPointer(el, event.clientY - drag.rectTop, drag.grab)
+    }
+    const onEnd = (event: globalThis.PointerEvent) => {
+      if (dragRef.current?.pointerId !== event.pointerId) {
+        return
+      }
+      dragRef.current = null
+      setDragging(false)
+    }
     const onTouchMove = (event: TouchEvent) => {
+      if (dragRef.current === null) {
+        return
+      }
       if (event.cancelable) {
         event.preventDefault()
       }
       event.stopPropagation()
     }
-    node.addEventListener('touchstart', onTouchStart, { passive: true })
-    node.addEventListener('touchmove', onTouchMove, { passive: false })
+    window.addEventListener('pointermove', onMove, { passive: false })
+    window.addEventListener('pointerup', onEnd)
+    window.addEventListener('pointercancel', onEnd)
+    // capture：抢在消息列表的 touchmove 之前处理，stopPropagation 才来得及
+    window.addEventListener('touchmove', onTouchMove, { passive: false, capture: true })
     return () => {
-      node.removeEventListener('touchstart', onTouchStart)
-      node.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onEnd)
+      window.removeEventListener('pointercancel', onEnd)
+      window.removeEventListener('touchmove', onTouchMove, true)
     }
-  }, [])
-
-  /** 让 thumb 的抓取点对齐指针 y（相对轨道顶部）；拖动中内容变高也能按最新比例换算 */
-  const scrollToPointer = (el: HTMLElement, y: number, grab: number) => {
-    const next = measure(el)
-    if (!next) {
-      return
-    }
-    const travel = next.viewportHeight - next.thumbHeight
-    el.scrollTop = (travel > 0 ? clamp((y - grab) / travel, 0, 1) : 0) * next.maxScroll
-  }
+  }, [scrollerRef])
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     // 只接管主键/单指；右键、多指缩放保持浏览器默认行为
@@ -190,25 +227,6 @@ export const Scrollbar = ({
     event.stopPropagation()
     onUserScroll?.()
     setDragging(true)
-  }
-
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current
-    const el = scrollerRef.current
-    if (!drag || !el || drag.pointerId !== event.pointerId) {
-      return
-    }
-    scrollToPointer(el, event.clientY - drag.rectTop, drag.grab)
-    event.preventDefault()
-    event.stopPropagation()
-  }
-
-  const endDrag = (event: PointerEvent<HTMLDivElement>) => {
-    if (dragRef.current?.pointerId !== event.pointerId) {
-      return
-    }
-    dragRef.current = null
-    setDragging(false)
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -247,9 +265,6 @@ export const Scrollbar = ({
       data-dragging={dragging ? 'true' : 'false'}
       data-active={active ? 'true' : 'false'}
       onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={endDrag}
-      onPointerCancel={endDrag}
       onKeyDown={onKeyDown}
     >
       {metrics ? (
