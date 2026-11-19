@@ -176,5 +176,4 @@ function getOrCreateDeviceId(): string {
 }
 
 // 从 version.ts 读版本号
-import { version } from '../version.js'
-const APP_VERSION = version
+import { APP_VERSION } from '../../version.js'

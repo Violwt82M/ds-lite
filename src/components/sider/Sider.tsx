@@ -125,7 +125,7 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
       <div className={styles.bottom}>
         <button type="button" className={styles.settings} onClick={openSyncPanel}>
           <span className={styles.settingsIcon}>📡</span>
-          <span className={styles.settingsLabel}>{t('sync', '同步')}</span>
+          <span className={styles.settingsLabel}>同步</span>
         </button>
         <button type="button" className={styles.settings} onClick={() => openSettings('general')}>
           <span className={styles.settingsIcon}>
