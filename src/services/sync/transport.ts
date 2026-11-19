@@ -51,6 +51,12 @@ export class SyncTransport extends EventTarget {
   private _state: SyncTransportState = 'idle'
   private listeners = new Map<string, Set<SyncListener>>()
 
+  constructor() {
+    super()
+    // 诊断日志：on 方法是否正确挂载
+    console.log('[SyncTransport] new instance, on is:', typeof (this as any).on)
+  }
+
   get state() {
     return this._state
   }
@@ -187,24 +193,39 @@ export class SyncTransport extends EventTarget {
     if (!this.pc) return
     this.pc.oniceconnectionstatechange = () => {
       const s = this.pc!.iceConnectionState
+      console.log('[SyncTransport] iceConnectionState:', s)
       this.emit('iceState', s)
       if (s === 'connected' || s === 'completed') {
         this.setState('connected')
         this.emit('open', null)
       } else if (s === 'failed' || s === 'disconnected') {
+        // 收集一下候选对，帮诊断
+        try {
+          const pairs = this.pc!.getSctpTransports?.() ?? []
+          for (const t of pairs) {
+            const c = t.iceTransport?.selectedCandidatePair
+            if (c) console.log('[SyncTransport] selected pair:', c)
+          }
+        } catch {}
         if (this._state !== 'closed') this.setState('failed')
       }
     }
     this.pc.onconnectionstatechange = () => {
       const s = this.pc!.connectionState
+      console.log('[SyncTransport] connectionState:', s)
       this.emit('connState', s)
+    }
+    this.pc.onicecandidateerror = (ev) => {
+      console.warn('[SyncTransport] iceCandidateError:', ev)
     }
   }
 
   private setupDC() {
     if (!this.dc) return
     this.dc.onopen = () => {
+      console.log('[SyncTransport] dc.onopen! state was:', this._state)
       if (this._state !== 'connected') this.setState('connected')
+      this.emit('open', null)
       this.emit('dc-open', null)
     }
     this.dc.onmessage = (e) => {

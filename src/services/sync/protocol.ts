@@ -12,6 +12,10 @@ export type SyncMessage =
   | SyncSession
   | SyncRequestDiff
   | SyncDiff
+  | SyncSummaryList
+  | SyncSettings
+  | SyncPersona
+  | SyncAppearance
   | SyncAck
   | SyncError
 
@@ -56,6 +60,20 @@ export interface SyncDiff {
   updatedAt: number
 }
 
+/** Session 摘要（交换 updatedAt 用来协商同步方向） */
+export interface SyncSummary {
+  id: string
+  title: string
+  updatedAt: number
+}
+
+/** 摘要列表（连接建立后自动交换） */
+export interface SyncSummaryList {
+  type: 'summary-list'
+  deviceId: string
+  summaries: SyncSummary[]
+}
+
 /** 收到确认 */
 export interface SyncAck { type: 'ack'; messageId?: string; at: number }
 
@@ -63,4 +81,35 @@ export interface SyncError {
   type: 'error'
   code: string
   message: string
+}
+
+/** 设置全量同步（apiKey 默认不同步，除非显式带） */
+export interface SyncSettings {
+  type: 'settings-full'
+  /** 每个设置项：key -> JSON string 或 null */
+  settings: Record<string, string | null>
+  /** 如果 true，对方 apiKey 会被这里的值覆盖 */
+  includeApiKey?: boolean
+  fromDevice: string
+  updatedAt: number
+}
+
+/** Persona 全量同步（整颗 PersonaState JSON） */
+export interface SyncPersona {
+  type: 'persona-full'
+  persona: unknown
+  fromDevice: string
+  updatedAt: number
+}
+
+/** Appearance 全量同步（头像 data URL + 气泡色） */
+export interface SyncAppearance {
+  type: 'appearance-full'
+  appearance: {
+    userAvatar: string | null
+    bubbleColor: string | null
+    aiBubbleColor: string | null
+  }
+  fromDevice: string
+  updatedAt: number
 }
