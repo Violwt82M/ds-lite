@@ -1,4 +1,5 @@
 declare const styles: {
+  readonly "root": string;
   readonly "wrapper": string;
   readonly "session": string;
   readonly "home": string;
@@ -18,6 +19,11 @@ declare const styles: {
   readonly "toggle": string;
   readonly "selected": string;
   readonly "right": string;
+  readonly "moreGlyph": string;
+  readonly "moreGlyphOpen": string;
+  readonly "suggestions": string;
+  readonly "suggestion": string;
+  readonly "suggestionArrow": string;
   readonly "sendButton": string;
   readonly "disabled": string;
 };

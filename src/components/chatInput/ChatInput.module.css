@@ -1,3 +1,11 @@
+/* 输入区根容器：白卡片 + 下方展开的附件面板（面板在卡片外、页面底色上） */
+.root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
 .wrapper {
   --line-height: 24px;
   --input-padding-top: 12px;
@@ -417,8 +425,56 @@
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   margin-left: auto;
+}
+
+/* 「更多」圆圈十字：打开时顺时针转 45°（十字变叉） */
+.moreGlyph {
+  display: inline-flex;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.moreGlyphOpen {
+  transform: rotate(45deg);
+}
+
+/* 带附件时的一排快捷提问：白底描边药丸，右端一个箭头（原版同款） */
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 12px 0;
+}
+
+.suggestion {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.suggestionArrow {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moreGlyph {
+    transition: none;
+  }
 }
 
 .sendButton {

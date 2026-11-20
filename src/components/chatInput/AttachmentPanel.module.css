@@ -1,39 +1,16 @@
-/* 「更多」入口：细线圆圈十字按钮 + 从按钮左上方拉出的面板 */
-.anchor {
-  display: inline-flex;
-}
-
-.glyph {
-  display: inline-flex;
-  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.3, 1);
-}
-
-/* 打开时顺时针转 45°：十字变成叉（原版就是这个动效） */
-.glyphOpen {
-  transform: rotate(45deg);
-}
-
+/* 「更多」展开的附件面板：在输入框下方，随输入框一起上移，不是浮层 */
 .panel {
-  position: fixed;
-  z-index: 1050;
   box-sizing: border-box;
-  width: min(360px, calc(100vw - 24px));
-  padding: 12px;
-  border: 1px solid var(--dsw-alias-border-inverted);
-  border-radius: 18px;
-  background: var(--dsw-specific-menu, #fff);
-  box-shadow:
-    0 0 1px 0 rgba(0, 0, 0, 0.2),
-    0 16px 40px 0 rgba(0, 0, 0, 0.16);
-  /* 从按钮那个角「拉出来」 */
-  transform-origin: bottom right;
+  width: 100%;
+  padding-top: 10px;
   animation: panelIn 0.18s cubic-bezier(0.2, 0.9, 0.3, 1) both;
 }
 
+/* 从输入框下沿「拉出来」：先轻微下移再归位 */
 @keyframes panelIn {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.96);
+    transform: translateY(14px);
   }
 
   to {
@@ -43,23 +20,23 @@
 }
 
 /* 最近发过的图片：一行横滑缩略图（原版是相册最近照片） */
-.recent {
+.thumbs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  padding-bottom: 2px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 
-.recent::-webkit-scrollbar {
+.thumbs::-webkit-scrollbar {
   display: none;
 }
 
-.recentItem {
+.thumb {
   flex: none;
-  width: 84px;
-  height: 104px;
+  width: 74px;
+  height: 92px;
   padding: 0;
   overflow: hidden;
   border: none;
@@ -79,6 +56,7 @@
 .actions {
   display: flex;
   gap: 10px;
+  padding: 10px 0;
 }
 
 .action {
@@ -87,8 +65,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 16px 8px;
+  gap: 8px;
+  min-height: 74px;
+  padding: 12px 8px;
   border: none;
   border-radius: 14px;
   background: var(--dsw-alias-interactive-bg-hover);
@@ -119,9 +98,5 @@
 @media (prefers-reduced-motion: reduce) {
   .panel {
     animation: none;
-  }
-
-  .glyph {
-    transition: none;
   }
 }

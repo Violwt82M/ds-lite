@@ -276,6 +276,28 @@ export const IconPhotoOutline16 = () => (
 )
 
 /** 「更多」面板里的大号描边图标：拍照 / 相册 / 文件（原版是细线图标卡片） */
+/** 语音输入：原版是细线圆圈里一个麦克风（和「更多」的圆圈十字同一套观感） */
+export const IconVoiceCircle20 = () => (
+  <svg width={20} height={20} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="10" cy="10" r="8.25" stroke="currentColor" strokeWidth="1.6" />
+    <rect
+      x="8.55"
+      y="5.5"
+      width="2.9"
+      height="5.1"
+      rx="1.45"
+      stroke="currentColor"
+      strokeWidth="1.3"
+    />
+    <path
+      d="M7.35 9.85a2.65 2.65 0 0 0 5.3 0M10 12.55v1.55"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
 export const IconCameraOutline24 = () => (
   <svg width={24} height={24} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
@@ -327,6 +349,19 @@ export const IconRefreshOutline16 = () => (
     <path
       d="M7.92136 0.349152C10.3744 0.349234 12.5564 1.5052 13.9557 3.29894L15.1281 2.12759C15.3303 1.92546 15.6767 2.06943 15.6767 2.35538V5.53923C15.6766 5.71626 15.5329 5.85976 15.3559 5.86002H12.171C11.8854 5.8597 11.7426 5.51465 11.9443 5.31249L12.9641 4.29056C11.8237 2.74305 9.98908 1.74106 7.92136 1.74097C4.46436 1.74097 1.66233 4.543 1.66233 8C1.66233 11.457 4.46436 14.259 7.92136 14.259C11.3782 14.2589 14.1804 11.4569 14.1804 8H15.5722C15.5722 12.2251 12.1465 15.6507 7.92136 15.6508C3.69614 15.6508 0.270508 12.2252 0.270508 8C0.270508 3.77478 3.69614 0.349152 7.92136 0.349152Z"
       fill="currentColor"
+    />
+  </svg>
+)
+
+/** 发送：原版是蓝色圆底上一个白色上箭头 */
+export const IconArrowUp16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M8 13.2V3.2M3.6 7.6L8 3.2l4.4 4.4"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     />
   </svg>
 )

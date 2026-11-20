@@ -3,8 +3,9 @@ import clsx from 'clsx'
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  IconArrowUp16,
   IconGlobeLanguageOutline14,
-  IconSendOutline16,
+  IconMoreCircle20,
   IconStopFill16,
   IconThinkOutline14,
 } from '../base/icons.js'
@@ -30,7 +31,9 @@ import {
 } from '../../services/chat/drafts.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import { Tooltip } from '../base/Tooltip.js'
-import { MorePanel } from './MorePanel.js'
+import { useDismiss } from '../base/anchored.js'
+import { IconButton } from '../base/IconButton.js'
+import { AttachmentPanel } from './AttachmentPanel.js'
 import { ensureApiKey } from '../settings/settingsDialogState.js'
 import { DragMask, useFileDrop } from './DragMask.js'
 import { showToast } from '../base/toastState.js'
@@ -77,6 +80,10 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const photoInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const togglesRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  // 「更多」展开的附件面板：点按钮后输入框连同面板一起上移，点外面 / Esc 收起
+  const [moreOpen, setMoreOpen] = useState(false)
+  useDismiss(moreOpen, [rootRef], () => setMoreOpen(false))
   // 思考强度的选择菜单 + 「点 ▾ 可以调强度」的一次性提示
   const [effortOpen, setEffortOpen] = useState(false)
   const [hintVisible, setHintVisible] = useState(false)
@@ -248,8 +255,39 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
 
   // 排队、上传中或上传失败的附件都留在输入框，全部上传成功后才能发送
   const canSend = !importingHistory && !streaming && voice.status === 'idle' && draftReady
-  // 原版默认没有发送键：输入框里有内容（文字或附件）时才把语音键换成发送键
+  // 有内容（文字或附件）就出现发送键；文字为空时语音键保留，附件也保留（对齐原版）
   const hasContent = text.trim() !== '' || attachments.length > 0
+  // 原版：文字非空时语音键让位给发送键；只有附件时语音键和发送键都在。
+  // 录音 / 转写进行中必须一直保留语音键（否则没法停止录音）
+  const showVoice = text.trim() === '' || voice.status !== 'idle'
+  // 带了附件又没输入文字时，给一排快捷提问（原版也有这排建议）
+  const attachmentNoun = t(
+    attachments.some((item) => !item.isImage) ? 'suggestionNounFile' : 'suggestionNounImage'
+  )
+  const suggestions =
+    attachments.length > 0 && text.trim() === '' && !streaming
+      ? [
+          { label: t('suggestionAnalyze'), text: t('suggestionAnalyzeText', { noun: attachmentNoun }) },
+          {
+            label: t('suggestionSummarize'),
+            text: t('suggestionSummarizeText', { noun: attachmentNoun }),
+          },
+          {
+            label: t('suggestionExplain'),
+            text: t('suggestionExplainText', { noun: attachmentNoun }),
+          },
+          { label: t('suggestionWhatIs'), text: t('suggestionWhatIsText', { noun: attachmentNoun }) },
+        ]
+      : []
+
+  const toggleMore = () => {
+    const next = !moreOpen
+    setMoreOpen(next)
+    // 弹出面板时收起软键盘，否则面板 + 键盘一起挤占聊天区
+    if (next) {
+      textareaRef.current?.blur()
+    }
+  }
 
   const send = () => {
     if (
@@ -277,6 +315,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   }
 
   return (
+    <div className={styles.root} ref={rootRef}>
     <div
       className={clsx(styles.wrapper, sessionId === null ? styles.home : styles.session)}
       onClick={(event) => {
@@ -286,6 +325,22 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       }}
     >
       <DraftAttachments items={attachments} onRetry={retryFile} onRemove={removeFile} />
+      {/* 带了附件又没打字：给一排快捷提问，点一下填进输入框（原版同款建议条） */}
+      {suggestions.length > 0 ? (
+        <div className={styles.suggestions}>
+          {suggestions.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className={styles.suggestion}
+              onClick={() => setText(item.text)}
+            >
+              {item.label}
+              <span className={styles.suggestionArrow}>→</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className={styles.textareaWrapper}>
         <textarea
           ref={textareaRef}
@@ -432,49 +487,23 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
           </Tooltip>
         </div>
         <div className={styles.right}>
-          {/* 更多 → 语音 / 发送（有内容时语音键换成发送键，清空后变回语音，对齐原版） */}
-          <MorePanel
+          {/* 更多 → 语音 / 发送（对齐原版）：点 ✛ 转 45° 并展开附件面板；
+              文字为空时保留语音键，有附件时语音键和发送键一起出现 */}
+          <IconButton
+            size="m"
+            tone="primary"
+            tooltip={t('moreAttach')}
             disabled={importingHistory}
-            onCamera={() => {
-              if (ensureApiKey()) {
-                cameraInputRef.current?.click()
-              }
-            }}
-            onPhoto={() => {
-              if (ensureApiKey()) {
-                photoInputRef.current?.click()
-              }
-            }}
-            onFile={() => {
-              if (ensureApiKey()) {
-                fileInputRef.current?.click()
-              }
-            }}
-            onPickImage={attachRecentImage}
+            aria-expanded={moreOpen}
+            aria-haspopup="dialog"
+            onClick={toggleMore}
+            icon={
+              <span className={clsx(styles.moreGlyph, moreOpen && styles.moreGlyphOpen)}>
+                <IconMoreCircle20 />
+              </span>
+            }
           />
-          {streaming && sessionId ? (
-            <button
-              type="button"
-              className={styles.sendButton}
-              aria-label={t('chatInputStopButtonTooltip')}
-              onClick={() => {
-                stopReadAloud()
-                stopReply(sessionId)
-              }}
-            >
-              <IconStopFill16 />
-            </button>
-          ) : hasContent && voice.status === 'idle' ? (
-            <button
-              type="button"
-              className={clsx(styles.sendButton, !canSend && styles.disabled)}
-              aria-label={t('send')}
-              aria-disabled={!canSend}
-              onClick={send}
-            >
-              <IconSendOutline16 />
-            </button>
-          ) : (
+          {showVoice ? (
             <VoiceButton
               status={voice.status}
               disabled={!voice.available}
@@ -488,7 +517,30 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 }
               }}
             />
-          )}
+          ) : null}
+          {streaming && sessionId ? (
+            <button
+              type="button"
+              className={styles.sendButton}
+              aria-label={t('chatInputStopButtonTooltip')}
+              onClick={() => {
+                stopReadAloud()
+                stopReply(sessionId)
+              }}
+            >
+              <IconStopFill16 />
+            </button>
+          ) : hasContent ? (
+            <button
+              type="button"
+              className={clsx(styles.sendButton, !canSend && styles.disabled)}
+              aria-label={t('send')}
+              aria-disabled={!canSend}
+              onClick={send}
+            >
+              <IconArrowUp16 />
+            </button>
+          ) : null}
           <input
             ref={cameraInputRef}
             type="file"
@@ -524,6 +576,30 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
           />
         </div>
       </div>
+    </div>
+      {moreOpen ? (
+        <AttachmentPanel
+          onCamera={() => {
+            if (ensureApiKey()) {
+              setMoreOpen(false)
+              cameraInputRef.current?.click()
+            }
+          }}
+          onPhoto={() => {
+            if (ensureApiKey()) {
+              setMoreOpen(false)
+              photoInputRef.current?.click()
+            }
+          }}
+          onFile={() => {
+            if (ensureApiKey()) {
+              setMoreOpen(false)
+              fileInputRef.current?.click()
+            }
+          }}
+          onPickImage={attachRecentImage}
+        />
+      ) : null}
       {dragging ? <DragMask /> : null}
     </div>
   )

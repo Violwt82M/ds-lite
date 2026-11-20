@@ -213,7 +213,11 @@ export const useSettings = create<Settings>(() => ({
   // 默认关闭：AI 输出气泡对齐原版（原版 AI 回答是纯文本，只有用户消息带气泡）
   aiBubble: read(KEYS.aiBubble) === 'true',
   // 默认 50 = temperature 1.0（官方默认）；存 0~100 整数，请求时按 /50 映射到 0~2
-  personalityTemperature: clampPersonalityTemperature(Number(read(KEYS.personalityTemperature))),
+  personalityTemperature: (() => {
+    const raw = read(KEYS.personalityTemperature)
+    // 没存过时 Number(null) 是 0，会把默认温度误判成 0.0；必须先用 null 判断
+    return raw === null ? PERSONALITY_TEMPERATURE_DEFAULT : clampPersonalityTemperature(Number(raw))
+  })(),
 }))
 
 /** 消息气泡开关：模型输出纯文本，气泡由客户端绘制 */

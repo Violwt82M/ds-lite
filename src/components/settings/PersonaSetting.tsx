@@ -68,6 +68,7 @@ export const PersonaSetting = () => {
   const activeId = usePersona((state) => state.activeId)
   const showAvatar = usePersona((state) => state.showAvatar)
   const safety = useSettings((state) => state.safety)
+  const thinking = useSettings((state) => state.thinking)
   const personalityTemperature = useSettings((state) => state.personalityTemperature)
   const active = cards.find((entry) => entry.id === activeId)
 
@@ -114,16 +115,19 @@ export const PersonaSetting = () => {
       />
       <Row
         label={t('settingsPersonalityTemp')}
-        description={t('settingsPersonalityTempHint')}
+        description={
+          thinking ? t('settingsPersonalityTempThinkingHint') : t('settingsPersonalityTempHint')
+        }
         action={
           <div className={settingsStyles.rangeWrap}>
             <input
-              className={settingsStyles.range}
+              className={clsx(settingsStyles.range, thinking && styles.rangeDisabled)}
               type="range"
               min={0}
               max={100}
               step={1}
               value={personalityTemperature}
+              disabled={thinking}
               aria-label={t('settingsPersonalityTemp')}
               onChange={(event) => setPersonalityTemperature(Number(event.currentTarget.value))}
             />
