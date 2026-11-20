@@ -7,6 +7,10 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+// 每次构建用分钟级时间戳做 versionCode：
+// 保证新包的 versionCode 一定比旧包大，手机可以直接覆盖安装，不用先卸载
+def buildVersionCode = (int) (System.currentTimeMillis() / 60000L)
+
 android {
     namespace = "com.dslite.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -14,7 +18,7 @@ android {
         applicationId "com.dslite.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 100
+        versionCode buildVersionCode
         versionName "0.9.51"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -24,6 +28,13 @@ android {
         }
     }
     signingConfigs {
+        // 固定签名：所有 debug 包都用项目内的 key，任何机器/任何时间打出来的包都能互相覆盖安装
+        debug {
+            storeFile file('ds-lite-debug.jks')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
         release {
             if (keystorePropertiesFile.exists()) {
                 storeFile rootProject.file(keystoreProperties['storeFile'])
@@ -34,6 +45,9 @@ android {
         }
     }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

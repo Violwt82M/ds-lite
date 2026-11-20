@@ -11,6 +11,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(SharedArchivePlugin.class);
         // 局域网 HTTP server + IP 查询（Phase 2A 自动发现用）
         registerPlugin(HttpServerPlugin.class);
+        // 同步保活：WiFi/CPU 锁 + 前台服务（息屏不断连）
+        registerPlugin(SyncKeepAlivePlugin.class);
         super.onCreate(savedInstanceState);
         // 深色壁纸下状态栏图标要反过来，否则时间和电量在黑色底上看不见
         getBridge().getWebView().addJavascriptInterface(new StatusBarBridge(this), "DSLiteNative");

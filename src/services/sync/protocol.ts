@@ -16,6 +16,8 @@ export type SyncMessage =
   | SyncSettings
   | SyncPersona
   | SyncAppearance
+  | SyncWallpaperMeta
+  | SyncWallpaperChunk
   | SyncAck
   | SyncError
 
@@ -88,6 +90,8 @@ export interface SyncSettings {
   type: 'settings-full'
   /** 每个设置项：key -> JSON string 或 null */
   settings: Record<string, string | null>
+  /** 每个设置项最后一次修改的时间戳，用于按项合并（老版本对端可能不带） */
+  meta?: Record<string, number>
   /** 如果 true，对方 apiKey 会被这里的值覆盖 */
   includeApiKey?: boolean
   fromDevice: string
@@ -112,4 +116,27 @@ export interface SyncAppearance {
   }
   fromDevice: string
   updatedAt: number
+}
+
+/** 自定义聊天背景图（存 IndexedDB，localStorage 通道带不动）：先发元信息再发分块 */
+export interface SyncWallpaperMeta {
+  type: 'wallpaper-meta'
+  /** 本次传输的 id（发送设备 + 图片时间戳） */
+  id: string
+  mime: string
+  /** 分块总数 */
+  total: number
+  /** base64 总长度 */
+  bytes: number
+  /** 本机设置这张图的时间，接收端用它判断要不要覆盖 */
+  updatedAt: number
+  fromDevice: string
+}
+
+export interface SyncWallpaperChunk {
+  type: 'wallpaper-chunk'
+  id: string
+  seq: number
+  /** base64（不带 data: 前缀） */
+  data: string
 }

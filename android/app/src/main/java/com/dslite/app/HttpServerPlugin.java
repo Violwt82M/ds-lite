@@ -11,6 +11,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -40,6 +41,27 @@ public class HttpServerPlugin extends Plugin {
     private ExecutorService pool;
     private int runningPort = -1;
     private volatile boolean running = false;
+    /** 通过 HTTP 信令交换的 SDP：本机发布 offer，浏览器/其他设备 POST answer 回来 */
+    private volatile String pairingOffer = null;
+    private volatile String pairingAnswer = null;
+
+    /** WebView 侧生成 Offer 后调用，把这个码挂到 /offer 上供浏览器拉取 */
+    @PluginMethod
+    public void setPairingOffer(PluginCall call) {
+        pairingOffer = call.getString("code");
+        pairingAnswer = null;
+        JSObject r = new JSObject();
+        r.put("ok", true);
+        call.resolve(r);
+    }
+
+    /** 断开 / 停止热点时清空信令 */
+    @PluginMethod
+    public void clearPairing(PluginCall call) {
+        pairingOffer = null;
+        pairingAnswer = null;
+        call.resolve();
+    }
 
     /** 开一个本地 HTTP server，返回 url / ip / port */
     @PluginMethod
@@ -102,6 +124,8 @@ public class HttpServerPlugin extends Plugin {
     @PluginMethod
     public void stopServer(PluginCall call) {
         running = false;
+        pairingOffer = null;
+        pairingAnswer = null;
         if (pool != null) {
             pool.shutdownNow();
             pool = null;
@@ -154,6 +178,8 @@ public class HttpServerPlugin extends Plugin {
     @Override
     protected void handleOnDestroy() {
         running = false;
+        pairingOffer = null;
+        pairingAnswer = null;
         if (pool != null) { pool.shutdownNow(); pool = null; }
         if (serverSocket != null) {
             try { serverSocket.close(); } catch (IOException ignored) {}
@@ -175,16 +201,81 @@ public class HttpServerPlugin extends Plugin {
             // 解析 "GET /ping HTTP/1.1"
             String[] parts = line.split(" ");
             if (parts.length < 2) { client.close(); return; }
+            String method = parts[0];
             String path = parts[1];
+
+            // 读 headers（主要是 Content-Length，用来读 POST body）
+            int contentLength = 0;
+            String headerLine;
+            while ((headerLine = br.readLine()) != null && !headerLine.isEmpty()) {
+                String lower = headerLine.toLowerCase(Locale.ROOT);
+                if (lower.startsWith("content-length:")) {
+                    try {
+                        contentLength = Integer.parseInt(headerLine.substring(15).trim());
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            // 浏览器 POST JSON 前会先发 OPTIONS 预检
+            if ("OPTIONS".equals(method)) {
+                writeCorsPreflight(client);
+                return;
+            }
+
+            // GET /offer：返回本机发布的 Offer 配对码
+            if ("GET".equals(method) && "/offer".equals(path)) {
+                if (pairingOffer == null || pairingOffer.isEmpty()) {
+                    writeJson(client, 404, "{\"error\":\"no offer\"}");
+                    return;
+                }
+                try {
+                    JSONObject body = new JSONObject();
+                    body.put("code", pairingOffer);
+                    body.put("app", "DS Lite");
+                    writeJson(client, 200, body.toString());
+                } catch (JSONException e) {
+                    writeJson(client, 500, "{\"error\":\"encode failed\"}");
+                }
+                return;
+            }
+
+            // POST /answer：其他设备返回 Answer，转交给 WebView 应用
+            if ("POST".equals(method) && "/answer".equals(path)) {
+                StringBuilder body = new StringBuilder();
+                int remaining = contentLength;
+                char[] buffer = new char[1024];
+                while (remaining > 0) {
+                    int read = br.read(buffer, 0, Math.min(buffer.length, remaining));
+                    if (read < 0) break;
+                    body.append(buffer, 0, read);
+                    remaining -= read;
+                }
+                try {
+                    JSONObject payload = new JSONObject(body.toString());
+                    String code = payload.optString("code", null);
+                    if (code == null || code.isEmpty()) {
+                        writeJson(client, 400, "{\"error\":\"missing code\"}");
+                        return;
+                    }
+                    pairingAnswer = code;
+                    JSObject data = new JSObject();
+                    data.put("code", code);
+                    notifyListeners("answer", data);
+                    writeJson(client, 200, "{\"ok\":true}");
+                } catch (Exception e) {
+                    writeJson(client, 400, "{\"error\":\"bad json\"}");
+                }
+                return;
+            }
 
             String json;
             switch (path) {
                 case "/ping":
-                    JSObject body = new JSObject();
-                    body.put("ok", true);
-                    body.put("app", "DS Lite");
-                    try { body.put("deviceId", getContext().getPackageName()); } catch (Exception ignored) {}
-                    json = body.toString();
+                    JSObject ping = new JSObject();
+                    ping.put("ok", true);
+                    ping.put("app", "DS Lite");
+                    try { ping.put("deviceId", getContext().getPackageName()); } catch (Exception ignored) {}
+                    json = ping.toString();
                     break;
                 case "/devices":
                     org.json.JSONArray arr = new org.json.JSONArray();
@@ -194,22 +285,48 @@ public class HttpServerPlugin extends Plugin {
                     json = "{\"error\":\"not found\"}";
                     break;
             }
-            int code = path.startsWith("/") && (path.equals("/ping") || path.equals("/devices")) ? 200 : 404;
-            writeJson(client, code, json);
+            boolean known = path.equals("/ping") || path.equals("/devices");
+            if (!known) {
+                // 让 POST /answer 之外的方法也有明确响应
+                writeJson(client, 404, "{\"error\":\"not found\"}");
+                return;
+            }
+            writeJson(client, 200, json);
         } catch (IOException ignored) {
         } finally {
             try { client.close(); } catch (IOException ignored) {}
         }
     }
 
+    private void writeCorsPreflight(Socket client) {
+        try {
+            String header = "HTTP/1.1 204 No Content\r\n"
+                    + "Access-Control-Allow-Origin: *\r\n"
+                    + "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+                    + "Access-Control-Allow-Headers: Content-Type\r\n"
+                    + "Access-Control-Max-Age: 86400\r\n"
+                    + "Content-Length: 0\r\n\r\n";
+            OutputStream os = client.getOutputStream();
+            os.write(header.getBytes("UTF-8"));
+            os.flush();
+        } catch (IOException ignored) {}
+    }
+
     private void writeJson(Socket client, int code, String json) {
         try {
             byte[] bytes = json.getBytes("UTF-8");
-            String statusText = code == 200 ? "OK" : code == 404 ? "Not Found" : "Error";
+            String statusText =
+                code == 200 ? "OK" :
+                code == 204 ? "No Content" :
+                code == 400 ? "Bad Request" :
+                code == 404 ? "Not Found" :
+                code == 503 ? "Service Unavailable" : "Error";
             String header = "HTTP/1.1 " + code + " " + statusText + "\r\n"
                     + "Content-Type: application/json; charset=utf-8\r\n"
                     + "Content-Length: " + bytes.length + "\r\n"
                     + "Access-Control-Allow-Origin: *\r\n"
+                    + "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+                    + "Access-Control-Allow-Headers: Content-Type\r\n"
                     + "Connection: close\r\n\r\n";
             OutputStream os = client.getOutputStream();
             os.write(header.getBytes("UTF-8"));

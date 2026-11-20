@@ -31,6 +31,9 @@ type SyncListener = (data: unknown) => void
 
 const STUN_SERVERS: RTCConfiguration['iceServers'] = [
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  // 国内可用的公共 STUN（Google 常被墙，失败时还有这些兜底）
+  { urls: ['stun:stun.miwifi.com:3478'] },
+  { urls: ['stun:stun.chat.bilibili.com:3478'] },
 ]
 
 /** 压缩后的配对码：base64(SDP JSON)，包含必要元数据做版本校验 */
@@ -50,11 +53,48 @@ export class SyncTransport extends EventTarget {
   private role: SyncRole | null = null
   private _state: SyncTransportState = 'idle'
   private listeners = new Map<string, Set<SyncListener>>()
+  /** true = 只用主机候选（同一局域网直连），不请求 STUN，建码更快 */
+  private lanOnly: boolean
 
-  constructor() {
+  constructor(opts: { lanOnly?: boolean } = {}) {
     super()
-    // 诊断日志：on 方法是否正确挂载
-    console.log('[SyncTransport] new instance, on is:', typeof (this as any).on)
+    this.lanOnly = opts.lanOnly ?? true
+  }
+
+  /** 切换连接模式；已有半成品连接会先丢弃，便于重新配对 */
+  setLanOnly(v: boolean) {
+    if (this.lanOnly === v) return
+    this.lanOnly = v
+    if (this.pc) this.resetPeer()
+  }
+
+  get iceMode() {
+    return this.lanOnly ? 'lan-only' : 'stun'
+  }
+
+  private newPeer(): RTCPeerConnection {
+    this.pc = new RTCPeerConnection({
+      iceServers: this.lanOnly ? [] : STUN_SERVERS,
+      iceCandidatePoolSize: 0,
+    })
+    return this.pc
+  }
+
+  /** 主动断开：关闭底层连接但保留事件监听，方便直接重新配对 */
+  reset() {
+    this.resetPeer()
+  }
+
+  get localRole(): SyncRole | null {
+    return this.role
+  }
+
+  /** 丢弃当前连接但保留事件监听（用于重试配对） */
+  private resetPeer() {
+    if (this.dc) { try { this.dc.close() } catch {} this.dc = null }
+    if (this.pc) { try { this.pc.close() } catch {} this.pc = null }
+    this.role = null
+    this.setState('idle')
   }
 
   get state() {
@@ -95,22 +135,23 @@ export class SyncTransport extends EventTarget {
    * 内部会等待 ICE gathering 完成再返回，保证 SDP 里包含所有候选地址。
    */
   async createPairingCode(opts: { device?: string } = {}): Promise<PairingCode> {
-    if (this.pc) throw new Error('SyncTransport 已在运行')
+    // 允许重试：上一次没连上时可以重新生成
+    if (this.pc) this.resetPeer()
     this.role = 'host'
-    this.pc = new RTCPeerConnection({ iceServers: STUN_SERVERS })
+    const pc = this.newPeer()
 
     this.setupPeerEvents()
-    this.dc = this.pc.createDataChannel('sync', { ordered: true })
+    this.dc = pc.createDataChannel('sync', { ordered: true })
     this.setupDC()
 
-    const offer = await this.pc.createOffer()
-    await this.pc.setLocalDescription(offer)
+    const offer = await pc.createOffer()
+    await pc.setLocalDescription(offer)
     await this.waitIceGathering()
 
-    const code = encodePairing({
+    const code = await encodePairing({
       v: 1,
       type: 'offer',
-      sdp: this.pc.localDescription!.sdp,
+      sdp: pc.localDescription!.sdp,
       device: opts.device ?? detectDevice(),
     })
     this.setState('offer_generated')
@@ -123,7 +164,7 @@ export class SyncTransport extends EventTarget {
    *  - Guest 收到 Offer → setRemote → createAnswer → 返回自己的配对码
    */
   async applyPairingCode(code: PairingCode): Promise<PairingCode | null> {
-    const payload = decodePairing(code)
+    const payload = await decodePairing(code)
 
     if (this.role === 'host') {
       if (payload.type !== 'answer') throw new Error('Host 只能接收 answer 码')
@@ -134,27 +175,27 @@ export class SyncTransport extends EventTarget {
     }
 
     // Guest 模式
-    if (this.pc) throw new Error('SyncTransport 已在运行')
+    if (this.pc) this.resetPeer()
     this.role = 'guest'
-    this.pc = new RTCPeerConnection({ iceServers: STUN_SERVERS })
+    const pc = this.newPeer()
     this.setupPeerEvents()
 
     // Guest 等对方的 DataChannel
-    this.pc.ondatachannel = (e) => {
+    pc.ondatachannel = (e) => {
       this.dc = e.channel
       this.setupDC()
     }
 
     if (payload.type !== 'offer') throw new Error('Guest 需要 offer 码')
-    await this.pc.setRemoteDescription({ type: 'offer', sdp: payload.sdp })
-    const answer = await this.pc.createAnswer()
-    await this.pc.setLocalDescription(answer)
+    await pc.setRemoteDescription({ type: 'offer', sdp: payload.sdp })
+    const answer = await pc.createAnswer()
+    await pc.setLocalDescription(answer)
     await this.waitIceGathering()
 
-    const answerCode = encodePairing({
+    const answerCode = await encodePairing({
       v: 1,
       type: 'answer',
-      sdp: this.pc.localDescription!.sdp,
+      sdp: pc.localDescription!.sdp,
       device: detectDevice(),
     })
     this.setState('connecting')
@@ -174,7 +215,6 @@ export class SyncTransport extends EventTarget {
 
   /** 关闭连接并清理 */
   close() {
-    this.listeners.clear()
     if (this.dc) {
       try { this.dc.close() } catch {}
       this.dc = null
@@ -184,24 +224,43 @@ export class SyncTransport extends EventTarget {
       this.pc = null
     }
     this.role = null
+    // 先通知状态，再清监听——否则 GUI 收不到 closed
     this.setState('closed')
+    this.listeners.clear()
   }
 
   // --- 内部 ---
 
   private setupPeerEvents() {
     if (!this.pc) return
+    // 候选诊断：把候选类型打到 UI 日志里，连不上时能看出卡在哪
+    this.pc.onicecandidate = (e) => {
+      if (e.candidate) {
+        this.emit('candidate', {
+          type: e.candidate.type ?? 'host',
+          protocol: e.candidate.protocol ?? '',
+          address: e.candidate.address ?? '',
+        })
+      } else {
+        this.emit('gathering-done', null)
+      }
+    }
     this.pc.oniceconnectionstatechange = () => {
       const s = this.pc!.iceConnectionState
       console.log('[SyncTransport] iceConnectionState:', s)
       this.emit('iceState', s)
       if (s === 'connected' || s === 'completed') {
+        // 这里只更新状态；'open' 等 DataChannel 真正可写后再发（setupDC 的 onopen），
+        // 否则握手 hello 会在通道还没就绪时被丢弃，表现为「连上了但什么都同步不过去」
         this.setState('connected')
-        this.emit('open', null)
-      } else if (s === 'failed' || s === 'disconnected') {
+      } else if (s === 'disconnected') {
+        // 息屏 / 切后台 / WiFi 短暂休眠都会走到这里，是可恢复的中间态，
+        // 不能直接判死，否则一息屏 UI 就永远显示连接失败
+        if (this._state === 'connected') this.setState('connecting')
+      } else if (s === 'failed') {
         // 收集一下候选对，帮诊断
         try {
-          const pairs = this.pc!.getSctpTransports?.() ?? []
+          const pairs = (this.pc as any).getSctpTransports?.() ?? []
           for (const t of pairs) {
             const c = t.iceTransport?.selectedCandidatePair
             if (c) console.log('[SyncTransport] selected pair:', c)
@@ -214,6 +273,14 @@ export class SyncTransport extends EventTarget {
       const s = this.pc!.connectionState
       console.log('[SyncTransport] connectionState:', s)
       this.emit('connState', s)
+      if (this._state === 'closed') return
+      // 双保险：connectionState 恢复时也把 UI 状态拉回来
+      if (s === 'connected') this.setState('connected')
+      else if (s === 'disconnected') {
+        if (this._state === 'connected') this.setState('connecting')
+      } else if (s === 'failed') {
+        this.setState('failed')
+      }
     }
     this.pc.onicecandidateerror = (ev) => {
       console.warn('[SyncTransport] iceCandidateError:', ev)
@@ -233,7 +300,11 @@ export class SyncTransport extends EventTarget {
       try { data = JSON.parse(e.data) } catch { /* binary 或纯文本，原样传 */ }
       this.emit('message', data)
     }
-    this.dc.onclose = () => this.emit('dc-close', null)
+    this.dc.onclose = () => {
+      this.emit('dc-close', null)
+      // 手动断开时状态已是 idle/closed；意外关闭则先标成连接中，等 ICE 恢复
+      if (this._state === 'connected') this.setState('connecting')
+    }
     this.dc.onerror = (e) => this.emit('dc-error', e)
   }
 
@@ -254,22 +325,81 @@ export class SyncTransport extends EventTarget {
 }
 
 // --- 配对码编解码 ---
+//
+// SDP 很长（1-2KB），直接塞二维码会密到扫不出来。
+// 优先用 gzip 压缩再 base64url（WebView/Chrome 都支持 CompressionStream），
+// 不支持时退回不压缩的旧格式；旧码（无前缀）仍然能解。
 
-export function encodePairing(p: PairingPayload): PairingCode {
-  const json = JSON.stringify(p)
-  // base64 → base64url（去掉 + / =），更短更安全
-  return btoa(unescape(encodeURIComponent(json)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+const COMPRESS_PREFIX = 'z1.'
+
+function toBase64Url(bytes: Uint8Array): string {
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i])
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-export function decodePairing(code: PairingCode): PairingPayload {
+function fromBase64Url(code: string): Uint8Array {
+  const b64 = code.replace(/-/g, '+').replace(/_/g, '/')
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i)
+  return bytes
+}
+
+async function gzip(text: string): Promise<Uint8Array | null> {
+  const CS = (globalThis as any).CompressionStream
+  if (typeof CS !== 'function') return null
   try {
-    const b64 = code.replace(/-/g, '+').replace(/_/g, '/')
-    const json = decodeURIComponent(escape(atob(b64)))
+    const stream = new Blob([new TextEncoder().encode(text)])
+      .stream()
+      .pipeThrough(new CS('gzip'))
+    return new Uint8Array(await new Response(stream).arrayBuffer())
+  } catch {
+    return null
+  }
+}
+
+async function gunzip(bytes: Uint8Array): Promise<string> {
+  const DS = (globalThis as any).DecompressionStream
+  if (typeof DS !== 'function') throw new Error('当前环境不支持压缩配对码')
+  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DS('gzip'))
+  return await new Response(stream).text()
+}
+
+export async function encodePairing(p: PairingPayload): Promise<PairingCode> {
+  // 默认输出未压缩格式：浏览器版 / 旧版 APK 都能解析，保证跨端互通
+  return toBase64Url(new TextEncoder().encode(JSON.stringify(p)))
+}
+
+/**
+ * 仅用于二维码显示：gzip 压缩后体积约减半，扫起来更稳。
+ * 文本复制仍然用未压缩的 encodePairing()，避免旧客户端解不开。
+ */
+export async function compactPairingCode(code: PairingCode): Promise<PairingCode> {
+  try {
+    const payload = await decodePairing(code)
+    const packed = await gzip(JSON.stringify(payload))
+    if (!packed) return code
+    return COMPRESS_PREFIX + toBase64Url(packed)
+  } catch {
+    return code
+  }
+}
+
+export async function decodePairing(code: PairingCode): Promise<PairingPayload> {
+  const trimmed = code.trim()
+  try {
+    let json: string
+    if (trimmed.startsWith(COMPRESS_PREFIX)) {
+      json = await gunzip(fromBase64Url(trimmed.slice(COMPRESS_PREFIX.length)))
+    } else {
+      const bin = atob(trimmed.replace(/-/g, '+').replace(/_/g, '/'))
+      json = decodeURIComponent(escape(bin))
+    }
     const p = JSON.parse(json) as PairingPayload
     if (!p.sdp || !p.type || !p.v) throw new Error('字段缺失')
     return p
-  } catch (e) {
+  } catch {
     throw new Error('配对码解析失败，可能已损坏')
   }
 }
