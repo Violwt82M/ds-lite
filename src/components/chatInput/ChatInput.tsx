@@ -3,11 +3,7 @@ import clsx from 'clsx'
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  IconCameraOutline16,
   IconGlobeLanguageOutline14,
-  IconPaperclipOutline16,
-  IconPhotoOutline16,
-  IconPlusOutline16,
   IconSendOutline16,
   IconStopFill16,
   IconThinkOutline14,
@@ -33,9 +29,8 @@ import {
   useDrafts,
 } from '../../services/chat/drafts.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
-import { IconButton } from '../base/IconButton.js'
-import { Menu, type MenuOption } from '../base/Menu.js'
 import { Tooltip } from '../base/Tooltip.js'
+import { MorePanel } from './MorePanel.js'
 import { ensureApiKey } from '../settings/settingsDialogState.js'
 import { DragMask, useFileDrop } from './DragMask.js'
 import { showToast } from '../base/toastState.js'
@@ -253,6 +248,8 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
 
   // 排队、上传中或上传失败的附件都留在输入框，全部上传成功后才能发送
   const canSend = !importingHistory && !streaming && voice.status === 'idle' && draftReady
+  // 原版默认没有发送键：输入框里有内容（文字或附件）时才把语音键换成发送键
+  const hasContent = text.trim() !== '' || attachments.length > 0
 
   const send = () => {
     if (
@@ -274,39 +271,10 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     }
   }
 
-  /** 「更多」入口：对齐原版的拍照 / 照片 / 文件三个选项 */
-  const moreOptions: MenuOption[] = [
-    {
-      key: 'camera',
-      label: t('moreCamera'),
-      icon: <IconCameraOutline16 />,
-      onSelect: () => {
-        if (ensureApiKey()) {
-          cameraInputRef.current?.click()
-        }
-      },
-    },
-    {
-      key: 'photo',
-      label: t('morePhoto'),
-      icon: <IconPhotoOutline16 />,
-      onSelect: () => {
-        if (ensureApiKey()) {
-          photoInputRef.current?.click()
-        }
-      },
-    },
-    {
-      key: 'file',
-      label: t('moreFile'),
-      icon: <IconPaperclipOutline16 />,
-      onSelect: () => {
-        if (ensureApiKey()) {
-          fileInputRef.current?.click()
-        }
-      },
-    },
-  ]
+  /** 更多面板里点最近的图片：当成新附件加进草稿 */
+  const attachRecentImage = (file: File) => {
+    acceptFiles([file])
+  }
 
   return (
     <div
@@ -464,35 +432,63 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
           </Tooltip>
         </div>
         <div className={styles.right}>
-          <VoiceButton
-            status={voice.status}
-            disabled={!voice.available}
-            seconds={voice.seconds}
-            onClick={() => {
-              if (
-                voice.status !== 'idle' ||
-                (!useChatStore.getState().importingHistory && ensureApiKey())
-              ) {
-                void voice.toggle()
+          {/* 更多 → 语音 / 发送（有内容时语音键换成发送键，清空后变回语音，对齐原版） */}
+          <MorePanel
+            disabled={importingHistory}
+            onCamera={() => {
+              if (ensureApiKey()) {
+                cameraInputRef.current?.click()
               }
             }}
+            onPhoto={() => {
+              if (ensureApiKey()) {
+                photoInputRef.current?.click()
+              }
+            }}
+            onFile={() => {
+              if (ensureApiKey()) {
+                fileInputRef.current?.click()
+              }
+            }}
+            onPickImage={attachRecentImage}
           />
-          <Menu options={moreOptions}>
-            {({ toggle }) => (
-              <IconButton
-                size="m"
-                tone="primary"
-                icon={<IconPlusOutline16 />}
-                tooltip={t('moreAttach')}
-                disabled={importingHistory}
-                onClick={() => {
-                  if (ensureApiKey()) {
-                    toggle()
-                  }
-                }}
-              />
-            )}
-          </Menu>
+          {streaming && sessionId ? (
+            <button
+              type="button"
+              className={styles.sendButton}
+              aria-label={t('chatInputStopButtonTooltip')}
+              onClick={() => {
+                stopReadAloud()
+                stopReply(sessionId)
+              }}
+            >
+              <IconStopFill16 />
+            </button>
+          ) : hasContent && voice.status === 'idle' ? (
+            <button
+              type="button"
+              className={clsx(styles.sendButton, !canSend && styles.disabled)}
+              aria-label={t('send')}
+              aria-disabled={!canSend}
+              onClick={send}
+            >
+              <IconSendOutline16 />
+            </button>
+          ) : (
+            <VoiceButton
+              status={voice.status}
+              disabled={!voice.available}
+              seconds={voice.seconds}
+              onClick={() => {
+                if (
+                  voice.status !== 'idle' ||
+                  (!useChatStore.getState().importingHistory && ensureApiKey())
+                ) {
+                  void voice.toggle()
+                }
+              }}
+            />
+          )}
           <input
             ref={cameraInputRef}
             type="file"
@@ -526,29 +522,6 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               event.target.value = ''
             }}
           />
-          {streaming && sessionId ? (
-            <button
-              type="button"
-              className={styles.sendButton}
-              aria-label={t('chatInputStopButtonTooltip')}
-              onClick={() => {
-                stopReadAloud()
-                stopReply(sessionId)
-              }}
-            >
-              <IconStopFill16 />
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={clsx(styles.sendButton, !canSend && styles.disabled)}
-              aria-label={t('send')}
-              aria-disabled={!canSend}
-              onClick={send}
-            >
-              <IconSendOutline16 />
-            </button>
-          )}
         </div>
       </div>
       {dragging ? <DragMask /> : null}

@@ -240,6 +240,19 @@ export const IconPlusOutline16 = () => (
   </svg>
 )
 
+/** 「更多」：原版是细线圆圈里一个十字；点击时整体顺时针转 45° 变成圆圈叉 */
+export const IconMoreCircle20 = () => (
+  <svg width={20} height={20} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="10" cy="10" r="8.25" stroke="currentColor" strokeWidth="1.6" />
+    <path
+      d="M10 5.8V14.2M5.8 10H14.2"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
 export const IconCameraOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
@@ -258,6 +271,53 @@ export const IconPhotoOutline16 = () => (
       clipRule="evenodd"
       d="M2.4 3.00006C2.06863 3.00006 1.8 3.26869 1.8 3.60006V12.4001C1.8 12.7314 2.06863 13.0001 2.4 13.0001H13.6C13.9314 13.0001 14.2 12.7314 14.2 12.4001V3.60006C14.2 3.26869 13.9314 3.00006 13.6 3.00006H2.4ZM0.400002 3.60006C0.400002 2.49549 1.29543 1.60006 2.4 1.60006H13.6C14.7046 1.60006 15.6 2.49549 15.6 3.60006V12.4001C15.6 13.5046 14.7046 14.4001 13.6 14.4001H2.4C1.29543 14.4001 0.400002 13.5046 0.400002 12.4001V3.60006ZM5.3 6.15006C5.76944 6.15006 6.15 5.7695 6.15 5.30006C6.15 4.83062 5.76944 4.45006 5.3 4.45006C4.83056 4.45006 4.45 4.83062 4.45 5.30006C4.45 5.7695 4.83056 6.15006 5.3 6.15006ZM4.43885 11.6001H11.5611L8.8501 7.90006L6.26248 11.2781L5.07303 9.60006L4.43885 11.6001ZM9.61767 8.53559L12.0768 11.6001H12.6V4.60006H3.4V10.1726L4.61035 8.46224C4.74469 8.25655 4.98964 8.15517 5.24957 8.16577C5.50949 8.17638 5.74259 8.29752 5.85674 8.50151L6.93604 10.4104L9.05101 7.66677C9.19473 7.47778 9.42337 7.37703 9.65536 7.38583C9.88735 7.39463 10.1063 7.51207 10.2348 7.69868L11.6133 9.65346L10.6885 10.4701L9.61767 8.53559Z"
       fill="currentColor"
+    />
+  </svg>
+)
+
+/** 「更多」面板里的大号描边图标：拍照 / 相册 / 文件（原版是细线图标卡片） */
+export const IconCameraOutline24 = () => (
+  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M8.1 5.3L9.2 3.9c.22-.28.56-.44.92-.44h3.76c.36 0 .7.16.92.44l1.1 1.4H19a2 2 0 0 1 2 2v9.3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.3a2 2 0 0 1 2-2h3.1Z"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    />
+    <circle cx="12" cy="12.2" r="3.4" stroke="currentColor" strokeWidth="1.6" />
+  </svg>
+)
+
+export const IconPhotoOutline24 = () => (
+  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect
+      x="3"
+      y="4.4"
+      width="18"
+      height="15.2"
+      rx="2.4"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    />
+    <circle cx="8.3" cy="9.3" r="1.6" stroke="currentColor" strokeWidth="1.4" />
+    <path
+      d="M4.2 17.4l4.4-4.4c.4-.4 1-.4 1.4 0l2.5 2.5 3.4-3.4c.4-.4 1-.4 1.4 0l2.7 2.7"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+export const IconPaperclipOutline24 = () => (
+  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M16.4 7v8.9a4.4 4.4 0 0 1-8.8 0V6.6a2.9 2.9 0 0 1 5.8 0v9.2a1.45 1.45 0 0 1-2.9 0V7.3"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     />
   </svg>
 )

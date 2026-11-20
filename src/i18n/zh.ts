@@ -372,8 +372,9 @@ export const zh = {
   uploadFile: '上传文件',
   moreAttach: '更多',
   moreCamera: '拍照',
-  morePhoto: '照片',
+  morePhoto: '相册',
   moreFile: '文件',
+  moreRecentImage: '附加图片：{name}',
   settingsPersonalityTemp: '人格温度',
   settingsPersonalityTempHint:
     '回复的随机性与人格强度：越靠右越生动多变，越靠左越稳定收敛；默认 1.0 与官方一致，开启深度思考时官方固定为 1.0',

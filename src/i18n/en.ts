@@ -386,8 +386,9 @@ export const en = {
   uploadFile: 'Upload files',
   moreAttach: 'More',
   moreCamera: 'Take photo',
-  morePhoto: 'Photos',
+  morePhoto: 'Albums',
   moreFile: 'Files',
+  moreRecentImage: 'Attach image: {name}',
   settingsPersonalityTemp: 'Personality temperature',
   settingsPersonalityTempHint:
     'Randomness and personality strength: further right is livelier and more varied, further left is steadier. Default 1.0 matches the official default; the server fixes it at 1.0 while deep thinking is on.',
