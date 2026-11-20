@@ -164,7 +164,12 @@ type OpenAiChunk = {
     delta?: { content?: string | null }
     finish_reason?: string | null
   }[]
-  usage?: { prompt_tokens?: number; completion_tokens?: number }
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    prompt_cache_hit_tokens?: number
+    prompt_tokens_details?: { cached_tokens?: number }
+  }
 }
 
 const mapFinishReason = (reason: string | null | undefined): StopReason => {
@@ -223,10 +228,13 @@ async function* streamOpenAi(
       }
     }
     if (chunk.usage) {
+      const prompt = chunk.usage.prompt_tokens ?? 0
+      const cached =
+        chunk.usage.prompt_cache_hit_tokens ?? chunk.usage.prompt_tokens_details?.cached_tokens ?? 0
       usage = {
-        input_tokens: chunk.usage.prompt_tokens ?? 0,
+        input_tokens: Math.max(0, prompt - cached),
         cache_creation_input_tokens: 0,
-        cache_read_input_tokens: 0,
+        cache_read_input_tokens: cached,
         output_tokens: chunk.usage.completion_tokens ?? 0,
       }
     }

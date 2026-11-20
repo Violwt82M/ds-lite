@@ -19,12 +19,12 @@ import {
   getContextLevel,
   getContextUsage,
   getUnfoldedRounds,
-  MANUAL_KEEP_TOKENS,
   splitFoldableRounds,
 } from '../../services/memory/context.js'
 import { closeMemoryPanel, useMemoryPanel } from '../../services/memory/state.js'
 import { saveFile } from '../../services/export/saveFile.js'
 import { setAutoMemory, setMemoryMode, useSettings } from '../../services/settings.js'
+import { formatTokens } from '../../services/usage.js'
 import { Button } from '../base/Button.js'
 import { IconEditOutline16, IconNotebookOutline16, IconTrashOutline16 } from '../base/icons.js'
 import { Modal } from '../base/Modal.js'
@@ -46,12 +46,28 @@ const MemoryPanel = ({ session }: { session: Session }) => {
   const autoMemory = useSettings((state) => state.autoMemory)
   const hasApiKey = useSettings((state) => Boolean(state.apiKey))
   const memoryMode = useSettings((state) => state.memoryMode)
+  const memoryKeepTokens = useSettings((state) => state.memoryKeepTokens)
   const streaming = useChatStore((state) => Boolean(state.streaming[session.id]))
   const notes = session.memory?.notes ?? []
   const roundCount = getUnfoldedRounds(session).length
-  // 手动整理保留最近 1 轮原文，其余折叠成笔记
-  // 与真正整理共用同一套切法：说「能整理」就一定整理得出东西
-  const foldable = splitFoldableRounds(getUnfoldedRounds(session), MANUAL_KEEP_TOKENS).foldable.length
+  // 与真正整理共用同一套保留上下文 token 数：说「能整理」就一定整理得出东西
+  const foldable = splitFoldableRounds(getUnfoldedRounds(session), memoryKeepTokens).foldable.length
+  const tokenStats = useMemo(() => {
+    let totalInput = 0
+    let cacheRead = 0
+    let output = 0
+    for (const msg of session.messages) {
+      if (msg.role === 'assistant' && msg.usage) {
+        totalInput +=
+          msg.usage.input_tokens +
+          msg.usage.cache_creation_input_tokens +
+          msg.usage.cache_read_input_tokens
+        cacheRead += msg.usage.cache_read_input_tokens
+        output += msg.usage.output_tokens
+      }
+    }
+    return { totalInput, cacheRead, output }
+  }, [session.messages])
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null)
   const [instruction, setInstruction] = useState(session.memory?.instruction ?? '')
   const [summaryInstruction, setSummaryInstruction] = useState('')
@@ -188,6 +204,19 @@ const MemoryPanel = ({ session }: { session: Session }) => {
         </div>
         <div className={styles.meta}>{t('memoryRoundCount', { count: roundCount })}</div>
         <div className={styles.meta}>{t('memoryFoldedCount', { count: usage.foldedRounds })}</div>
+        {tokenStats.totalInput > 0 || tokenStats.output > 0 ? (
+          <div className={styles.meta}>
+            {t('memoryCacheHitStats', {
+              cached: formatTokens(tokenStats.cacheRead),
+              input: formatTokens(tokenStats.totalInput),
+              rate:
+                tokenStats.totalInput > 0
+                  ? Math.round((tokenStats.cacheRead / tokenStats.totalInput) * 100)
+                  : 0,
+              output: formatTokens(tokenStats.output),
+            })}
+          </div>
+        ) : null}
         <div className={styles.legend}>
           <div className={styles.legendRow}>
             <span className={styles.dot} data-level="low" />
@@ -434,7 +463,13 @@ const MemoryPanel = ({ session }: { session: Session }) => {
                   ) : null}
                   <div className={styles.noteMeta}>
                     <span className={styles.noteSource}>
-                      {t(note.source === 'auto' ? 'memorySourceAuto' : 'memorySourceManual')}
+                      {t(
+                    note.source === 'auto'
+                      ? 'memorySourceAuto'
+                      : note.source === 'summary'
+                        ? 'memorySourceSummary'
+                        : 'memorySourceManual'
+                  )}
                     </span>
                     <button
                       type="button"

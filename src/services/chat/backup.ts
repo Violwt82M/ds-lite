@@ -57,6 +57,8 @@ export type ImportHistoryOptions = {
   skipImages?: boolean
   /** 只导入这些会话 id；缺省表示整包导入 */
   sessionIds?: string[]
+  /** 允许重新导入本机已有的会话（以新 id 导入为副本，不覆盖本机原会话） */
+  allowDuplicate?: boolean
 }
 
 /** 解析归档里的会话清单，用于导入前让用户挑选（只读，不改动本机数据） */

@@ -32,6 +32,7 @@ import { Tooltip } from '../base/Tooltip.js'
 import { Markdown } from '../markdown/Markdown.js'
 import { SiteThumbnails } from '../search/SiteLogo.js'
 import { toggleSearchPanel, useSearchPanel } from '../search/searchPanelState.js'
+import { useSettings } from '../../services/settings.js'
 import styles from './ReplyArea.module.css'
 import './thinking.markdown.css'
 
@@ -65,15 +66,19 @@ export const ReplyArea = memo(function ReplyArea({
   hasResponse: boolean
 }) {
   useTranslate()
-  // 流式进行中展开思考；发完自动折叠（对齐原版）。历史消息默认折叠，点标题可再展开。
+  // 流式进行中展开思考；发完自动折叠（对齐原版，可在「设置 → 外观」关掉）。
+  // 关掉后：新回答生成完保持展开；历史消息仍默认折叠，点标题可再展开。
+  const collapseThinking = useSettings((state) => state.collapseThinking)
   const [open, setOpen] = useState(() => streaming)
   const previousStreaming = useRef(streaming)
   useEffect(() => {
     if (streaming !== previousStreaming.current) {
       previousStreaming.current = streaming
-      setOpen(streaming)
+      if (streaming || collapseThinking) {
+        setOpen(streaming)
+      }
     }
-  }, [streaming])
+  }, [streaming, collapseThinking])
   const titleActive = streaming && !hasResponse
   useTicker(titleActive, 1000)
   if (view.steps.length === 0 && !(message.thinking && streaming)) {

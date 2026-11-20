@@ -12,7 +12,14 @@ import {
 } from '../../services/appearance.js'
 import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
 import { toAvatarDataUrl } from '../../utils/image.js'
-import { setAiBubble, setBubbleSkin, useSettings } from '../../services/settings.js'
+import {
+  setAiBubble,
+  setBubbleSkin,
+  setCollapseThinking,
+  setShowReadMark,
+  setShowTokenUsage,
+  useSettings,
+} from '../../services/settings.js'
 import { Button } from '../base/Button.js'
 import { IconCheckOutline16 } from '../base/icons.js'
 import { ImageCropDialog } from '../base/ImageCropDialog.js'
@@ -181,6 +188,9 @@ export const AppearanceSetting = () => {
   const aiBubbleColor = useAppearance((state) => state.aiBubbleColor)
   const bubbleSkin = useSettings((state) => state.bubbleSkin)
   const aiBubble = useSettings((state) => state.aiBubble)
+  const showReadMark = useSettings((state) => state.showReadMark)
+  const collapseThinking = useSettings((state) => state.collapseThinking)
+  const showTokenUsage = useSettings((state) => state.showTokenUsage)
   const fileRef = useRef<HTMLInputElement>(null)
   const [cropFile, setCropFile] = useState<File | null>(null)
 
@@ -285,6 +295,48 @@ export const AppearanceSetting = () => {
             onClick={() => setAiBubble(!aiBubble)}
           >
             {t(aiBubble ? 'bubbleSkinOn' : 'bubbleSkinOff')}
+          </Button>
+        }
+      />
+      <Row
+        label={t('settingsShowReadMark')}
+        description={t('showReadMarkHint')}
+        action={
+          <Button
+            variant={showReadMark ? 'primary' : 'outlined'}
+            size="m"
+            className={settingsStyles.cellButton}
+            onClick={() => setShowReadMark(!showReadMark)}
+          >
+            {t(showReadMark ? 'bubbleSkinOn' : 'bubbleSkinOff')}
+          </Button>
+        }
+      />
+      <Row
+        label={t('settingsCollapseThinking')}
+        description={t('collapseThinkingHint')}
+        action={
+          <Button
+            variant={collapseThinking ? 'primary' : 'outlined'}
+            size="m"
+            className={settingsStyles.cellButton}
+            onClick={() => setCollapseThinking(!collapseThinking)}
+          >
+            {t(collapseThinking ? 'bubbleSkinOn' : 'bubbleSkinOff')}
+          </Button>
+        }
+      />
+      <Row
+        label={t('settingsShowTokenUsage')}
+        description={t('showTokenUsageHint')}
+        action={
+          <Button
+            variant={showTokenUsage ? 'primary' : 'outlined'}
+            size="m"
+            className={settingsStyles.cellButton}
+            onClick={() => setShowTokenUsage(!showTokenUsage)}
+          >
+            {t(showTokenUsage ? 'bubbleSkinOn' : 'bubbleSkinOff')}
           </Button>
         }
       />

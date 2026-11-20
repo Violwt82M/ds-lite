@@ -49,8 +49,6 @@ import {
   estimateMessageTokens,
   formatCharCount,
   getContextUsage,
-  MANUAL_KEEP_TOKENS,
-  MEMORY_KEEP_TOKENS,
   splitFoldableRounds,
   getFoldedChars,
   getFoldedIds,
@@ -226,7 +224,10 @@ const getStreamController = (id: string) => {
 }
 
 const sameSummary = (a: SessionSummary, b: SessionSummary) =>
-  a.title === b.title && a.createdAt === b.createdAt && a.updatedAt === b.updatedAt
+  a.title === b.title &&
+  a.createdAt === b.createdAt &&
+  a.updatedAt === b.updatedAt &&
+  Boolean(a.memoryBackup) === Boolean(b.memoryBackup)
 
 const sessionAccess = new Map<string, number>()
 const unsavedSessions = new Set<string>()
@@ -1045,6 +1046,44 @@ export const forkSession = (sessionId: string, messageId: string): string | null
   return forked.id
 }
 
+/**
+ * 复制整条会话为独立分支（0 token 消耗）：完整保留消息树、已整理的记忆笔记与 foldedIds，
+ * 以及人设绑定；两边后续聊天互不干扰，共同前缀还能继续命中 DeepSeek 缓存。
+ */
+export const duplicateSession = async (sessionId: string): Promise<string | null> => {
+  const state = get()
+  if (state.importingHistory || deletingSessions.has(sessionId) || getStreamController(sessionId)) {
+    return null
+  }
+  const source = getSession(sessionId) ?? (await db.loadSession(sessionId))
+  if (!source) {
+    return null
+  }
+  const now = Date.now()
+  const baseTitle = source.title.trim() || translate('untitledChat')
+  const copy: Session = {
+    ...(JSON.parse(JSON.stringify(source)) as Session),
+    id: createId(),
+    title: `${baseTitle}${translate('sessionCopySuffix')}`,
+    createdAt: now,
+    updatedAt: now,
+  }
+  const scope = usePersonaScope.getState().map[sessionId]
+  if (scope !== undefined) {
+    setSessionPersona(copy.id, scope)
+  } else {
+    bindPersonaForNewSession(copy.id)
+  }
+  touchSession(copy.id)
+  set((current) => ({
+    sessions: sortSessions([toSessionSummary(copy), ...current.sessions], current.pins),
+    sessionCache: { ...current.sessionCache, [copy.id]: copy },
+    activeId: copy.id,
+  }))
+  persist(copy.id)
+  return copy.id
+}
+
 /** 重新生成当前路径上的回答：在原问题下新增版本，不覆盖旧回答和后续对话。 */
 export const regenerateReply = (sessionId: string, messageId?: string) => {
   if (get().importingHistory || deletingSessions.has(sessionId)) {
@@ -1454,9 +1493,10 @@ const runCompaction = async (
   const rounds = getUnfoldedRounds(session)
   // 近期原文按 token 保底，不按轮数：同一轮可以是 200 字也可以是 3000 字。
   // 切法与横幅、面板共用 splitFoldableRounds，界面上说「能整理」就一定能整理。
+  const keepTokens = useSettings.getState().memoryKeepTokens
   const { kept, foldable: candidates } = splitFoldableRounds(
     rounds,
-    source === 'manual' ? MANUAL_KEEP_TOKENS : MEMORY_KEEP_TOKENS,
+    keepTokens,
     options.keep
   )
   const minimum = options.minimum ?? (source === 'manual' ? 1 : MEMORY_MIN_FOLD_ROUNDS)
@@ -1625,6 +1665,29 @@ const runCompaction = async (
     }
     const now = Date.now()
     const foldedIds = folded.map(([, reply]) => reply.id)
+    // 整理前自动复制一份完整分支作为「后悔药」：保留整理前的上下文、旧笔记、foldedIds 与人设绑定
+    const preCompact = getSession(sessionId)
+    if (preCompact) {
+      const baseTitle = preCompact.title.trim() || translate('untitledChat')
+      const backup: Session = {
+        ...(JSON.parse(JSON.stringify(preCompact)) as Session),
+        id: createId(),
+        title: `${baseTitle}${translate('memoryBackupTitleSuffix')}`,
+        createdAt: now,
+        updatedAt: now - 1,
+        memoryBackup: true,
+      }
+      const scope = usePersonaScope.getState().map[sessionId]
+      if (scope !== undefined) {
+        setSessionPersona(backup.id, scope)
+      }
+      touchSession(backup.id)
+      set((current) => ({
+        sessions: sortSessions([toSessionSummary(backup), ...current.sessions], current.pins),
+        sessionCache: { ...current.sessionCache, [backup.id]: backup },
+      }))
+      persist(backup.id)
+    }
     updateMemory(sessionId, (memory) => ({
       // 覆盖式：模型输出的就是最新一版笔记，旧笔记被整体替换
       notes: rewriteNotes(memory, notes, now, MAX_BIG_NOTE_CHARS),
@@ -1632,9 +1695,10 @@ const runCompaction = async (
       foldedRounds: memory.foldedRounds + foldedIds.length,
       updatedAt: now,
     }))
-    // 自动整理是后台行为，留一条一次性提示，免得用户觉得"它怎么突然失忆了"
+    // 自动整理是后台行为，留一条一次性提示并弹 toast 告知已自动备份原会话
     if (source === 'auto') {
       setMemoryNotice(sessionId, foldedIds.length)
+      showToast({ key: 'memoryAutoCompactBackupToast', params: { count: foldedIds.length } })
     }
     return true
   } catch (error) {

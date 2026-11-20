@@ -49,6 +49,7 @@ export const UserMessage = memo(function UserMessage({
   const userAvatar = useAppearance((state) => state.userAvatar)
   // 气泡皮肤：消息由客户端画气泡，模型只输出纯文本
   const bubbleSkin = useSettings((state) => state.bubbleSkin)
+  const showReadMark = useSettings((state) => state.showReadMark)
   const canSend = !busy && (draft.trim() !== '' || message.files.length > 0)
 
   useLayoutEffect(() => {
@@ -131,7 +132,7 @@ export const UserMessage = memo(function UserMessage({
           {message.content ? (
             <div className={styles.bubbleRow}>
               <div className={`${styles.bubble} ds-user-bubble`}>{message.content}</div>
-              {bubbleSkin ? <span className={styles.readMark}>{t('readMark')}</span> : null}
+              {bubbleSkin && showReadMark ? <span className={styles.readMark}>{t('readMark')}</span> : null}
             </div>
           ) : null}
           <div className={styles.bottom}>

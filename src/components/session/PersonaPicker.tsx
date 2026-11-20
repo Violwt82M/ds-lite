@@ -80,16 +80,32 @@ const PersonaPicker = ({
               <button
                 key={entry.id}
                 type="button"
-                className={clsx(styles.option, selected && styles.optionActive)}
+                className={clsx(
+                  styles.option,
+                  entry.builtin && styles.optionBuiltin,
+                  selected && styles.optionActive
+                )}
                 onClick={() => pick(entry.id)}
               >
                 {entry.avatar ? (
                   <img className={styles.avatar} src={entry.avatar} alt="" />
+                ) : entry.builtin ? (
+                  <span className={styles.avatarBuiltin} aria-hidden>
+                    💡
+                  </span>
                 ) : (
                   <span className={styles.avatarText}>{entry.card.name.slice(0, 1)}</span>
                 )}
                 <span className={styles.optionText}>
-                  <span className={styles.optionLabel}>{entry.card.name}</span>
+                  <span className={styles.optionLabel}>
+                    {entry.card.name}
+                    {entry.builtin ? (
+                      <span className={styles.builtinBadge}>{t('personaBuiltinBadge')}</span>
+                    ) : null}
+                  </span>
+                  {entry.builtin ? (
+                    <span className={styles.optionNote}>{t('personaBuiltinHint')}</span>
+                  ) : null}
                 </span>
                 {selected ? <span className={styles.check}>✓</span> : null}
               </button>

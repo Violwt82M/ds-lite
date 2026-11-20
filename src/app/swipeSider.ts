@@ -27,6 +27,10 @@ const startedInHScroller = (target: EventTarget | null): boolean => {
   }
   return false
 }
+const startedInDialog = (target: EventTarget | null): boolean =>
+  (target instanceof Element && target.closest('[role="dialog"], [aria-modal="true"]') !== null) ||
+  document.querySelector('[role="dialog"], [aria-modal="true"]') !== null
+
 /** 松手时超过这个进度就吸附到打开，否则收回 */
 const OPEN_THRESHOLD = 0.32
 /** 抽屉开着时左划：拖过抽屉宽度的这个比例就关回去 */
@@ -51,7 +55,7 @@ export const useSwipeSider = (ref: RefObject<HTMLElement>, enabled: boolean) => 
       if (event.touches.length !== 1 || useMobileSider.getState().open) {
         return
       }
-      if (startedInHScroller(event.target)) {
+      if (startedInDialog(event.target) || startedInHScroller(event.target)) {
         return
       }
       const touch = event.touches[0]
@@ -137,7 +141,7 @@ export const useSwipeSiderClose = (enabled: boolean, onSwipeEnd: () => void) => 
         return
       }
       // 横向滚动区域里的左滑是用户在翻内容，不能拿来关抽屉
-      if (startedInHScroller(event.target)) {
+      if (startedInDialog(event.target) || startedInHScroller(event.target)) {
         return
       }
       const touch = event.touches[0]

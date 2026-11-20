@@ -14,7 +14,12 @@ import {
   usePersona,
 } from '../../services/persona/store.js'
 import { toAvatarDataUrl } from '../../utils/image.js'
-import { setPersonalityTemperature, setSafety, useSettings } from '../../services/settings.js'
+import {
+  setPersonalityTemperature,
+  setSafety,
+  temperatureValue,
+  useSettings,
+} from '../../services/settings.js'
 import { usesOpenAiProtocol } from '../../services/api/protocol.js'
 import { Button } from '../base/Button.js'
 import { IconEditOutline16, IconUploadOutline14 } from '../base/icons.js'
@@ -133,7 +138,7 @@ export const PersonaSetting = () => {
             />
             <span className={settingsStyles.rangeValue}>
               {t('settingsPersonalityTempValue', {
-                value: (personalityTemperature / 50).toFixed(1),
+                value: temperatureValue(personalityTemperature).toFixed(2).replace(/0$/, ''),
               })}
             </span>
           </div>
@@ -203,23 +208,28 @@ export const PersonaSetting = () => {
                   <span className={styles.avatarText}>{entry.card.name.slice(0, 1)}</span>
                 )}
                 {entry.card.name}
+                {entry.builtin ? <span className={styles.tag}>{t('personaBuiltinBadge')}</span> : null}
                 {entry.id === activeId ? <span className={styles.tag}>{t('personaInUse')}</span> : null}
               </button>
-              <button
-                type="button"
-                className={styles.editButton}
-                aria-label={t('personaEdit')}
-                onClick={() => setEditor({ id: entry.id, initial: entry.card, avatar: entry.avatar })}
-              >
-                <IconEditOutline16 />
-              </button>
-              <button
-                type="button"
-                className={styles.remove}
-                onClick={() => removePersonaCard(entry.id)}
-              >
-                {t('personaDelete')}
-              </button>
+              {entry.builtin ? null : (
+                <>
+                  <button
+                    type="button"
+                    className={styles.editButton}
+                    aria-label={t('personaEdit')}
+                    onClick={() => setEditor({ id: entry.id, initial: entry.card, avatar: entry.avatar })}
+                  >
+                    <IconEditOutline16 />
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.remove}
+                    onClick={() => removePersonaCard(entry.id)}
+                  >
+                    {t('personaDelete')}
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>

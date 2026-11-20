@@ -178,8 +178,8 @@ export const buildRequest = (options: BuildRequestOptions): BuiltRequest => {
     safety_check: { level: standardOnly ? 'low' : safety },
     tools,
     ...(wantTitle && !standardOnly && !isPro ? { title: { enabled: true } } : {}),
-    // 只在用户调过人格温度时传（默认 1.0 与不传等价，保持旧请求形态）
-    ...(temperature !== undefined ? { temperature } : {}),
+    // 只在用户调过人格温度且未开深度思考时传（默认 1.0 与不传等价；思考模式服务端固定 1.0）
+    ...(temperature !== undefined && !thinking ? { temperature } : {}),
   }
 
   return {

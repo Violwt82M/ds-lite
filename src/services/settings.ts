@@ -55,7 +55,15 @@ type Settings = {
   bubbleSkin: boolean
   /** AI 输出气泡：AI 回答单独画成圆角气泡（原版默认不画），默认关；「消息气泡」关闭时也一起关 */
   aiBubble: boolean
-  /** 人格温度（0~100）：映射到 API temperature 0~2，默认 50 = 官方默认 1.0 */
+  /** 显示「已读」：气泡旁的已读标记，默认关（官方 App 没有已读回执） */
+  showReadMark: boolean
+  /** 思考自动折叠：回答生成完自动收起思考过程，默认开（对齐原版） */
+  collapseThinking: boolean
+  /** 每条 AI 回复底部显示真实 token 消耗与缓存命中，默认关 */
+  showTokenUsage: boolean
+  /** 记忆整理后保留的最近上下文 token 数（4K~48K，默认 24K） */
+  memoryKeepTokens: number
+  /** 人格温度（0~100）：映射到 API temperature 0~1.5，默认 50 = 官方默认 1.0 */
   personalityTemperature: number
 }
 
@@ -85,6 +93,10 @@ const KEYS = {
   documentBudget: 'chat-demo:document-budget',
   bubbleSkin: 'chat-demo:bubble-skin',
   aiBubble: 'chat-demo:ai-bubble',
+  showReadMark: 'chat-demo:show-read-mark',
+  collapseThinking: 'chat-demo:collapse-thinking',
+  showTokenUsage: 'chat-demo:show-token-usage',
+  memoryKeepTokens: 'chat-demo:memory-keep-tokens',
   personalityTemperature: 'chat-demo:personality-temperature',
 } as const
 
@@ -156,6 +168,20 @@ const clampDocumentBudget = (value: number) => {
   return Math.min(DOCUMENT_BUDGET_MAX, Math.max(DOCUMENT_BUDGET_MIN, stepped))
 }
 
+/** 记忆整理保留的上下文 token 范围（必须定义在 useSettings 之前，避免 TDZ） */
+export const MEMORY_KEEP_MIN = 4_000
+export const MEMORY_KEEP_MAX = 48_000
+export const MEMORY_KEEP_STEP = 2_000
+export const MEMORY_KEEP_DEFAULT = 24_000
+
+const clampMemoryKeepTokens = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return MEMORY_KEEP_DEFAULT
+  }
+  const stepped = Math.round(value / MEMORY_KEEP_STEP) * MEMORY_KEEP_STEP
+  return Math.min(MEMORY_KEEP_MAX, Math.max(MEMORY_KEEP_MIN, stepped))
+}
+
 /** 人格温度滑杆：0~100，50 为官方默认（temperature 1.0） */
 export const PERSONALITY_TEMPERATURE_DEFAULT = 50
 
@@ -212,6 +238,17 @@ export const useSettings = create<Settings>(() => ({
   bubbleSkin: read(KEYS.bubbleSkin) !== 'false',
   // 默认关闭：AI 输出气泡对齐原版（原版 AI 回答是纯文本，只有用户消息带气泡）
   aiBubble: read(KEYS.aiBubble) === 'true',
+  // 默认关闭：已读标记（v0.9.51 起写死显示，用户反馈莫名其妙）
+  showReadMark: read(KEYS.showReadMark) === 'true',
+  // 默认开启：生成完自动折叠思考（对齐原版）
+  collapseThinking: read(KEYS.collapseThinking) !== 'false',
+  // 默认关闭：每条回答底部显示官方返回的真实 token 消耗与缓存命中
+  showTokenUsage: read(KEYS.showTokenUsage) === 'true',
+  // 默认 24,000 token：整理记忆时保留最近这么多原文不折叠
+  memoryKeepTokens: (() => {
+    const raw = read(KEYS.memoryKeepTokens)
+    return raw === null ? MEMORY_KEEP_DEFAULT : clampMemoryKeepTokens(Number(raw))
+  })(),
   // 默认 50 = temperature 1.0（官方默认）；存 0~100 整数，请求时按 /50 映射到 0~2
   personalityTemperature: (() => {
     const raw = read(KEYS.personalityTemperature)
@@ -232,6 +269,31 @@ export const setAiBubble = (aiBubble: boolean) => {
   useSettings.setState({ aiBubble })
 }
 
+/** 已读标记开关，默认关 */
+export const setShowReadMark = (showReadMark: boolean) => {
+  write(KEYS.showReadMark, String(showReadMark))
+  useSettings.setState({ showReadMark })
+}
+
+/** 思考自动折叠开关，默认开 */
+export const setCollapseThinking = (collapseThinking: boolean) => {
+  write(KEYS.collapseThinking, String(collapseThinking))
+  useSettings.setState({ collapseThinking })
+}
+
+/** 每条对话 token 与缓存显示开关，默认关 */
+export const setShowTokenUsage = (showTokenUsage: boolean) => {
+  write(KEYS.showTokenUsage, String(showTokenUsage))
+  useSettings.setState({ showTokenUsage })
+}
+
+/** 记忆整理保留的最近上下文 token 数（4K~48K） */
+export const setMemoryKeepTokens = (value: number) => {
+  const next = clampMemoryKeepTokens(value)
+  write(KEYS.memoryKeepTokens, String(next))
+  useSettings.setState({ memoryKeepTokens: next })
+}
+
 /** 人格温度滑杆：0~100，50 为官方默认（temperature 1.0） */
 export const setPersonalityTemperature = (personalityTemperature: number) => {
   const next = clampPersonalityTemperature(personalityTemperature)
@@ -239,11 +301,22 @@ export const setPersonalityTemperature = (personalityTemperature: number) => {
   useSettings.setState({ personalityTemperature: next })
 }
 
-/** 请求用的 temperature（0~2）；等于官方默认 1.0 时不发字段，保持旧行为 */
+/**
+ * 滑杆值 → temperature：左半段 0~50 → 0.0~1.0，右半段 50~100 → 1.0~1.5。
+ * 实测（2026-11-20，flash 与 v4 pro 都一样，不是 pro 专属问题）：非思考模式 temperature 2.0
+ * 会整段输出乱码，1.5 仍然正常；深度思考下服务端固定 1.0，发了也不生效。
+ * 所以上限压到 1.5，旧版存的 51~100 自动落进新区间，不会再出现 2.0。
+ */
+export const temperatureValue = (personalityTemperature: number): number =>
+  personalityTemperature <= PERSONALITY_TEMPERATURE_DEFAULT
+    ? personalityTemperature / 50
+    : 1 + (personalityTemperature - PERSONALITY_TEMPERATURE_DEFAULT) / 100
+
+/** 请求用的 temperature（0~1.5）；等于官方默认 1.0 时不发字段，保持旧行为 */
 export const requestTemperature = (personalityTemperature: number): number | undefined =>
   personalityTemperature === PERSONALITY_TEMPERATURE_DEFAULT
     ? undefined
-    : personalityTemperature / 50
+    : Math.round(temperatureValue(personalityTemperature) * 100) / 100
 
 export const setDocumentBudget = (value: number) => {
   const next = clampDocumentBudget(value)

@@ -74,3 +74,119 @@
     user-select: none;
   }
 }
+
+/* 新对话页「DS Lite 使用助手」醒目入口：配好 API Key 后一眼看到，点一下即切过去 */
+.helperCard,
+.helperCardActive {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 560px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px solid rgba(77, 107, 254, 0.34);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(77, 107, 254, 0.13), rgba(77, 107, 254, 0.04));
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+}
+
+.helperCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.helperCard:hover {
+  border-color: rgba(77, 107, 254, 0.6);
+  background: linear-gradient(135deg, rgba(77, 107, 254, 0.18), rgba(77, 107, 254, 0.06));
+}
+
+.helperIcon {
+  flex: none;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.helperText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.helperTitle {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.helperDesc {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.helperAction {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--dsw-alias-brand-primary, #4d6bfe);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.helperCardActive {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-color: var(--dsw-alias-brand-primary, #4d6bfe);
+}
+
+.helperTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.helperExit {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid rgba(77, 107, 254, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.helperChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.helperChip {
+  padding: 4px 10px;
+  border: 1px solid rgba(77, 107, 254, 0.28);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-base, rgba(255, 255, 255, 0.8));
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.helperChip:hover {
+  border-color: var(--dsw-alias-brand-primary, #4d6bfe);
+}

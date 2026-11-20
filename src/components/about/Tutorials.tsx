@@ -28,22 +28,31 @@ export const Tutorials = () => {
   const t = useTranslate()
 
   return (
-    <div className={styles.wrap}>
-      <div className={styles.head}>
-        <div className={styles.headTitle}>{t('tutorialTitle')}</div>
-        <div className={styles.headHint}>{t('tutorialHint')}</div>
+    <details className={styles.outer}>
+      <summary className={styles.head}>
+        <div className={styles.headText}>
+          <div className={styles.headTitle}>{t('tutorialTitle')}</div>
+          <div className={styles.headHint}>{t('tutorialHint')}</div>
+        </div>
+        <span className={styles.outerBadge} aria-hidden>
+          <span className={styles.outerLabelClosed}>{t('foldExpand')}</span>
+          <span className={styles.outerLabelOpen}>{t('foldCollapse')}</span>
+          <span className={styles.outerArrow}>▾</span>
+        </span>
+      </summary>
+      <div className={styles.wrap}>
+        {SECTIONS.map((section) => (
+          <details key={section} className={styles.item}>
+            <summary className={styles.summary}>
+              <span>{t(`tutorial${section}Title` as TranslationKey)}</span>
+              <span className={styles.arrow} aria-hidden>
+                ▾
+              </span>
+            </summary>
+            <div className={styles.body}>{renderBody(t(`tutorial${section}Body` as TranslationKey))}</div>
+          </details>
+        ))}
       </div>
-      {SECTIONS.map((section) => (
-        <details key={section} className={styles.item}>
-          <summary className={styles.summary}>
-            <span>{t(`tutorial${section}Title` as TranslationKey)}</span>
-            <span className={styles.arrow} aria-hidden>
-              ▾
-            </span>
-          </summary>
-          <div className={styles.body}>{renderBody(t(`tutorial${section}Body` as TranslationKey))}</div>
-        </details>
-      ))}
-    </div>
+    </details>
   )
 }

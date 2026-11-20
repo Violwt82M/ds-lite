@@ -4,6 +4,7 @@ import { memo } from 'react'
 import { IconForkOutline16, IconRefreshOutline16, IconWarningOutline16 } from '../base/icons.js'
 import { describeReply } from '../../services/chat/describe.js'
 import { useSettings } from '../../services/settings.js'
+import { formatTokens } from '../../services/usage.js'
 import { canContinueReply } from '../../services/chat/reply.js'
 import { continueReply, forkSession, regenerateReply } from '../../services/chat/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
@@ -50,10 +51,11 @@ export const AssistantMessage = memo(function AssistantMessage({
   avatar?: { src: string | null; label: string } | null
 }) {
   const t = useTranslate()
-  const bubbleSkin = useSettings((state) => state.bubbleSkin)
-  // AI 输出气泡：单独开关，默认关（对齐原版：AI 回答是纯文本）；「消息气泡」关掉时它也一起关
+  // AI 输出气泡：独立开关，默认关（对齐原版：AI 回答是纯文本）；和「消息气泡」（用户气泡）互不影响
   const aiBubble = useSettings((state) => state.aiBubble)
-  const showBubble = bubbleSkin && aiBubble
+  const showReadMark = useSettings((state) => state.showReadMark)
+  const showTokenUsage = useSettings((state) => state.showTokenUsage)
+  const showBubble = aiBubble
   const view = useReplyView(message, streaming)
   const panelEntry = useSearchPanel((state) => state.entry)
   const notice = streaming ? null : describeReply(message)
@@ -159,6 +161,19 @@ export const AssistantMessage = memo(function AssistantMessage({
       {!streaming && charCount > 0 ? (
         <div className={styles.charCount}>{t('messageCharCount', { count: charCount })}</div>
       ) : null}
+      {!streaming && showTokenUsage && message.usage ? (
+        <div className={styles.charCount}>
+          {t('messageTokenUsage', {
+            input: formatTokens(
+              message.usage.input_tokens +
+                message.usage.cache_creation_input_tokens +
+                message.usage.cache_read_input_tokens
+            ),
+            cached: formatTokens(message.usage.cache_read_input_tokens),
+            output: formatTokens(message.usage.output_tokens),
+          })}
+        </div>
+      ) : null}
       {!streaming && !refused && view.searchResults.length > 0 ? (
         <div
           className={clsx(styles.summary, panelEntry === summaryEntry && styles.summaryActive)}
@@ -173,7 +188,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           </span>
         </div>
       ) : null}
-      {showBubble && !streaming && responseText ? (
+      {showBubble && showReadMark && !streaming && responseText ? (
         <span className={styles.readMark}>{t('readMark')}</span>
       ) : null}
       </div>

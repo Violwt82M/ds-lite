@@ -39,6 +39,25 @@
   line-height: 18px;
 }
 
+/* 整理记忆前自动备份分支的小标志：一眼与正常会话区分 */
+.backupBadge {
+  display: inline-block;
+  margin-right: 5px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(77, 107, 254, 0.14);
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  vertical-align: 1px;
+}
+
+.active .backupBadge {
+  background: rgba(255, 255, 255, 0.24);
+  color: inherit;
+}
+
 .action {
   display: none;
   flex-shrink: 0;

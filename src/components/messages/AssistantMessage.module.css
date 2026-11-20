@@ -135,14 +135,14 @@
   }
 }
 
-/* ===== 气泡皮肤（body[data-bubble-skin='1']）=====
+/* ===== 气泡皮肤（body[data-ai-bubble-on='1']）=====
    模型只输出纯文本，气泡、小尾巴、「已读」都由这里画。
    关掉时用 display:contents，保证和旧布局完全一致。 */
 .bubbleBodyOff {
   display: contents;
 }
 
-:global(body[data-bubble-skin='1']) .bubbleBody {
+:global(body[data-ai-bubble-on='1']) .bubbleBody {
   position: relative;
   display: inline-block;
   box-sizing: border-box;
@@ -156,7 +156,7 @@
 }
 
 /* 左侧小尾巴：旋转方块，外沿带 1px 描边，浅色主题下也能看见 */
-:global(body[data-bubble-skin='1']) .bubbleBody::before {
+:global(body[data-ai-bubble-on='1']) .bubbleBody::before {
   content: '';
   position: absolute;
   top: 16px;
@@ -170,16 +170,23 @@
   transform: rotate(45deg);
 }
 
-/* 有背景图时气泡半透明 + 模糊，和用户气泡观感一致 */
-:global(body[data-bubble-skin='1'][data-wallpaper]:not([data-wallpaper='none'])) .bubbleBody {
-  --dsl-bubble-fill: rgba(255, 255, 255, 0.92);
-  border-color: rgba(0, 0, 0, 0.08);
-  backdrop-filter: blur(16px) saturate(120%);
+/* 有背景图时气泡呈现轻透毛玻璃质感（0.66~0.68 + 强模糊高饱和 + 玻璃高光描边） */
+:global(body[data-ai-bubble-on='1'][data-wallpaper]:not([data-wallpaper='none'])) .bubbleBody {
+  --dsl-bubble-fill: rgba(255, 255, 255, 0.68);
+  border-color: rgba(255, 255, 255, 0.52);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
-:global(body[data-bubble-skin='1'][data-wallpaper]:not([data-wallpaper='none']).dark) .bubbleBody {
-  --dsl-bubble-fill: rgba(24, 26, 31, 0.9);
-  border-color: rgba(255, 255, 255, 0.12);
+:global(body[data-ai-bubble-on='1'][data-wallpaper]:not([data-wallpaper='none']).dark) .bubbleBody {
+  --dsl-bubble-fill: rgba(24, 26, 31, 0.66);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 /* 自定义 AI 气泡色的壁纸半透明版本和字色规则在 global.css（搜「自定义 AI 气泡色」）：
@@ -187,17 +194,17 @@
 
 /* 气泡里的辅助小字/等待点没有自己的底色，跟着气泡字色走，深浅主题下都看得清
    （搜索卡片这类自带底色的保留主题色） */
-:global(body[data-bubble-skin='1'][data-ai-bubble='1']) .readMark,
-:global(body[data-bubble-skin='1'][data-ai-bubble='1']) .charCount {
+:global(body[data-ai-bubble-on='1'][data-ai-bubble='1']) .readMark,
+:global(body[data-ai-bubble-on='1'][data-ai-bubble='1']) .charCount {
   color: var(--ds-ai-bubble-text);
 }
 
-:global(body[data-bubble-skin='1'][data-ai-bubble='1']) .waitingDot {
+:global(body[data-ai-bubble-on='1'][data-ai-bubble='1']) .waitingDot {
   background-color: var(--ds-ai-bubble-text);
 }
 
 /* 气泡里不要再套一层「纸」：背景图模式下原来给助手正文加的底板 */
-:global(body[data-bubble-skin='1'][data-wallpaper]:not([data-wallpaper='none'])) .bubbleBody :global(.ds-assistant-message-main-content) {
+:global(body[data-ai-bubble-on='1'][data-wallpaper]:not([data-wallpaper='none'])) .bubbleBody :global(.ds-assistant-message-main-content) {
   padding: 0;
   border: none;
   border-radius: 0;
@@ -206,7 +213,7 @@
   backdrop-filter: none;
 }
 
-:global(body[data-bubble-skin='1']) .readMark {
+:global(body[data-ai-bubble-on='1']) .readMark {
   display: block;
   margin-top: 6px;
   text-align: right;

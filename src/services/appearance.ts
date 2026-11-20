@@ -121,8 +121,8 @@ const applyBubbleColor = (kind: 'user' | 'ai', color: string | null) => {
   }
   const [r, g, b] = parseRgb(color)
   body.style.setProperty(`${prefix}-bg`, color)
-  // 有背景图时气泡要透一点，底下的模糊才看得见；0.82 和现有默认气泡的透明度对齐
-  body.style.setProperty(`${prefix}-bg-soft`, `rgba(${r}, ${g}, ${b}, 0.82)`)
+  // 有背景图时用 0.66 透明度的毛玻璃版本，配合强模糊既透出背景又不影响字迹清晰度
+  body.style.setProperty(`${prefix}-bg-soft`, `rgba(${r}, ${g}, ${b}, 0.66)`)
   body.style.setProperty(`${prefix}-text`, textColorFor(color))
 }
 

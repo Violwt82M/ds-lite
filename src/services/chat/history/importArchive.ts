@@ -1,3 +1,4 @@
+import { createId } from '../../../utils/id.js'
 import * as db from '../db.js'
 import { BackupError, fail } from './errors.js'
 import type { SessionIndexEntry } from './format.js'
@@ -96,8 +97,10 @@ export type ImportArchiveOptions = {
   skipImages?: boolean
   /** 只导入这些会话 id；缺省表示整包导入 */
   sessionIds?: string[]
-  /** 本机已有的会话 id：这些会话连同附件一起跳过，本机版本保留不覆盖 */
+  /** 本机已有的会话 id：默认跳过不覆盖；allowDuplicate 为 true 时分配新 id 保留两份 */
   existingIds?: string[]
+  /** 允许重新导入本机已有的会话（以新 id 导入为副本，不覆盖本机原会话） */
+  allowDuplicate?: boolean
 }
 
 /** 条目属于哪个会话：会话 JSON 或它的附件目录 */
@@ -123,7 +126,7 @@ export const importArchive = async (
   file: File,
   options: ImportArchiveOptions = {}
 ): Promise<ImportArchiveResult> => {
-  const { onEntry, skipImages, sessionIds, existingIds } = options
+  const { onEntry, skipImages, sessionIds, existingIds, allowDuplicate } = options
   const wanted = sessionIds ? new Set(sessionIds) : null
   const existing = existingIds ? new Set(existingIds) : null
   const skippedSessions = new Set<string>()
@@ -132,8 +135,11 @@ export const importArchive = async (
     const id = sessionIdOfPath(path)
     return id === null || wanted === null || wanted.has(id)
   }
-  /** 本机已有的会话：连附件一起跳过，不覆盖本机版本 */
+  /** 本机已有的会话：未开启 allowDuplicate 时跳过；开启后允许以新 id 重新导入为副本 */
   const pathOwned = (path: string) => {
+    if (allowDuplicate) {
+      return false
+    }
     const id = sessionIdOfPath(path)
     return id !== null && existing !== null && existing.has(id)
   }
@@ -238,7 +244,11 @@ export const importArchive = async (
         for (const [imagePath, id] of local.images) {
           images.set(imagePath, id)
         }
-        await db.addStagingSession(local.session)
+        const sessionToSave =
+          allowDuplicate && existing?.has(sessionId)
+            ? { ...local.session, id: createId() }
+            : local.session
+        await db.addStagingSession(sessionToSave)
       } else if (path === INDEX_PATH && !index) {
         index = readSessionIndex(await readJson(entry))
       } else if (

@@ -11,7 +11,6 @@ import {
   getContextLevel,
   getContextUsage,
   getFoldableTokens,
-  MANUAL_KEEP_TOKENS,
   MIN_FOLDABLE_TOKENS,
 } from '../../services/memory/context.js'
 import { openMemoryPanel, useMemoryPanel } from '../../services/memory/state.js'
@@ -103,9 +102,10 @@ export const ContextBanner = ({ session }: { session: Session }) => {
   const percent = Math.min(100, Math.round(ratio * 100))
   // 只按「有多少是可折叠的」决定要不要劝整理：刚聊两句、或者只是挂了个大附件，
   // 这时候点整理要么没得整理，要么会把它刚要用的文档折掉，劝了也是白劝。
+  const memoryKeepTokens = useSettings((state) => state.memoryKeepTokens)
   const foldableTokens = useMemo(
-    () => getFoldableTokens(session, MANUAL_KEEP_TOKENS),
-    [session]
+    () => getFoldableTokens(session, memoryKeepTokens),
+    [session, memoryKeepTokens]
   )
   const canCompact = foldableTokens >= MIN_FOLDABLE_TOKENS
   const levelText =

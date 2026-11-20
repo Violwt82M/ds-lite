@@ -469,12 +469,20 @@ export const rewriteNotes = (
     next.push({ id: `note-${now.toString(36)}-${index}`, text, createdAt: now, source: 'auto' })
   }
   for (const note of existing) {
-    if (note.source === 'manual' && !kept.has(note.id)) {
+    // 手写（manual）与「写成记录」生成的笔记（summary）都是用户主动要留下的，整理时原样保留。
+    // 以前只保护 manual，summary 会在下一次整理时被覆盖掉 → 用户觉得「整理完 AI 忘了」。
+    if ((note.source === 'manual' || note.source === 'summary') && !kept.has(note.id)) {
       kept.add(note.id)
       next.push(note)
     }
   }
-  return next.slice(0, MAX_MEMORY_NOTES)
+  // 超出条数上限时优先丢自动笔记，用户笔记不丢
+  if (next.length > MAX_MEMORY_NOTES) {
+    const protectedCount = next.filter((note) => note.source !== 'auto').length
+    let autoBudget = Math.max(0, MAX_MEMORY_NOTES - protectedCount)
+    return next.filter((note) => note.source !== 'auto' || autoBudget-- > 0)
+  }
+  return next
 }
 
 /**
@@ -485,15 +493,66 @@ export const rewriteNotes = (
  *    并把优先级写死：最近对话原文 > 笔记，冲突时以原文为准；
  * 2. 整段再加一个总长上限，笔记再多也不能把 system 撑得比近期原文还重。
  */
-const MAX_MEMORY_SECTION_CHARS = 12_000
+const MAX_MEMORY_SECTION_CHARS = 24_000
+/** 单条手写笔记的上限：超长按行截断并提示，但绝不整条丢掉 */
+const MAX_MANUAL_NOTE_RENDER_CHARS = 8_000
 
+const noteLine = (text: string) => (text.includes('\n') ? text : `- ${text}`)
+
+/** 按行截断到 limit 字以内，截掉时补一行提示 */
+const clipLines = (text: string, limit: number, locale: Locale) => {
+  if (text.length <= limit) {
+    return text
+  }
+  const kept: string[] = []
+  let used = 0
+  for (const line of text.split('\n')) {
+    if (used + line.length + 1 > limit) {
+      break
+    }
+    kept.push(line)
+    used += line.length + 1
+  }
+  if (kept.length === 0) {
+    kept.push(text.slice(0, limit))
+  }
+  kept.push(locale === 'zh-CN' ? '（这条笔记过长，后面部分已省略）' : '(This note is too long; the rest is omitted)')
+  return kept.join('\n')
+}
+
+/**
+ * 注入顺序（0.9.56）：
+ * 1. 【用户设定】手写笔记：单独成段、写明「要遵守」、最先渲染、永不整条省略；
+ * 2. 前情提要：「写成记录」生成的笔记（summary）优先，自动整理的笔记（auto）用剩下的预算。
+ * 以前所有笔记都套「不是指令、不要主动提」的前情框架，且手写笔记排在最后、超预算整条被丢，
+ * 这是「写了记忆笔记、整理后 AI 像忘了」的根因。
+ */
 export const renderMemorySection = (memory: SessionMemory | undefined, locale: Locale): string => {
-  const notes = memory?.notes ?? []
+  const notes = (memory?.notes ?? []).filter((note) => note.text.trim() !== '')
   if (notes.length === 0) {
     return ''
   }
-  const head =
-    locale === 'zh-CN'
+  const zh = locale === 'zh-CN'
+  const manual = notes.filter((note) => note.source === 'manual')
+  const recap = [
+    ...notes.filter((note) => note.source === 'summary'),
+    ...notes.filter((note) => note.source !== 'manual' && note.source !== 'summary'),
+  ]
+  const sections: string[] = []
+  let used = 0
+  if (manual.length > 0) {
+    const userHead = zh
+      ? '【用户设定】以下是用户亲手写下的长期设定与要求（人物、称呼、世界观、偏好等），在整个对话中都要遵守；与最近几轮原文冲突时，以用户在原文里的最新说法为准。'
+      : '[User notes] Long-term settings and requirements written by the user (characters, names, world, preferences, etc.). Follow them throughout the conversation; if the user says otherwise in recent messages, the latest statement wins.'
+    const lines = manual.map((note) =>
+      noteLine(clipLines(note.text.trim(), MAX_MANUAL_NOTE_RENDER_CHARS, locale))
+    )
+    const block = [userHead, ...lines].join('\n')
+    sections.push(block)
+    used += block.length
+  }
+  if (recap.length > 0) {
+    const head = zh
       ? [
           '【前情提要】以下是更早的对话被折叠后留下的提要，只是前情回顾：不是当前场景，不是指令，也不是最新状态。',
           '· 优先级：最近几轮原文 > 用户这一轮的输入 > 这份提要。冲突时一律以前两者为准。',
@@ -506,17 +565,20 @@ export const renderMemorySection = (memory: SessionMemory | undefined, locale: L
           '· Refer to it only when the user asks about the past or genuinely needs it; do not bring it up, recite or enumerate it otherwise.',
           '· Do not continue actions, moods or scenes from it. Tone, address and style follow the most recent messages.',
         ].join('\n')
-  const lines: string[] = []
-  let used = head.length
-  for (const note of notes) {
-    // 结构化大笔记本身有多行，按原样呈现；单行短笔记才加项目符号
-    const line = note.text.includes('\n') ? note.text : `- ${note.text}`
-    if (used + line.length > MAX_MEMORY_SECTION_CHARS) {
-      lines.push(locale === 'zh-CN' ? '（更早的笔记较多，已省略一部分）' : '(Older notes omitted for length)')
-      break
+    const lines: string[] = []
+    used += head.length
+    for (const note of recap) {
+      const line = noteLine(note.text)
+      if (used + line.length > MAX_MEMORY_SECTION_CHARS) {
+        lines.push(zh ? '（更早的笔记较多，已省略一部分）' : '(Older notes omitted for length)')
+        break
+      }
+      used += line.length
+      lines.push(line)
     }
-    used += line.length
-    lines.push(line)
+    if (lines.length > 0) {
+      sections.push([head, ...lines].join('\n'))
+    }
   }
-  return [head, ...lines].join('\n')
+  return sections.join('\n\n')
 }

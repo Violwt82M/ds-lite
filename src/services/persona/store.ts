@@ -1,9 +1,15 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
+import { getBuiltinHelperEntry, isBuiltinPersona } from './builtin.js'
 import type { PersonaCard } from './card.js'
 
-/** 角色库条目：id 只用于本地标识，卡片内容随条目一起保存；avatar 是本机设置的头像（data URL） */
-export type PersonaEntry = { id: string; card: PersonaCard; avatar?: string }
+/** 角色库条目：id 只用于本地标识，卡片内容随条目一起保存；avatar 是本机设置的头像（data URL）；builtin 为官方内置只读卡 */
+export type PersonaEntry = { id: string; card: PersonaCard; avatar?: string; builtin?: boolean }
+
+const withBuiltins = (cards: PersonaEntry[]): PersonaEntry[] => [
+  getBuiltinHelperEntry(),
+  ...cards.filter((entry) => !entry.builtin && !isBuiltinPersona(entry.id)),
+]
 
 /** 本机角色扮演设置，存 localStorage；不涉及任何服务端 */
 export type PersonaState = {
@@ -22,7 +28,7 @@ const STORAGE_KEY = 'ds-lite:persona'
 const emptyState = (): PersonaState => ({
   enabled: false,
   userName: '',
-  cards: [],
+  cards: withBuiltins([]),
   activeId: null,
   showAvatar: false,
 })
@@ -49,7 +55,8 @@ const readState = (): PersonaState => {
       return emptyState()
     }
     const parsed = JSON.parse(raw) as Partial<PersonaState>
-    const cards = Array.isArray(parsed.cards) ? parsed.cards.filter(isEntry) : []
+    const userCards = Array.isArray(parsed.cards) ? parsed.cards.filter(isEntry) : []
+    const cards = withBuiltins(userCards)
     const activeId = cards.some((entry) => entry.id === parsed.activeId) ? (parsed.activeId ?? null) : null
     return {
       enabled: parsed.enabled === true && activeId !== null,
@@ -65,12 +72,16 @@ const readState = (): PersonaState => {
 
 export const usePersona = create<PersonaState>(() => readState())
 
-/** 写入失败只在内存中生效，与 settings.ts 的处理保持一致 */
+/** 写入失败只在内存中生效，与 settings.ts 的处理保持一致；内置角色卡不落盘，随版本自动更新 */
 const commit = (patch: Partial<PersonaState>) => {
   const next = { ...usePersona.getState(), ...patch }
   usePersona.setState(patch)
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    const persisted: PersonaState = {
+      ...next,
+      cards: next.cards.filter((entry) => !entry.builtin && !isBuiltinPersona(entry.id)),
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted))
   } catch {
     // 存储不可用时不阻断使用
   }
@@ -94,9 +105,12 @@ export const addPersonaCard = (card: PersonaCard) => {
 }
 
 export const removePersonaCard = (id: string) => {
+  if (isBuiltinPersona(id)) {
+    return
+  }
   const state = usePersona.getState()
   const cards = state.cards.filter((entry) => entry.id !== id)
-  const activeId = state.activeId === id ? (cards[0]?.id ?? null) : state.activeId
+  const activeId = state.activeId === id ? (cards.find((entry) => !entry.builtin)?.id ?? null) : state.activeId
   commit({ cards, activeId, enabled: activeId !== null ? state.enabled : false })
 }
 
@@ -108,6 +122,9 @@ export const setActivePersona = (id: string) => {
 
 /** 新建（id 为 null）或覆盖保存一张卡；新建的卡自动成为当前角色并启用 */
 export const savePersonaCard = (id: string | null, card: PersonaCard): string => {
+  if (isBuiltinPersona(id)) {
+    return id!
+  }
   const state = usePersona.getState()
   if (id === null) {
     const entry = { id: createId(), card }
@@ -133,6 +150,9 @@ export const setPersonaShowAvatar = (showAvatar: boolean) => commit({ showAvatar
 
 /** 设置某张卡的头像；传 null 移除。图片已在调用侧压成小图，存进 localStorage */
 export const setPersonaAvatar = (id: string, avatar: string | null) => {
+  if (isBuiltinPersona(id)) {
+    return
+  }
   const state = usePersona.getState()
   if (!state.cards.some((entry) => entry.id === id)) {
     return
