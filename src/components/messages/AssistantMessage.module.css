@@ -170,23 +170,17 @@
   transform: rotate(45deg);
 }
 
-/* 有背景图时气泡呈现轻透毛玻璃质感（0.66~0.68 + 强模糊高饱和 + 玻璃高光描边） */
+/* 有背景图时气泡呈现简洁毛玻璃半透明（不透明度由滑杆控制，默认 68%），不加高光描边 */
 :global(body[data-ai-bubble-on='1'][data-wallpaper]:not([data-wallpaper='none'])) .bubbleBody {
-  --dsl-bubble-fill: rgba(255, 255, 255, 0.68);
-  border-color: rgba(255, 255, 255, 0.52);
+  --dsl-bubble-fill: rgba(255, 255, 255, var(--ds-bubble-alpha, 0.68));
+  border-color: rgba(0, 0, 0, 0.08);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
   backdrop-filter: blur(20px) saturate(160%);
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 :global(body[data-ai-bubble-on='1'][data-wallpaper]:not([data-wallpaper='none']).dark) .bubbleBody {
-  --dsl-bubble-fill: rgba(24, 26, 31, 0.66);
-  border-color: rgba(255, 255, 255, 0.18);
-  box-shadow:
-    0 4px 18px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --dsl-bubble-fill: rgba(24, 26, 31, var(--ds-bubble-alpha, 0.68));
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 /* 自定义 AI 气泡色的壁纸半透明版本和字色规则在 global.css（搜「自定义 AI 气泡色」）：

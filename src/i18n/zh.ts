@@ -352,6 +352,8 @@ export const zh = {
   bubbleColorDeep: '深色',
   settingsAiBubbleColor: 'AI 气泡颜色',
   aiBubbleHint: 'AI 回答的气泡底色；「AI 输出气泡」开启时才生效，有背景图时会自动半透明 + 模糊',
+  settingsBubbleOpacity: '气泡不透明度',
+  bubbleOpacityHint: '设置聊天背景后生效：数值越低越通透、越能看清壁纸，越高字迹越实（默认 68%）',
   settingsBubbleSkin: '用户消息气泡',
   bubbleSkinHint: '你的消息由客户端画成气泡（带小尾巴）；AI 回答的气泡在「AI 输出气泡」里单独控制，两者互不影响',
   bubbleSkinOn: '已开启',

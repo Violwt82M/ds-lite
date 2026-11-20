@@ -3,9 +3,13 @@ import { useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import {
   AI_BUBBLE_PRESETS,
+  BUBBLE_OPACITY_MAX,
+  BUBBLE_OPACITY_MIN,
+  BUBBLE_OPACITY_STEP,
   BUBBLE_PRESETS,
   setAiBubbleColor,
   setBubbleColor,
+  setBubbleOpacity,
   setUserAvatar,
   useAppearance,
   type BubblePreset,
@@ -186,6 +190,7 @@ export const AppearanceSetting = () => {
   const userAvatar = useAppearance((state) => state.userAvatar)
   const bubbleColor = useAppearance((state) => state.bubbleColor)
   const aiBubbleColor = useAppearance((state) => state.aiBubbleColor)
+  const bubbleOpacity = useAppearance((state) => state.bubbleOpacity)
   const bubbleSkin = useSettings((state) => state.bubbleSkin)
   const aiBubble = useSettings((state) => state.aiBubble)
   const showReadMark = useSettings((state) => state.showReadMark)
@@ -269,6 +274,25 @@ export const AppearanceSetting = () => {
         themeSwatchClassName={settingsStyles.bubbleSwatchAi}
         fallbackColor="#ffffff"
         onChange={setAiBubbleColor}
+      />
+      <Row
+        label={t('settingsBubbleOpacity')}
+        description={t('bubbleOpacityHint')}
+        action={
+          <div className={settingsStyles.rangeWrap}>
+            <input
+              className={settingsStyles.range}
+              type="range"
+              min={BUBBLE_OPACITY_MIN}
+              max={BUBBLE_OPACITY_MAX}
+              step={BUBBLE_OPACITY_STEP}
+              value={bubbleOpacity}
+              aria-label={t('settingsBubbleOpacity')}
+              onChange={(event) => setBubbleOpacity(Number(event.currentTarget.value))}
+            />
+            <span className={settingsStyles.rangeValue}>{bubbleOpacity}%</span>
+          </div>
+        }
       />
       <Row
         label={t('settingsBubbleSkin')}

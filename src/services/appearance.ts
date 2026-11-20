@@ -59,6 +59,30 @@ export const AI_BUBBLE_PRESETS: readonly BubblePreset[] = [
   { id: 'deep', color: '#2c2c2e', labelKey: 'bubbleColorDeep' },
 ]
 
+export const BUBBLE_OPACITY_MIN = 30
+export const BUBBLE_OPACITY_MAX = 100
+export const BUBBLE_OPACITY_STEP = 5
+export const BUBBLE_OPACITY_DEFAULT = 68
+
+const BUBBLE_OPACITY_KEY = 'ds-lite:bubble-opacity'
+
+const clampBubbleOpacity = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return BUBBLE_OPACITY_DEFAULT
+  }
+  const stepped = Math.round(value / BUBBLE_OPACITY_STEP) * BUBBLE_OPACITY_STEP
+  return Math.min(BUBBLE_OPACITY_MAX, Math.max(BUBBLE_OPACITY_MIN, stepped))
+}
+
+const readBubbleOpacity = (): number => {
+  try {
+    const raw = localStorage.getItem(BUBBLE_OPACITY_KEY)
+    return raw === null ? BUBBLE_OPACITY_DEFAULT : clampBubbleOpacity(Number(raw))
+  } catch {
+    return BUBBLE_OPACITY_DEFAULT
+  }
+}
+
 export type AppearanceState = {
   /** 128px PNG data URL；null = 不显示头像 */
   userAvatar: string | null
@@ -66,6 +90,8 @@ export type AppearanceState = {
   bubbleColor: string | null
   /** #rrggbb；null = 跟随主题默认气泡色（AI 回答侧） */
   aiBubbleColor: string | null
+  /** 有壁纸时的气泡不透明度（30~100%，默认 68%） */
+  bubbleOpacity: number
 }
 
 /** 坏数据一律按没设置处理：外观设置坏了不能阻塞启动 */
@@ -82,6 +108,7 @@ export const useAppearance = create<AppearanceState>(() => ({
   userAvatar: readSaved(AVATAR_KEY, isAvatar),
   bubbleColor: readSaved(BUBBLE_KEY, isBubbleColor),
   aiBubbleColor: readSaved(AI_BUBBLE_KEY, isBubbleColor),
+  bubbleOpacity: readBubbleOpacity(),
 }))
 
 const parseRgb = (hex: string): [number, number, number] => [
@@ -109,7 +136,7 @@ const textColorFor = (hex: string): string => {
  * 字色按底色亮度算好，深色主题配浅色气泡也不会白字浅底。
  * 用户气泡和 AI 气泡只差前缀，抽出来免得以后改一处漏一处。
  */
-const applyBubbleColor = (kind: 'user' | 'ai', color: string | null) => {
+const applyBubbleColor = (kind: 'user' | 'ai', color: string | null, alpha: string) => {
   const body = document.body
   body.dataset[kind === 'user' ? 'userBubble' : 'aiBubble'] = color === null ? '0' : '1'
   const prefix = `--ds-${kind}-bubble`
@@ -121,16 +148,18 @@ const applyBubbleColor = (kind: 'user' | 'ai', color: string | null) => {
   }
   const [r, g, b] = parseRgb(color)
   body.style.setProperty(`${prefix}-bg`, color)
-  // 有背景图时用 0.66 透明度的毛玻璃版本，配合强模糊既透出背景又不影响字迹清晰度
-  body.style.setProperty(`${prefix}-bg-soft`, `rgba(${r}, ${g}, ${b}, 0.66)`)
+  // 有背景图时按用户设置的不透明度生成半透明色，配合毛玻璃模糊既透背景又清字
+  body.style.setProperty(`${prefix}-bg-soft`, `rgba(${r}, ${g}, ${b}, ${alpha})`)
   body.style.setProperty(`${prefix}-text`, textColorFor(color))
 }
 
 /** 把外观写到 body 上：CSS 只认 data 属性和变量，气泡组件不用重复算颜色 */
 const applyAppearance = () => {
-  const { bubbleColor, aiBubbleColor } = useAppearance.getState()
-  applyBubbleColor('user', bubbleColor)
-  applyBubbleColor('ai', aiBubbleColor)
+  const { bubbleColor, aiBubbleColor, bubbleOpacity } = useAppearance.getState()
+  const alpha = (bubbleOpacity / 100).toFixed(2)
+  document.body.style.setProperty('--ds-bubble-alpha', alpha)
+  applyBubbleColor('user', bubbleColor, alpha)
+  applyBubbleColor('ai', aiBubbleColor, alpha)
 }
 
 export const setupAppearance = () => {
@@ -169,4 +198,10 @@ export const setAiBubbleColor = (color: string | null) => {
   const next = color !== null && isBubbleColor(color) ? color.toLowerCase() : null
   useAppearance.setState({ aiBubbleColor: next })
   persist(AI_BUBBLE_KEY, next)
+}
+
+export const setBubbleOpacity = (value: number) => {
+  const next = clampBubbleOpacity(value)
+  useAppearance.setState({ bubbleOpacity: next })
+  persist(BUBBLE_OPACITY_KEY, String(next))
 }

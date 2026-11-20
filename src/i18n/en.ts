@@ -366,6 +366,8 @@ export const en = {
   bubbleColorDeep: 'Dark',
   settingsAiBubbleColor: 'AI bubble color',
   aiBubbleHint: 'Background of the AI reply bubble; only applies while the AI output bubble is on. With a chat background it turns translucent and blurred.',
+  settingsBubbleOpacity: 'Bubble opacity',
+  bubbleOpacityHint: 'Applies when a chat background is set: lower is more translucent, higher is more solid (default 68%)',
   settingsBubbleSkin: 'User message bubbles',
   bubbleSkinHint: 'Your messages are drawn as bubbles by the app (with the little tail). The AI reply bubble is controlled separately under "AI output bubble"; the two are independent.',
   bubbleSkinOn: 'On',

@@ -7,7 +7,7 @@
  *
  * 以后要改版本，只改这里 + android/app/build.gradle（Gradle 读不到 TS，必须手动同步）。
  */
-export const APP_VERSION = '0.9.57'
+export const APP_VERSION = '0.9.60'
 
 /**
  * 发布渠道：beta = 公开测试版（关于页/更新内容弹窗带标记，提示可能有问题、请走反馈），
