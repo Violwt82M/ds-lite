@@ -9,6 +9,11 @@ declare const styles: {
   readonly "uploading": string;
   readonly "spin": string;
   readonly "failed": string;
+  readonly "preview": string;
+  readonly "voiceMode": string;
+  readonly "holdButton": string;
+  readonly "holding": string;
+  readonly "transcribing": string;
   readonly "textareaWrapper": string;
   readonly "textarea": string;
   readonly "mirror": string;

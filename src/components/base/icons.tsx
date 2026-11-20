@@ -241,15 +241,49 @@ export const IconPlusOutline16 = () => (
 )
 
 /** 「更多」：原版是细线圆圈里一个十字；点击时整体顺时针转 45° 变成圆圈叉 */
-export const IconMoreCircle20 = () => (
-  <svg width={20} height={20} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="10" cy="10" r="8.25" stroke="currentColor" strokeWidth="1.6" />
+export const IconMoreCircle26 = () => (
+  <svg width={26} height={26} viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="13" cy="13" r="11" stroke="currentColor" strokeWidth="1.7" />
     <path
-      d="M10 5.8V14.2M5.8 10H14.2"
+      d="M13 7.6V18.4M7.6 13H18.4"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
+/** 语音输入：原版是细线圆圈里的「一个点 + 两道声波」 */
+export const IconVoiceSignal26 = () => (
+  <svg width={26} height={26} viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="13" cy="13" r="11" stroke="currentColor" strokeWidth="1.7" />
+    <circle cx="9.4" cy="13" r="1.5" fill="currentColor" />
+    <path
+      d="M12.6 10.6a3.4 3.4 0 0 1 0 4.8"
       stroke="currentColor"
       strokeWidth="1.6"
       strokeLinecap="round"
     />
+    <path
+      d="M15.4 8.8a6.2 6.2 0 0 1 0 8.4"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
+/** 语音模式里切回键盘：细线圆圈里一个键盘点阵 */
+export const IconKeyboardCircle26 = () => (
+  <svg width={26} height={26} viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="13" cy="13" r="11" stroke="currentColor" strokeWidth="1.7" />
+    <circle cx="9.2" cy="10.4" r="1.1" fill="currentColor" />
+    <circle cx="13" cy="10.4" r="1.1" fill="currentColor" />
+    <circle cx="16.8" cy="10.4" r="1.1" fill="currentColor" />
+    <circle cx="9.2" cy="14" r="1.1" fill="currentColor" />
+    <circle cx="13" cy="14" r="1.1" fill="currentColor" />
+    <circle cx="16.8" cy="14" r="1.1" fill="currentColor" />
+    <path d="M10 17.4h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
   </svg>
 )
 
@@ -276,28 +310,6 @@ export const IconPhotoOutline16 = () => (
 )
 
 /** 「更多」面板里的大号描边图标：拍照 / 相册 / 文件（原版是细线图标卡片） */
-/** 语音输入：原版是细线圆圈里一个麦克风（和「更多」的圆圈十字同一套观感） */
-export const IconVoiceCircle20 = () => (
-  <svg width={20} height={20} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="10" cy="10" r="8.25" stroke="currentColor" strokeWidth="1.6" />
-    <rect
-      x="8.55"
-      y="5.5"
-      width="2.9"
-      height="5.1"
-      rx="1.45"
-      stroke="currentColor"
-      strokeWidth="1.3"
-    />
-    <path
-      d="M7.35 9.85a2.65 2.65 0 0 0 5.3 0M10 12.55v1.55"
-      stroke="currentColor"
-      strokeWidth="1.3"
-      strokeLinecap="round"
-    />
-  </svg>
-)
-
 export const IconCameraOutline24 = () => (
   <svg width={24} height={24} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
@@ -360,6 +372,19 @@ export const IconArrowUp16 = () => (
       d="M8 13.2V3.2M3.6 7.6L8 3.2l4.4 4.4"
       stroke="currentColor"
       strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+/** 发送：原版是蓝色圆底上一个白色上箭头 */
+export const IconArrowUp18 = () => (
+  <svg width={18} height={18} viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M9 15V3.6M3.9 8.6L9 3.6l5.1 5"
+      stroke="currentColor"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
     />

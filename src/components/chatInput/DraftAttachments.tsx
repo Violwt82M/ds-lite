@@ -16,10 +16,13 @@ export const DraftAttachments = memo(function DraftAttachments({
   items,
   onRetry,
   onRemove,
+  onPreview,
 }: {
   items: DraftAttachment[]
   onRetry: (id: string) => void
   onRemove: (id: string) => void
+  /** 点已添加的图片预览：放大查看（原版行为） */
+  onPreview?: (item: DraftAttachment) => void
 }) {
   if (items.length === 0) {
     return null
@@ -32,6 +35,7 @@ export const DraftAttachments = memo(function DraftAttachments({
           item={item}
           onRetry={() => onRetry(item.id)}
           onRemove={() => onRemove(item.id)}
+          onPreview={onPreview ? () => onPreview(item) : undefined}
         />
       ))}
     </div>
@@ -43,10 +47,12 @@ const AttachmentItem = ({
   item,
   onRetry,
   onRemove,
+  onPreview,
 }: {
   item: DraftAttachment
   onRetry: () => void
   onRemove: () => void
+  onPreview?: () => void
 }) => {
   const t = useTranslate()
   const task = useUploads((state) => state.tasks[item.id] ?? UPLOADING)
@@ -63,7 +69,19 @@ const AttachmentItem = ({
       className={clsx(styles.attachment, failed && styles.attachmentFailed)}
       title={error ?? item.file.name}
     >
-      <img src={item.previewUrl} alt={item.file.name} />
+      {/* 点缩略图放大查看（官方行为）；上传失败时点它仍是重试，不打开预览 */}
+      {onPreview && !failed ? (
+        <button
+          type="button"
+          className={styles.preview}
+          aria-label={t('previewImage')}
+          onClick={onPreview}
+        >
+          <img src={item.previewUrl} alt={item.file.name} />
+        </button>
+      ) : (
+        <img src={item.previewUrl} alt={item.file.name} />
+      )}
       {status === 'uploading' ? <div className={styles.uploading} /> : null}
       {failed && retry ? (
         <Tooltip content={retryLabel}>
