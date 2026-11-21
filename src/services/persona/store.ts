@@ -186,3 +186,36 @@ export const getActiveCard = (): PersonaCard | null => {
   }
   return state.cards.find((entry) => entry.id === state.activeId)?.card ?? null
 }
+
+/**
+ * 合并来自备份包 / 快传包的自定义人设卡：
+ * 只追加本机没有的 id（绝不覆盖本机已有的角色卡），若本机未设置称呼则补填称呼。
+ */
+export const mergeImportedPersonas = (incoming: unknown[], userName?: string): number => {
+  const state = usePersona.getState()
+  const existingIds = new Set(state.cards.map((entry) => entry.id))
+  const toAdd: PersonaEntry[] = []
+  for (const item of incoming) {
+    if (!isEntry(item) || item.builtin || isBuiltinPersona(item.id) || existingIds.has(item.id)) {
+      continue
+    }
+    existingIds.add(item.id)
+    toAdd.push({
+      id: item.id,
+      card: item.card,
+      ...(item.avatar ? { avatar: item.avatar } : {}),
+    })
+  }
+  const nextUserName =
+    !state.userName.trim() && typeof userName === 'string' && userName.trim()
+      ? userName.trim()
+      : state.userName
+  if (toAdd.length === 0 && nextUserName === state.userName) {
+    return 0
+  }
+  commit({
+    cards: [...state.cards, ...toAdd],
+    userName: nextUserName,
+  })
+  return toAdd.length
+}

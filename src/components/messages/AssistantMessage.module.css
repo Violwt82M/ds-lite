@@ -1,5 +1,7 @@
 .message {
   position: relative;
+  user-select: none;
+  -webkit-user-select: none;
 
   &:hover .actions,
   &:focus-within .actions {
@@ -8,6 +10,8 @@
 
   :global(.ds-assistant-message-main-content) {
     padding-bottom: 6px;
+    user-select: text;
+    -webkit-user-select: text;
   }
 }
 

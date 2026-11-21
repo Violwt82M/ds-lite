@@ -1,6 +1,12 @@
 import { createId } from '../../../utils/id.js'
 import * as db from '../db.js'
 import { BackupError, fail } from './errors.js'
+import {
+  DS_LITE_EXTRAS_PATH,
+  applySessionExtras,
+  parseArchiveExtras,
+  type DsLiteArchiveExtras,
+} from './extras.js'
 import type { SessionIndexEntry } from './format.js'
 import { INDEX_PATH, MANIFEST_PATH, USER_PATH, parseSessionPath, sessionFilesDir } from './paths.js'
 import { checkManifest, readSessionFile, readSessionIndex } from './schema.js'
@@ -120,6 +126,10 @@ export type ImportArchiveResult = {
   skipped: number
   /** 因为文件损坏或格式不对而跳过的会话数 */
   failed: number
+  /** DS Lite 专属扩展数据（记忆、人设与绑定），仅含该扩展文件的归档返回 */
+  extras: DsLiteArchiveExtras | null
+  /** 归档内原会话 id → 本机实际保存的会话 id 映射 */
+  idMap: Map<string, string>
 }
 
 export const importArchive = async (
@@ -160,10 +170,12 @@ export const importArchive = async (
   }
   const rel = (path: string) => stripPrefix(prefix, path)
   const imported = new Set<string>()
+  const idMap = new Map<string, string>()
   const images = new Map<string, string>()
   /** 已保存的原件：文件 ID → MIME。同一图片出现在多个会话目录时只保存一次。 */
   const stored = new Map<string, string>()
   let manifest = false
+  let extras: DsLiteArchiveExtras | null = null
   let index: SessionIndexEntry[] | undefined
   let currentSessionId: string | undefined
   /** 当前正在处理的条目，出错时写进提示，方便定位是哪个文件导致了失败 */
@@ -220,6 +232,8 @@ export const importArchive = async (
         }
         checkManifest(await readJson(entry))
         manifest = true
+      } else if (path === DS_LITE_EXTRAS_PATH) {
+        extras = parseArchiveExtras(await readJson(entry))
       } else if (path === USER_PATH && !index && imported.size === 0) {
         // 账号信息（已脱敏）不导入；文件可能缺失。
         await skipEntry(entry)
@@ -244,10 +258,12 @@ export const importArchive = async (
         for (const [imagePath, id] of local.images) {
           images.set(imagePath, id)
         }
+        const withExtras = applySessionExtras(local.session, extras?.sessions[sessionId])
         const sessionToSave =
           allowDuplicate && existing?.has(sessionId)
-            ? { ...local.session, id: createId() }
-            : local.session
+            ? { ...withExtras, id: createId() }
+            : withExtras
+        idMap.set(sessionId, sessionToSave.id)
         await db.addStagingSession(sessionToSave)
       } else if (path === INDEX_PATH && !index) {
         index = readSessionIndex(await readJson(entry))
@@ -295,5 +311,11 @@ export const importArchive = async (
     fail('backupIncomplete')
   }
   await db.updateStagingFileTypes(stored)
-  return { imported: imported.size, skipped: skippedSessions.size, failed: failedSessions }
+  return {
+    imported: imported.size,
+    skipped: skippedSessions.size,
+    failed: failedSessions,
+    extras,
+    idMap,
+  }
 }

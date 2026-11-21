@@ -3,6 +3,8 @@
   flex-direction: column;
   align-items: flex-end;
   padding-bottom: 16px;
+  user-select: none;
+  -webkit-user-select: none;
 
   &.isFirst {
     padding-top: 34px;
@@ -50,7 +52,27 @@
   --message-file-image-size: 64px;
 }
 
+.bubbleCollapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.collapseBtn {
+  margin-top: 4px;
+  padding: 2px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #6b7280);
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .bubble {
+  user-select: text;
+  -webkit-user-select: text;
   max-width: calc(100% - 88px);
   box-sizing: border-box;
   padding: 10px 16px;

@@ -5,6 +5,7 @@ import { safeTail, truncatePercent } from '../../utils/safeText.js'
 import { stripSpecialTokens } from '../../utils/specialTokens.js'
 import { cleanSessionText } from './clean.js'
 import { ApiError, streamMessage } from '../api/client.js'
+import { usesOpenAiProtocol } from '../api/protocol.js'
 import type { ChatModel } from '../api/types.js'
 import { isCustomApiOrigin } from '../api/base.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
@@ -61,8 +62,10 @@ import {
   buildInternalRequest,
   buildRequest,
   EXTENDED_INPUT_LIMIT_TOKENS,
+  URL_PATTERN,
   wantsExtendedRequest,
 } from './request.js'
+import { runTwoStepSearch } from './twoStepSearch.js'
 import {
   applyEvent,
   canContinueReply,
@@ -2151,6 +2154,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   let standardForced = false
   /** 本轮为保住扩展能力裁剪了上下文：确认请求被接受后再提示，失败时别给误导信息 */
   let trimmedForExtended = false
+  /** 两步法联网搜索的结果摘要（重试补传文件时复用，避免重复搜索） */
+  let twoStepSummary: string | null = null
+  let twoStepNotified = false
+  /** 服务端实际报 400 user input too long 时补触发两步法搜索 */
+  let forceTwoStep = false
   try {
     for (let attempt = 0; ; attempt += 1) {
       /** 附件补齐前出错属于上传失败，请求还没有发出 */
@@ -2202,12 +2210,66 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           (activeSession ? getContextUsage(activeSession).usedTokens : 0) +
           estimateMessageTokens(prepared.question)
         const folded = activeSession ? getFoldedIds(activeSession) : undefined
+        const needsSearchTools =
+          !usesOpenAiProtocol() &&
+          !isPro &&
+          ((initial.search ?? false) || URL_PATTERN.test(prepared.question.content))
+
         /**
-         * 本轮用户明确点了联网 / 提问带链接 / 开着严格审查时，宁可裁掉较早的上下文也要保住这些能力：
-         * 服务端扩展模式只有 32768 token，不裁的话「发过一次大文档」就会让联网从此被悄悄关掉。
-         * 裁剪只影响这一次请求，历史附件和轮次都不写回会话；估算仍偏小时走下面的 400 兜底。
+         * 联网搜索「两步法」：
+         * 长上下文或携带大附件（超过扩展模式 32768 token 上限）时，先用精简上下文跑一次联网搜索
+         * 拿到最新资料，再把资料拼进完整上下文的标准模式（1M 上限）请求里，
+         * 彻底避免丢失历史对话和附件。
+         */
+        if (
+          activeSession &&
+          !standardForced &&
+          twoStepSummary === null &&
+          (requestTokens > EXTENDED_INPUT_LIMIT_TOKENS || forceTwoStep) &&
+          needsSearchTools
+        ) {
+          try {
+            const searchRes = await runTwoStepSearch({
+              apiKey: prefs.apiKey ?? '',
+              model,
+              history: prepared.history,
+              question: prepared.question,
+              latestReminder: latestReminder ?? '',
+              search: initial.search ?? false,
+              signal: controller.signal,
+              onToolBlock: (block) => {
+                receivedContent = true
+                reply = {
+                  ...reply,
+                  status: 'streaming',
+                  blocks: [...reply.blocks, block],
+                }
+                if (document.visibilityState === 'hidden') {
+                  flush()
+                } else {
+                  frame ||= requestAnimationFrame(flush)
+                }
+              },
+            })
+            if (searchRes?.summary) {
+              twoStepSummary = searchRes.summary
+            }
+          } catch (step1Error) {
+            if (controller.signal.aborted) {
+              throw step1Error
+            }
+            // eslint-disable-next-line no-console
+            console.warn('[search] two-step search failed, falling back', step1Error)
+          }
+        }
+
+        const useTwoStep = twoStepSummary !== null
+
+        /**
+         * 若未走两步法（如仅严格审查，或第一步搜索失败降级），再尝试按原方案裁剪历史上下文。
          */
         const trimmed =
+          !useTwoStep &&
           activeSession &&
           !standardForced &&
           requestTokens > EXTENDED_INPUT_LIMIT_TOKENS &&
@@ -2249,24 +2311,30 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
               : { card: entry.card, userName: usePersona.getState().userName }
           })()
         )
+        const systemWithSearch = useTwoStep
+          ? `${systemBase}\n\n【本轮联网搜索参考资料】\n${twoStepSummary}\n请结合以上最新检索资料、完整历史上下文与附件内容回答用户问题。`
+          : systemBase
         // v4 pro 不支持 latest_reminder 消息：时间信息并入 system（官方实测 200）
-        const system = isPro ? `${systemBase}\n\n【当前时间】${latestReminder}` : systemBase
+        const system = isPro ? `${systemWithSearch}\n\n【当前时间】${latestReminder}` : systemWithSearch
         const built = buildRequest({
           model,
           system,
           messages,
           questionText: prepared.question.content,
-          search: initial.search ?? false,
+          search: useTwoStep ? false : (initial.search ?? false),
           safety: prefs.safety,
           thinking: initial.thinking ?? false,
           effort: prefs.thinkingEffort,
           wantTitle: titleRequests.has(controller),
           // 传裁剪后的估算值：degraded 只该反映「真的降级了」，裁完还能联网就不算降级
           inputTokens: trimmed ? trimmed.tokens : requestTokens,
-          forceStandard: standardForced,
+          forceStandard: standardForced || useTwoStep,
           temperature: requestTemperature(prefs.personalityTemperature),
         })
-        if (built.degraded) {
+        if (useTwoStep && !twoStepNotified) {
+          twoStepNotified = true
+          showToast('已通过两步联网搜索保留完整上下文与附件')
+        } else if (built.degraded) {
           // 自动降级要说得清楚：用户可能刚点了联网，不能悄悄当没点
           showToast({
             key: 'replyExtendedDowngraded',
@@ -2332,7 +2400,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           })
           break
         }
-        // 扩展模式的 32768 输入上限：报这个错时本轮退回标准模式重发一次，别让用户看到红字
+        // 扩展模式的 32768 输入上限：若是联网/读链接请求先补走两步法，否则退回标准模式重发一次
         if (
           !standardForced &&
           !receivedContent &&
@@ -2340,7 +2408,17 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           error.status === 400 &&
           /user input too long/i.test(error.message)
         ) {
-          standardForced = true
+          if (
+            !forceTwoStep &&
+            twoStepSummary === null &&
+            !usesOpenAiProtocol() &&
+            !isPro &&
+            ((initial.search ?? false) || URL_PATTERN.test(request.question.content))
+          ) {
+            forceTwoStep = true
+          } else {
+            standardForced = true
+          }
           continue
         }
         // 附件失效：重新补传后重发。收到过内容块（含丢弃的客户端工具）后不自动重发。

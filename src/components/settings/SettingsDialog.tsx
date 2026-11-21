@@ -1,4 +1,5 @@
 import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
+import { Capacitor } from '@capacitor/core'
 import clsx from 'clsx'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
@@ -7,11 +8,14 @@ import {
   IconDownloadOutline16,
   IconFollowsystemOutline16,
   IconLightOutline16,
+  IconLinkOutline14,
   IconGlobeLanguageOutline14,
   IconSettingsOutline16,
   IconThinkOutline16,
   IconUploadOutline14,
 } from '../base/icons.js'
+import { downloadArchiveFromUrl } from '../../services/chat/history/downloadArchive.js'
+import { QuickTransferModal } from './QuickTransferModal.js'
 import { isStorageWriteError } from '../../services/storage.js'
 import {
   BackupError,
@@ -208,6 +212,7 @@ const SettingsContent = () => {
               <ApiOriginField />
           <BalanceField />
           <ShowBalanceField />
+              <QuickTransferCell historyImport={historyImport} disabled={historyBusy} />
               <ImportHistory historyImport={historyImport} disabled={historyBusy} />
               <ExportHistory disabled={historyBusy} />
               <ExportMemory disabled={historyBusy} />
@@ -1099,6 +1104,76 @@ const ImportGuide = ({ onClose }: { onClose: () => void }) => {
   )
 }
 
+const ImportFromUrlModal = ({
+  onFetched,
+  onClose,
+}: {
+  onFetched: (file: File) => void
+  onClose: () => void
+}) => {
+  const [url, setUrl] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleFetch = async () => {
+    if (loading || !url.trim()) {
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      const file = await downloadArchiveFromUrl(url)
+      onClose()
+      onFetched(file)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal
+      title="通过下载链接导入"
+      closable
+      onClose={() => {
+        if (!loading) {
+          onClose()
+        }
+      }}
+      footer={
+        <div className={styles.importUrlFooter}>
+          <Button variant="outlined" size="m" disabled={loading} onClick={onClose}>
+            取消
+          </Button>
+          <Button size="m" disabled={loading || !url.trim()} onClick={() => void handleFetch()}>
+            {loading ? '下载解析中…' : '下载并导入'}
+          </Button>
+        </div>
+      }
+    >
+      <div className={styles.importUrlBox}>
+        <div className={styles.importUrlHint}>
+          粘贴 DeepSeek 官方导出提供的 ZIP 压缩包下载链接，将直接拉取并进入会话勾选列表（不覆盖本机已有会话）。
+        </div>
+        <textarea
+          className={styles.importUrlInput}
+          placeholder="https://..."
+          value={url}
+          disabled={loading}
+          onChange={(event) => {
+            setUrl(event.target.value)
+            if (error) {
+              setError('')
+            }
+          }}
+        />
+        {error ? <div className={styles.importUrlError}>{error}</div> : null}
+      </div>
+    </Modal>
+  )
+}
+
 const ImportHistory = ({
   historyImport,
   disabled,
@@ -1109,6 +1184,8 @@ const ImportHistory = ({
   const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
   const [guideOpen, setGuideOpen] = useState(false)
+  const [urlModalOpen, setUrlModalOpen] = useState(false)
+  const isNative = Capacitor.isNativePlatform()
 
   return (
     <>
@@ -1125,6 +1202,18 @@ const ImportHistory = ({
             >
               {t('historyImportGuideLink')}
             </button>
+            {isNative ? (
+              <Button
+                variant="outlined"
+                size="m"
+                className={clsx(styles.cellButton, styles.uploadButton)}
+                disabled={disabled}
+                onClick={() => setUrlModalOpen(true)}
+              >
+                <IconLinkOutline14 />
+                链接导入
+              </Button>
+            ) : null}
             <Button
               variant="outlined"
               size="m"
@@ -1153,6 +1242,12 @@ const ImportHistory = ({
       />
       <div className={styles.importShareTip}>{renderEmphasis(t('historyImportShareTip'))}</div>
       {guideOpen ? <ImportGuide onClose={() => setGuideOpen(false)} /> : null}
+      {urlModalOpen ? (
+        <ImportFromUrlModal
+          onFetched={(file) => historyImport.select(file)}
+          onClose={() => setUrlModalOpen(false)}
+        />
+      ) : null}
     </>
   )
 }
@@ -1197,10 +1292,47 @@ const ExportMemory = ({ disabled }: { disabled: boolean }) => {
   )
 }
 
+const QuickTransferCell = ({
+  historyImport,
+  disabled,
+}: {
+  historyImport: ReturnType<typeof useHistoryImport>
+  disabled: boolean
+}) => {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <SettingCell
+        label="设备快传（多端同步）"
+        description="无需云服务：局域网 6 位口令或全端加密口令直连互传对话、附件、记忆笔记与人设（不含 API Key）"
+        status={null}
+        action={
+          <Button
+            variant="outlined"
+            size="m"
+            className={styles.cellButton}
+            disabled={disabled}
+            onClick={() => setOpen(true)}
+          >
+            打开快传
+          </Button>
+        }
+      />
+      {open ? (
+        <QuickTransferModal
+          onReceivedFile={(file) => historyImport.select(file)}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </>
+  )
+}
+
 /** 将全部会话及图片导出为 ZIP 文件并下载 */
 const ExportHistory = ({ disabled }: { disabled: boolean }) => {
   const t = useTranslate()
   const empty = useChatStore((state) => state.sessions.length === 0)
+  const [includeExtras, setIncludeExtras] = useState(true)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<Status>(null)
 
@@ -1208,7 +1340,7 @@ const ExportHistory = ({ disabled }: { disabled: boolean }) => {
     setBusy(true)
     setStatus(null)
     try {
-      const { name, blob } = await exportHistory()
+      const { name, blob } = await exportHistory({ includeExtras })
       // APK 里没有下载监听，saveFile 会改走系统分享面板
       await saveFile(blob, name)
     } catch (error) {
@@ -1219,22 +1351,32 @@ const ExportHistory = ({ disabled }: { disabled: boolean }) => {
   }
 
   return (
-    <SettingCell
-      label={t('exportAllLabel')}
-      description={t('historyExportDescription')}
-      status={status}
-      action={
-        <Button
-          variant="outlined"
-          size="m"
-          className={styles.cellButton}
-          disabled={disabled || busy || empty}
-          onClick={() => void onExport()}
-        >
-          <IconDownloadOutline16 />
-          {t('exportAllDownload')}
-        </Button>
-      }
-    />
+    <>
+      <SettingCell
+        label={t('exportAllLabel')}
+        description={t('historyExportDescription')}
+        status={status}
+        action={
+          <Button
+            variant="outlined"
+            size="m"
+            className={styles.cellButton}
+            disabled={disabled || busy || empty}
+            onClick={() => void onExport()}
+          >
+            <IconDownloadOutline16 />
+            {t('exportAllDownload')}
+          </Button>
+        }
+      />
+      <label className={styles.exportExtrasOption}>
+        <input
+          type="checkbox"
+          checked={includeExtras}
+          onChange={(event) => setIncludeExtras(event.target.checked)}
+        />
+        <span>包含记忆笔记与人设（DS Lite 专属扩展文件，不含 API Key）</span>
+      </label>
+    </>
   )
 }

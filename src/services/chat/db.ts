@@ -1,6 +1,26 @@
+import { Capacitor } from '@capacitor/core'
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import { cleanSessionText } from './clean.js'
+import {
+  nativeAddStagingSession,
+  nativeClearStaging,
+  nativeCommitStaging,
+  nativeDeleteSession,
+  nativeLoadAllSearchDocs,
+  nativeLoadFile,
+  nativeLoadSession,
+  nativeLoadSessionSummaries,
+  nativeRenameSession,
+  nativeSaveSearchDocs,
+  nativeSaveSessionFiles,
+  nativeSaveSessionRecord,
+  nativeSaveStagingFiles,
+  nativeUpdateStagingFileTypes,
+  type IdbMigrationSource,
+} from './nativeDb.js'
 import { toSessionSummary, type Session, type SessionSummary } from './types.js'
+
+const isNative = () => Capacitor.isNativePlatform()
 
 /**
  * IndexedDB 存储结构版本；新增或调整存储、索引时递增。
@@ -165,7 +185,7 @@ export const requestPersistentStorage = (): void => {
  * 列表就全空、界面显示「对话列表加载失败」——用户看到的就是「重启后会话全没了」。
  * 所以失败后退化成按 key 逐条读：坏的那条跳过，其它会话照常列出来。
  */
-export const loadSessionSummaries = async (): Promise<SessionSummary[]> => {
+const idbLoadSessionSummaries = async (): Promise<SessionSummary[]> => {
   const db = await getDB()
   try {
     return (await db.getAll('sessionSummaries')).map(toSessionSummary)
@@ -188,8 +208,27 @@ export const loadSessionSummaries = async (): Promise<SessionSummary[]> => {
   return summaries
 }
 
-export const loadSession = async (id: string): Promise<Session | undefined> =>
+const idbLoadSession = async (id: string): Promise<Session | undefined> =>
   (await getDB()).get('sessions', id)
+
+const idbLoadFile = async (id: string): Promise<Blob | undefined> =>
+  (await (await getDB()).get('files', id))?.blob
+
+const idbLoadAllSearchDocs = async (): Promise<SessionSearchDocs[]> =>
+  (await getDB()).getAll('searchDocs')
+
+const idbSource: IdbMigrationSource = {
+  loadSessionSummaries: idbLoadSessionSummaries,
+  loadSession: idbLoadSession,
+  loadFile: idbLoadFile,
+  loadAllSearchDocs: idbLoadAllSearchDocs,
+}
+
+export const loadSessionSummaries = async (): Promise<SessionSummary[]> =>
+  isNative() ? nativeLoadSessionSummaries(idbSource) : idbLoadSessionSummaries()
+
+export const loadSession = async (id: string): Promise<Session | undefined> =>
+  isNative() ? nativeLoadSession(id, idbSource) : idbLoadSession(id)
 
 /**
  * 写会话正文与列表摘要。
@@ -218,6 +257,10 @@ const writeSessionRecord = async (session: Session, summary: StoredSessionSummar
 }
 
 export const saveSessionRecord = async (session: Session): Promise<void> => {
+  if (isNative()) {
+    await nativeSaveSessionRecord(session, idbSource)
+    return
+  }
   // 写库前清洗异常字符与漏进来的协议标记；没有改动时返回原对象，不影响流式期间的引用比较
   session = cleanSessionText(session)
   const summary = storedSummary(session)
@@ -235,15 +278,23 @@ export const saveSessionRecord = async (session: Session): Promise<void> => {
 
 /** 读取整库正文索引；搜索时一次性读进内存，之后不再碰 IndexedDB。 */
 export const loadAllSearchDocs = async (): Promise<SessionSearchDocs[]> =>
-  (await getDB()).getAll('searchDocs')
+  isNative() ? nativeLoadAllSearchDocs(idbSource) : idbLoadAllSearchDocs()
 
 /** 写入一个会话的正文索引（整条覆盖）。 */
 export const saveSearchDocs = async (docs: SessionSearchDocs): Promise<void> => {
+  if (isNative()) {
+    await nativeSaveSearchDocs(docs, idbSource)
+    return
+  }
   await (await getDB()).put('searchDocs', docs)
 }
 
 /** 未打开的会话也可重命名，只读取该会话，原子更新详情和列表。 */
 export const renameSession = async (id: string, title: string): Promise<void> => {
+  if (isNative()) {
+    await nativeRenameSession(id, title, idbSource)
+    return
+  }
   const tx = (await getDB()).transaction(['sessions', 'sessionSummaries'], 'readwrite')
   await Promise.all([
     (async () => {
@@ -266,6 +317,10 @@ export const renameSession = async (id: string, title: string): Promise<void> =>
 
 /** 删除会话，仅清理已无会话引用的本地原件；远端文件不删。 */
 export const deleteSession = async (sessionId: string): Promise<void> => {
+  if (isNative()) {
+    await nativeDeleteSession(sessionId, idbSource)
+    return
+  }
   const tx = (await getDB()).transaction(
     ['sessions', 'sessionSummaries', 'files', 'searchDocs'],
     'readwrite'
@@ -300,13 +355,18 @@ const putFiles = async (store: 'files' | 'filesStaging', files: StoredFile[]) =>
 }
 
 /** 附件原件单独写：失败只影响缩略图/补传，正文已经在上一步落地 */
-export const saveSessionFiles = (files: StoredFile[]): Promise<void> => putFiles('files', files)
+export const saveSessionFiles = (files: StoredFile[]): Promise<void> =>
+  isNative() ? nativeSaveSessionFiles(files, idbSource) : putFiles('files', files)
 
 export const loadFile = async (id: string): Promise<Blob | undefined> =>
-  (await (await getDB()).get('files', id))?.blob
+  isNative() ? nativeLoadFile(id, idbSource) : idbLoadFile(id)
 
 /** 清空导入暂存：开始导入前清除上次中断（如关闭页面）遗留的数据，导入失败后清除本次写入。 */
 export const clearStaging = async (): Promise<void> => {
+  if (isNative()) {
+    await nativeClearStaging()
+    return
+  }
   const tx = (await getDB()).transaction(['sessionsStaging', 'filesStaging'], 'readwrite')
   await Promise.all([
     tx.objectStore('sessionsStaging').clear(),
@@ -316,14 +376,22 @@ export const clearStaging = async (): Promise<void> => {
 }
 
 export const addStagingSession = async (session: Session): Promise<void> => {
+  if (isNative()) {
+    await nativeAddStagingSession(session)
+    return
+  }
   await (await getDB()).add('sessionsStaging', session)
 }
 
 export const saveStagingFiles = (files: StoredFile[]): Promise<void> =>
-  putFiles('filesStaging', files)
+  isNative() ? nativeSaveStagingFiles(files) : putFiles('filesStaging', files)
 
 /** 图片位于会话 JSON 之后；全部读完后回填具体 MIME，保留归档给出的 isImage 标识。 */
 export const updateStagingFileTypes = async (types: ReadonlyMap<string, string>): Promise<void> => {
+  if (isNative()) {
+    await nativeUpdateStagingFileTypes(types)
+    return
+  }
   const tx = (await getDB()).transaction('sessionsStaging', 'readwrite')
   await Promise.all([
     (async () => {
@@ -361,6 +429,9 @@ export const updateStagingFileTypes = async (types: ReadonlyMap<string, string>)
 export const commitStaging = async (
   options: { merge?: boolean } = {}
 ): Promise<SessionSummary[]> => {
+  if (isNative()) {
+    return nativeCommitStaging(options, idbSource)
+  }
   const { merge = false } = options
   const summaries: SessionSummary[] = []
   const tx = (await getDB()).transaction(

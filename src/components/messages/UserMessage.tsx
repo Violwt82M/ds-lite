@@ -43,6 +43,8 @@ export const UserMessage = memo(function UserMessage({
   const t = useTranslate()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(message.content)
+  const [collapsed, setCollapsed] = useState(false)
+  const isLongMessage = message.content.length > 300 || message.content.split('\n').length > 8
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isMobile = useIsMobile()
   // 自定义头像属于外观设置，直接订阅 store，不用从 MessageList 一层层传
@@ -130,10 +132,25 @@ export const UserMessage = memo(function UserMessage({
       ) : (
         <>
           {message.content ? (
-            <div className={styles.bubbleRow}>
-              <div className={`${styles.bubble} ds-user-bubble`}>{message.content}</div>
-              {bubbleSkin && showReadMark ? <span className={styles.readMark}>{t('readMark')}</span> : null}
-            </div>
+            <>
+              <div className={styles.bubbleRow}>
+                <div className={`${styles.bubble} ds-user-bubble`}>
+                  <span className={collapsed ? styles.bubbleCollapsed : undefined}>
+                    {message.content}
+                  </span>
+                </div>
+                {bubbleSkin && showReadMark ? <span className={styles.readMark}>{t('readMark')}</span> : null}
+              </div>
+              {isLongMessage ? (
+                <button
+                  type="button"
+                  className={styles.collapseBtn}
+                  onClick={() => setCollapsed((prev) => !prev)}
+                >
+                  {collapsed ? '展开全文' : '收起'}
+                </button>
+              ) : null}
+            </>
           ) : null}
           <div className={styles.bottom}>
             <div className={clsx(styles.actions, isLast && styles.alwaysShow)}>

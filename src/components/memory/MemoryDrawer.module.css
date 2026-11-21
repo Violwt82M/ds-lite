@@ -71,7 +71,7 @@
 }
 
 .progressFill[data-level='critical'] {
-  background: #1a1a1a;
+  background: repeating-linear-gradient(-45deg, #f5a623 0 5px, #1a1a1a 5px 10px);
 }
 
 /* 四色水位图例 */

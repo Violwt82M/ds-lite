@@ -3,6 +3,7 @@ import { memo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import {
   IconCopyOutline16,
+  IconDownloadOutline16,
   IconEditOutline16,
   IconEllipsisOutline16,
   IconPinOutline16,
@@ -19,6 +20,7 @@ import { showToast } from '../base/toastState.js'
 import type { SessionSummary } from '../../services/chat/types.js'
 import { IconButton } from '../base/IconButton.js'
 import { Menu } from '../base/Menu.js'
+import { ExportTxtDialog } from './ExportTxtDialog.js'
 import { closeMobileSider } from './mobileSiderState.js'
 import styles from './SessionItem.module.css'
 
@@ -36,6 +38,7 @@ export const SessionItem = memo(function SessionItem({
 }) {
   const t = useTranslate()
   const [editing, setEditing] = useState(false)
+  const [exportTxtOpen, setExportTxtOpen] = useState(false)
   const displayTitle = session.title || t('untitledChat')
 
   if (editing) {
@@ -64,13 +67,14 @@ export const SessionItem = memo(function SessionItem({
   }
 
   return (
-    <div
-      className={clsx(styles.item, active && styles.active)}
-      onClick={() => {
-        selectSession(session.id)
-        closeMobileSider()
-      }}
-    >
+    <>
+      <div
+        className={clsx(styles.item, active && styles.active)}
+        onClick={() => {
+          selectSession(session.id)
+          closeMobileSider()
+        }}
+      >
       <div className={styles.title}>
         {session.memoryBackup ? (
           <span className={styles.backupBadge}>{t('sessionBackupBadge')}</span>
@@ -110,6 +114,12 @@ export const SessionItem = memo(function SessionItem({
               },
             },
             {
+              key: 'exportTxt',
+              label: '导出当前对话（txt）',
+              icon: <IconDownloadOutline16 />,
+              onSelect: () => setExportTxtOpen(true),
+            },
+            {
               key: 'rename',
               label: t('sessionItemMenuRenameOption'),
               icon: <IconEditOutline16 />,
@@ -129,6 +139,14 @@ export const SessionItem = memo(function SessionItem({
           )}
         </Menu>
       </div>
-    </div>
+      </div>
+      {exportTxtOpen ? (
+        <ExportTxtDialog
+          sessionId={session.id}
+          sessionTitle={displayTitle}
+          onClose={() => setExportTxtOpen(false)}
+        />
+      ) : null}
+    </>
   )
 })

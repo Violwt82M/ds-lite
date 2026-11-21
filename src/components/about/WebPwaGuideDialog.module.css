@@ -1,0 +1,48 @@
+.modal {
+  width: min(460px, calc(100vw - 28px));
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.intro {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--dsw-alias-label-secondary, #5c6270);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.browserCard {
+  padding: 11px 13px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
+  border-left: 3px solid var(--dsw-alias-brand-primary, #4d6bfe);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2, rgba(77, 107, 254, 0.04));
+}
+
+.browserName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+  margin-bottom: 4px;
+}
+
+.browserSteps {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-secondary, #5c6270);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

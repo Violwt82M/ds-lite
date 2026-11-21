@@ -17,6 +17,7 @@ import { Welcome } from '../components/session/Welcome.js'
 import { ensureApiKey, openSettings } from '../components/settings/settingsDialogState.js'
 import { SettingsDialog } from '../components/settings/SettingsDialog.js'
 import { DisclaimerDialog } from '../components/about/DisclaimerDialog.js'
+import { WebPwaGuideDialog } from '../components/about/WebPwaGuideDialog.js'
 import { ChangelogDialog } from '../components/about/ChangelogDialog.js'
 import { checkForUpdate, isNativePlatform } from '../services/updateCheck.js'
 import { applyWebUpdate, useWebUpdate } from '../services/webUpdate.js'
@@ -209,6 +210,7 @@ export const App = () => {
       ) : null}
       <SettingsDialog />
       <DisclaimerDialog />
+      <WebPwaGuideDialog />
       <ContextGuideDialog />
       <ChangelogDialog />
       <SponsorDialog />

@@ -25,8 +25,15 @@ const enqueueBackup = <T>(run: () => Promise<T>): Promise<T> => {
 
 const backupFileName = (date: Date) => `deepseek_data-${formatDate(date)}.zip`
 
+export type ExportHistoryOptions = {
+  /** 是否附带 DS Lite 专属扩展文件（记忆笔记、折叠状态、人设卡与绑定，不含 API Key） */
+  includeExtras?: boolean
+}
+
 /** 导出为历史会话导出格式的 ZIP，可再次导入。 */
-export const exportHistory = (): Promise<{ name: string; blob: Blob }> =>
+export const exportHistory = (
+  options: ExportHistoryOptions = {}
+): Promise<{ name: string; blob: Blob }> =>
   enqueueBackup(async () => {
     // 列表和已加载内容保留导出开始时的快照；未打开的会话逐条读取，不填满详情缓存。
     const { sessions, sessionCache } = useChatStore.getState()
@@ -44,7 +51,9 @@ export const exportHistory = (): Promise<{ name: string; blob: Blob }> =>
     }
     const { exportArchive } = await import('./history/exportArchive.js')
     const now = new Date()
-    const blob = await exportArchive(readSessions())
+    const blob = await exportArchive(readSessions(), {
+      includeExtras: options.includeExtras === true,
+    })
     return { name: backupFileName(now), blob }
   })
 
@@ -87,10 +96,17 @@ export const importHistory = (
     beginImport(file)
     try {
       const { checkArchiveFormat, importArchive } = await import('./history/importArchive.js')
+      const { applyArchiveExtrasPersonas } = await import('./history/extras.js')
       await checkArchiveFormat(file, reportScanProgress)
       const existingIds = (await db.loadSessionSummaries()).map((summary) => summary.id)
       startReading()
-      let result = { imported: 0, skipped: 0, failed: 0 }
+      let result: Awaited<ReturnType<typeof importArchive>> = {
+        imported: 0,
+        skipped: 0,
+        failed: 0,
+        extras: null,
+        idMap: new Map(),
+      }
       const imported = await replaceHistory(
         async () => {
           result = await importArchive(file, {
@@ -102,6 +118,7 @@ export const importHistory = (
         },
         { merge: true }
       )
+      applyArchiveExtrasPersonas(result.extras, result.idMap)
       return { imported, skipped: result.skipped, failed: result.failed }
     } finally {
       endImport()
