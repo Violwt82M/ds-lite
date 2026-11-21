@@ -14,6 +14,7 @@ import { showToast } from '../../components/base/toastState.js'
 import { classifyStorageWriteFailure } from '../storage.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
+import { notifyLocalSessionSaved, notifyLocalSessionsReplaced } from '../sync/bridge.js'
 import { flushSearchIndex, scheduleSessionIndex } from './searchIndex.js'
 import {
   clearAllDrafts,
@@ -431,6 +432,8 @@ const persist = (sessionId: string): Promise<void> => {
     saveAttempts.delete(sessionId)
     // 正文搜索索引跟着数据走：会话存进库后顺手重建它那一条（防抖，流式期间不会反复写）
     scheduleSessionIndex(session)
+    // 通知同步引擎：这条会话有新内容，推给已连接的设备
+    notifyLocalSessionSaved(session)
     if (pendingFiles.get(sessionId) === files) {
       pendingFiles.delete(sessionId)
     }
@@ -646,6 +649,125 @@ export const initChat = (): Promise<void> => {
   return initTask
 }
 
+/**
+ * 同步引擎把对端会话写进 IndexedDB 后，通知界面刷新列表与已缓存的详情。
+ * 本地还在编辑 / 生成中的会话不覆盖（内存里的版本比库里新）。
+ */
+export const refreshSessionsFromStorage = async () => {
+  if (!get().ready) return
+  const summaries = await db.loadSessionSummaries()
+  const state = get()
+  // 列表里有、库里还没有的会话（刚新建 / 生成中还没落盘）不能被整表替换弄丢
+  const dbIds = new Set(summaries.map((s) => s.id))
+  const inMemoryOnly = state.sessions.filter((s) => !dbIds.has(s.id))
+  const list = inMemoryOnly.length > 0 ? sortSessions([...summaries, ...inMemoryOnly]) : summaries
+  const changed = new Set<string>()
+  for (const summary of summaries) {
+    const prev = state.sessions.find((session) => session.id === summary.id)
+    if (!prev || prev.updatedAt !== summary.updatedAt) changed.add(summary.id)
+  }
+  const reloadIds = [...changed].filter(
+    (id) =>
+      Object.hasOwn(state.sessionCache, id) &&
+      !unsavedSessions.has(id) &&
+      !Object.hasOwn(state.streaming, id)
+  )
+  if (reloadIds.length > 0) {
+    const reloaded = await Promise.all(reloadIds.map((id) => db.loadSession(id)))
+    set((current) => {
+      const sessionCache = { ...current.sessionCache }
+      reloadIds.forEach((id, index) => {
+        const stored = reloaded[index]
+        if (stored) sessionCache[id] = settleInterrupted(normalizeSession(stored))
+      })
+      return { sessions: sortSessions(list), sessionCache }
+    })
+  } else {
+    set({ sessions: sortSessions(list) })
+  }
+}
+
+/**
+ * 对端消息与本机的并集合并：没有的补进来，同 id 用对端版本覆盖（对端持有该消息的最新状态），
+ * 最后按 createdAt 排序，保证合并后的线程顺序正确。
+ */
+const unionMessages = (local: Message[], incoming: Message[]) => {
+  const map = new Map(local.map((m) => [m.id, m]))
+  let added = 0
+  for (const m of incoming) {
+    if (!map.has(m.id)) added += 1
+    map.set(m.id, m)
+  }
+  const merged = [...map.values()].sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
+  return { merged, added }
+}
+
+/**
+ * 对端同步来的会话写入本机的唯一入口（同步引擎经 bridge 钩子调用）。
+ *
+ * 内存里已有这条会话 → 先并进内存、再走正常 persist 落盘；内存里没有才读库合并写库。
+ * 之前引擎直接写库，而 store 生成对话时又会把「旧内存整条」写回库，两边互相覆盖，
+ * 结果就是同步后一方的历史消失。现在会话只有 store 一个写入者，不存在双写。
+ */
+export const mergeRemoteSession = async (
+  incoming: Session
+): Promise<{ isNew: boolean; added: number }> => {
+  if (!incoming?.id || !Array.isArray(incoming.messages)) return { isNew: false, added: 0 }
+  if (deletingSessions.has(incoming.id)) return { isNew: false, added: 0 }
+
+  const cached = getSession(incoming.id)
+  if (cached) {
+    const { merged, added } = unionMessages(cached.messages, incoming.messages)
+    const newer = (incoming.updatedAt ?? 0) > (cached.updatedAt ?? 0)
+    const next: Session = newer
+      ? {
+          ...cached,
+          messages: merged,
+          title: incoming.title ?? cached.title,
+          updatedAt: incoming.updatedAt ?? cached.updatedAt,
+          rootMessageId: incoming.rootMessageId ?? cached.rootMessageId,
+          memory: incoming.memory ?? cached.memory,
+        }
+      : { ...cached, messages: merged }
+    set((state) => ({
+      sessionCache: { ...state.sessionCache, [incoming.id]: next },
+      sessions: sameSummary(cached, next)
+        ? state.sessions
+        : sortSessions(
+            state.sessions.map((summary) =>
+              summary.id === incoming.id ? toSessionSummary(next) : summary
+            )
+          ),
+    }))
+    persist(incoming.id)
+    return { isNew: false, added }
+  }
+
+  const stored = await db.loadSession(incoming.id)
+  if (stored) {
+    const { merged, added } = unionMessages(stored.messages, incoming.messages)
+    const newer = (incoming.updatedAt ?? 0) > (stored.updatedAt ?? 0)
+    if (added > 0 || newer) {
+      const next: Session = newer
+        ? {
+            ...stored,
+            messages: merged,
+            title: incoming.title ?? stored.title,
+            updatedAt: incoming.updatedAt ?? stored.updatedAt,
+            rootMessageId: incoming.rootMessageId ?? stored.rootMessageId,
+            memory: incoming.memory ?? stored.memory,
+          }
+        : { ...stored, messages: merged }
+      await db.saveSessionRecord(next)
+    }
+    return { isNew: false, added }
+  }
+  // 只带元数据的 diff（如同步压缩 memory）先到了、整条会话还没来：不建空会话，等全量推送
+  if (incoming.messages.length === 0) return { isNew: false, added: 0 }
+  await db.saveSessionRecord(incoming)
+  return { isNew: true, added: incoming.messages.length }
+}
+
 /** 同一会话合并并发读取；切换只改变 activeId，旧请求不会把界面切回去。 */
 const ensureSessionLoaded = (id: string): Promise<void> => {
   if (getSession(id)) {
@@ -756,6 +878,8 @@ export const replaceHistory = async (
     if (merge) {
       // 会话 id 由导入阶段去重，这里直接并进列表即可；详情缓存对已有会话仍然有效。
       set({ sessions: sortSessions([...get().sessions, ...summaries]) })
+      // 导入不经过 persist，必须单独通知同步引擎，否则已连接的设备收不到新会话
+      notifyLocalSessionsReplaced(summaries.map((summary) => summary.id))
       return summaries.length
     }
     sessionAccess.clear()
@@ -773,6 +897,8 @@ export const replaceHistory = async (
       sessionSaveErrors: {},
       activeId: null,
     })
+    // 整库替换后把所有会话同步给已连接的对端
+    notifyLocalSessionsReplaced(summaries.map((summary) => summary.id))
     return summaries.length
   } finally {
     set({ importingHistory: false })

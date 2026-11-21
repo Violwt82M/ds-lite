@@ -1,6 +1,7 @@
 import { openDB, type IDBPDatabase } from 'idb'
 import { create } from 'zustand'
 import { setStatusBarIconsDark, setThemeColor } from './nativeTheme.js'
+import { touchSyncMeta } from './settings.js'
 
 /**
  * 聊天背景：预设用 CSS 渐变（不占存储），自定义图片压缩后存 IndexedDB
@@ -9,6 +10,8 @@ import { setStatusBarIconsDark, setThemeColor } from './nativeTheme.js'
 export type WallpaperPreset = 'none' | 'paper' | 'mist' | 'dusk' | 'custom'
 
 const STORAGE_KEY = 'chat-demo:wallpaper'
+/** 自定义背景图的设置时间：同步时用它判断哪边的图更新 */
+export const WALLPAPER_TS_KEY = 'ds-lite:wallpaper-updatedAt'
 const DB_NAME = 'chat-demo-wallpaper'
 const STORE = 'images'
 const IMAGE_KEY = 'custom'
@@ -139,6 +142,7 @@ const shrink = async (file: File): Promise<Blob> => {
 export const setCustomWallpaperBlob = async (blob: Blob): Promise<void> => {
   const db = await open()
   await db.put(STORE, blob, IMAGE_KEY)
+  try { localStorage.setItem(WALLPAPER_TS_KEY, String(Date.now())) } catch {}
   setObjectUrl(blob)
   const dark = await measureDark(blob)
   useWallpaper.setState({ dark })
@@ -152,6 +156,8 @@ export const setCustomWallpaper = async (file: File): Promise<void> => {
 }
 
 export const setWallpaper = (preset: WallpaperPreset) => {
+  let prev: string | null = null
+  try { prev = localStorage.getItem(STORAGE_KEY) } catch {}
   // 自定义图沿用测出来的深浅；预设图按预设判断
   useWallpaper.setState(
     preset === 'custom' ? { preset } : { preset, dark: DARK_PRESETS.includes(preset) }
@@ -161,6 +167,24 @@ export const setWallpaper = (preset: WallpaperPreset) => {
   } catch {
     // 存不下只影响下次打开
   }
+  // 只有值真的变了才更新时间戳：启动重放同一个值不算，
+  // 否则同步时「哪边背景更新」的比较会失真；
+  // 同时补记设置同步用的时间戳，防止远端旧预设无条件覆盖本机新选择
+  if (prev !== preset) {
+    try { localStorage.setItem(WALLPAPER_TS_KEY, String(Date.now())) } catch {}
+    touchSyncMeta(STORAGE_KEY)
+  }
+}
+
+/** 设置同步把壁纸预设写进 localStorage 后调用：重读并立即应用（含自定义图加载） */
+export const refreshWallpaperFromStorage = async (): Promise<void> => {
+  let saved: WallpaperPreset = 'none'
+  try {
+    const v = localStorage.getItem(STORAGE_KEY)
+    if (v && (PRESETS as readonly string[]).includes(v)) saved = v as WallpaperPreset
+  } catch {}
+  setWallpaper(saved)
+  if (saved === 'custom') await loadWallpaper()
 }
 
 /** 启动时读回自定义图（只有选了 custom 才需要） */
@@ -182,6 +206,36 @@ export const loadWallpaper = async (): Promise<void> => {
   } catch {
     setWallpaper('none')
   }
+}
+
+/** 读当前自定义背景图（同步引擎传输用）；没设过自定义图返回 null */
+export const readWallpaperBlob = async (): Promise<Blob | null> => {
+  try {
+    const database = await open()
+    return ((await database.get(STORE, IMAGE_KEY)) as Blob | undefined) ?? null
+  } catch {
+    return null
+  }
+}
+
+/** 本机自定义背景图的设置时间（同步引擎判断新旧用） */
+export const wallpaperUpdatedAt = (): number => {
+  try {
+    return Number(localStorage.getItem(WALLPAPER_TS_KEY)) || 0
+  } catch {
+    return 0
+  }
+}
+
+/** 同步引擎收到对端背景图后：写库、切换过去、按图片亮度调整状态栏 */
+export const applySyncedWallpaper = async (blob: Blob): Promise<void> => {
+  const database = await open()
+  await database.put(STORE, blob, IMAGE_KEY)
+  try { localStorage.setItem(WALLPAPER_TS_KEY, String(Date.now())) } catch {}
+  setObjectUrl(blob)
+  const dark = await measureDark(blob)
+  useWallpaper.setState({ dark })
+  setWallpaper('custom')
 }
 
 /** 把当前背景写到 body 上：预设走 CSS 选择器，自定义图注入 CSS 变量 */

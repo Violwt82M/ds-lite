@@ -25,6 +25,7 @@ import { ContextGuideDialog } from '../components/memory/ContextGuideDialog.js'
 import { useDisclaimer } from '../components/about/disclaimerState.js'
 import { Toast } from '../components/base/Toast.js'
 import { showToast } from '../components/base/toastState.js'
+import { SyncDialog } from '../components/sync/SyncPanel.js'
 import { onUploadNotice } from '../services/attachments.js'
 import { setupWallpaper } from '../services/wallpaper.js'
 import { setupAppearance } from '../services/appearance.js'
@@ -213,6 +214,7 @@ export const App = () => {
       <ChangelogDialog />
       <SponsorDialog />
       <Toast />
+      <SyncDialog />
     </>
   )
 }

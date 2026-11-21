@@ -108,6 +108,33 @@ const read = (key: string) => {
   }
 }
 
+/** 每个设置项最后一次修改的时间戳（同步按项合并用） */
+const META_KEY = 'chat-demo:sync-meta'
+
+const readMeta = (): Record<string, number> => {
+  try {
+    const raw = localStorage.getItem(META_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (typeof parsed !== 'object' || parsed === null) return {}
+    const meta: Record<string, number> = {}
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof value === 'number' && Number.isFinite(value)) meta[key] = value
+    }
+    return meta
+  } catch {
+    return {}
+  }
+}
+
+const writeMeta = (meta: Record<string, number>) => {
+  try {
+    localStorage.setItem(META_KEY, JSON.stringify(meta))
+  } catch {
+    // 存储不可用时忽略
+  }
+}
+
 const write = (key: string, value: string | null) => {
   try {
     if (value === null) {
@@ -118,6 +145,9 @@ const write = (key: string, value: string | null) => {
   } catch {
     // 存储不可用时只在内存中生效
   }
+  const meta = readMeta()
+  meta[key] = Date.now()
+  writeMeta(meta)
 }
 
 /** 位置选择模式跟随浏览器语言，与应用内选择的界面语言无关。 */
@@ -196,7 +226,7 @@ const clampPersonalityTemperature = (value: number) => {
   return Math.min(100, Math.max(0, Math.round(value)))
 }
 
-export const useSettings = create<Settings>(() => ({
+const readInitialSettings = (): Settings => ({
   apiKey: read(KEYS.apiKey),
   locale: initialLocale(),
   location: initialLocation(),
@@ -255,7 +285,54 @@ export const useSettings = create<Settings>(() => ({
     // 没存过时 Number(null) 是 0，会把默认温度误判成 0.0；必须先用 null 判断
     return raw === null ? PERSONALITY_TEMPERATURE_DEFAULT : clampPersonalityTemperature(Number(raw))
   })(),
-}))
+})
+
+export const useSettings = create<Settings>(() => readInitialSettings())
+
+/** 同步收到远端设置后调用：把 localStorage 重新读回内存 store，界面立即生效 */
+export const reloadSettingsFromStorage = () => {
+  useSettings.setState(readInitialSettings())
+}
+
+/** 供同步发送：每个设置项的最后修改时间 */
+export const settingsSyncMeta = (): Record<string, number> => readMeta()
+
+/** 给绕过设置 store 直接写 localStorage 的写入方（如壁纸）补记同步时间戳，否则远端同名项会无条件覆盖本机 */
+export const touchSyncMeta = (key: string) => {
+  const meta = readMeta()
+  meta[key] = Date.now()
+  writeMeta(meta)
+}
+
+/**
+ * 同步接收：按「每项最后修改时间」合并，只接收比本机更新的项，不会整包覆盖。
+ * remoteMeta 缺失（老版本对端）时退回逐项覆盖的旧行为。
+ */
+export const applySyncedSettings = (
+  entries: Record<string, string | null>,
+  remoteMeta?: Record<string, number>
+): number => {
+  const meta = readMeta()
+  let applied = 0
+  for (const [key, value] of Object.entries(entries)) {
+    const remoteTs = remoteMeta?.[key]
+    if (remoteTs !== undefined && remoteTs <= (meta[key] ?? 0)) continue
+    try {
+      if (value === null) {
+        localStorage.removeItem(key)
+      } else {
+        localStorage.setItem(key, value)
+      }
+    } catch {
+      continue
+    }
+    meta[key] = remoteTs ?? Date.now()
+    applied += 1
+  }
+  writeMeta(meta)
+  if (applied > 0) reloadSettingsFromStorage()
+  return applied
+}
 
 /** 消息气泡开关：模型输出纯文本，气泡由客户端绘制 */
 export const setBubbleSkin = (bubbleSkin: boolean) => {

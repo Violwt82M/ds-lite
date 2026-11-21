@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from '@rspack/cli'
@@ -7,6 +7,12 @@ import { rspack, type Configuration } from '@rspack/core'
 const dev = process.env.NODE_ENV !== 'production'
 const targets = ['chrome >= 70', 'edge >= 79', 'safari >= 14', 'firefox >= 78']
 const root = path.dirname(fileURLToPath(import.meta.url))
+
+// 可选：HTTPS dev server 证书（certs/ 下存在时自动启用）
+const certDir = path.resolve(root, 'certs')
+const serverKeyPath = path.resolve(certDir, 'server-key.pem')
+const serverCertPath = path.resolve(certDir, 'server-cert.pem')
+const useHttps = existsSync(serverKeyPath) && existsSync(serverCertPath)
 /** 注入 HTML meta 的版本号取自 src/version.ts（唯一来源）；读不到就退回 0.0.0，别退回 package.json */
 const version =
   /APP_VERSION\s*=\s*'([^']+)'/.exec(
@@ -92,7 +98,20 @@ export const createConfig = ({
     }),
   ],
   performance: { hints: false },
-  devServer: { port: 8090, ...devServer },
+  devServer: {
+    port: 8090,
+    host: '0.0.0.0',
+    ...(useHttps && {
+      server: {
+        type: 'https',
+        options: {
+          key: readFileSync(serverKeyPath),
+          cert: readFileSync(serverCertPath),
+        },
+      },
+    }),
+    ...devServer,
+  },
 })
 
 // eslint-disable-next-line import/no-default-export

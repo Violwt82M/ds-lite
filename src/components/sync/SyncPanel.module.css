@@ -1,0 +1,243 @@
+.sync-panel {
+  padding: 16px;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-size: 14px;
+}
+
+/* 弹窗限高：内容再长也只在内部滚动，关闭按钮永远留在屏幕内 */
+.dialog {
+  max-height: calc(var(--app-vh, 100vh) - 24px);
+}
+
+@media (max-width: 480px) {
+  .dialog {
+    width: 100%;
+    max-width: calc(var(--app-vw, 100vw) - 16px);
+    padding: 16px;
+  }
+
+  .sync-panel {
+    padding: 4px 0 calc(8px + env(safe-area-inset-bottom));
+  }
+}
+
+.sync-panel h2 {
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+
+.sync-panel h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+  color: #666;
+}
+
+.sync-section {
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fafafa;
+}
+
+/* 已连接提示条：跟标题、状态行同级 */
+.sync-connected {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid #b7eb8f;
+  border-radius: 12px;
+  background: #f6ffed;
+  color: #237804;
+  font-size: 13px;
+}
+
+/* 推送进度条 */
+.sync-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sync-progress-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: #d9f7be;
+  overflow: hidden;
+}
+
+.sync-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: #52c41a;
+  transition: width 0.2s ease;
+}
+
+.sync-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.sync-row button {
+  flex: 1;
+}
+
+.sync-panel textarea {
+  width: 100%;
+  min-height: 80px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  resize: vertical;
+  margin-bottom: 6px;
+}
+
+.sync-panel textarea:focus {
+  outline: none;
+  border-color: #1677ff;
+}
+
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ccc;
+}
+
+.sync-dot.ok { background: #52c41a; }
+.sync-dot.wait { background: #faad14; animation: pulse 1s infinite; }
+.sync-dot.err { background: #ff4d4f; }
+
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+.sync-btn {
+  padding: 10px 16px;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+  touch-action: manipulation;
+}
+
+.sync-btn:hover:not(:disabled) { background: #f0f0f0; }
+.sync-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.sync-btn.primary {
+  background: #1677ff;
+  color: #fff;
+  border-color: #1677ff;
+}
+.sync-btn.primary:hover:not(:disabled) { background: #4096ff; }
+
+.sync-btn.danger {
+  background: #fff;
+  color: #ff4d4f;
+  border-color: #ffccc7;
+}
+
+.sync-tab {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.sync-tab button {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #e5e5e5;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.sync-tab button.active {
+  background: #1677ff;
+  color: #fff;
+  border-color: #1677ff;
+}
+
+.sync-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.sync-input:focus {
+  outline: none;
+  border-color: #1677ff;
+}
+
+.sync-log {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  padding: 10px;
+  border-radius: 8px;
+  height: 180px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin-top: 8px;
+}
+
+.sync-log .ok { color: #4ec9b0; }
+.sync-log .err { color: #f48771; }
+.sync-log .info { color: #ce9178; }
+
+.sync-info {
+  font-size: 12px;
+  color: #888;
+  line-height: 1.5;
+}
+
+.sync-info code {
+  background: #f0f0f0;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.sync-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+}
+.sync-toggle input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary, #555);
+}
+.sync-toggle em {
+  font-style: normal;
+  font-size: 12px;
+}
