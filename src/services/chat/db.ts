@@ -112,11 +112,53 @@ const getDB = () =>
         summaries.createIndex('fileIds', 'fileIds', { multiEntry: true })
       }
     },
-  }).catch((error: unknown) => {
-    // 打开失败后允许界面重试，避免一直复用已拒绝的 Promise。
+    terminated() {
+      dbPromise = null
+    },
+  })
+    .then((db) => {
+      db.addEventListener('close', () => {
+        dbPromise = null
+      })
+      return db
+    })
+    .catch((error: unknown) => {
+      // 打开失败后允许界面重试，避免一直复用已拒绝的 Promise。
+      dbPromise = null
+      throw error
+    }))
+
+const isConnectionClosedError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  if (error.name === 'InvalidStateError') {
+    return true
+  }
+  const msg = error.message.toLowerCase()
+  return msg.includes('closing') || msg.includes('closed') || msg.includes('terminated')
+}
+
+const withDB = async <T>(fn: (db: IDBPDatabase<ChatDB>) => Promise<T>): Promise<T> => {
+  try {
+    return await fn(await getDB())
+  } catch (error) {
+    if (!isConnectionClosedError(error)) {
+      throw error
+    }
     dbPromise = null
-    throw error
-  }))
+    return await fn(await getDB())
+  }
+}
+
+/** 静默申请持久化存储，降低系统在存储紧张时清理 WebView IndexedDB 的概率 */
+export const requestPersistentStorage = (): void => {
+  try {
+    void navigator.storage?.persist?.().catch(() => {})
+  } catch {
+    // 部分旧 WebView 不支持 navigator.storage
+  }
+}
 
 /**
  * 读取会话列表。正常情况一次 getAll；只要有一条记录反序列化失败，getAll 会整体报错，
@@ -154,23 +196,41 @@ export const loadSession = async (id: string): Promise<Session | undefined> =>
  * 和附件分成两个事务：空间不足时附件可能写不进去，但正文先落地，
  * 用户至少不会因为一张图片丢掉整轮对话（0.9.52 用户反馈「保存失败，重试没反应」）。
  */
+const isDataCloneError = (error: unknown): boolean =>
+  error instanceof Error && error.name === 'DataCloneError'
+
+const writeSessionRecord = async (session: Session, summary: StoredSessionSummary): Promise<void> => {
+  await withDB(async (db) => {
+    const tx = db.transaction(['sessions', 'sessionSummaries'], 'readwrite')
+    await Promise.all([
+      (async () => {
+        try {
+          await tx.objectStore('sessions').put(session)
+          await tx.objectStore('sessionSummaries').put(summary)
+        } catch (error) {
+          abortTransaction(tx)
+          throw error
+        }
+      })(),
+      tx.done,
+    ])
+  })
+}
+
 export const saveSessionRecord = async (session: Session): Promise<void> => {
   // 写库前清洗异常字符与漏进来的协议标记；没有改动时返回原对象，不影响流式期间的引用比较
   session = cleanSessionText(session)
   const summary = storedSummary(session)
-  const tx = (await getDB()).transaction(['sessions', 'sessionSummaries'], 'readwrite')
-  await Promise.all([
-    (async () => {
-      try {
-        await tx.objectStore('sessions').put(session)
-        await tx.objectStore('sessionSummaries').put(summary)
-      } catch (error) {
-        abortTransaction(tx)
-        throw error
-      }
-    })(),
-    tx.done,
-  ])
+  try {
+    await writeSessionRecord(session, summary)
+  } catch (error) {
+    if (!isDataCloneError(error)) {
+      throw error
+    }
+    // 兜底：若消息对象意外混入不可克隆字段，用 JSON 清洗一次再写，避免整条会话永久卡死
+    const sanitized = JSON.parse(JSON.stringify(session)) as Session
+    await writeSessionRecord(sanitized, storedSummary(sanitized))
+  }
 }
 
 /** 读取整库正文索引；搜索时一次性读进内存，之后不再碰 IndexedDB。 */
@@ -233,8 +293,10 @@ export const deleteSession = async (sessionId: string): Promise<void> => {
 }
 
 const putFiles = async (store: 'files' | 'filesStaging', files: StoredFile[]) => {
-  const tx = (await getDB()).transaction(store, 'readwrite')
-  await Promise.all([...files.map((file) => tx.store.put(file)), tx.done])
+  await withDB(async (db) => {
+    const tx = db.transaction(store, 'readwrite')
+    await Promise.all([...files.map((file) => tx.store.put(file)), tx.done])
+  })
 }
 
 /** 附件原件单独写：失败只影响缩略图/补传，正文已经在上一步落地 */

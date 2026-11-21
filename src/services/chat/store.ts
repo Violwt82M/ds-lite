@@ -383,11 +383,26 @@ const markSaveFailure = (
   scheduleAutoRetry()
 }
 
+const persistQueues = new Map<string, Promise<void>>()
+
 /**
  * 把会话写进本机，返回这次落盘结束的 promise（失败不算 reject，结论体现在状态里）。
+ * 同一会话的写入按队列串行执行，避免并发 readwrite 事务在 WebView 下锁竞争。
  * 先写正文/摘要、再写附件原件：空间不足时正文照样落地，用户不会因为一个附件丢掉整轮对话。
  */
 const persist = (sessionId: string): Promise<void> => {
+  const prev = persistQueues.get(sessionId) ?? Promise.resolve()
+  const next = prev.then(() => persistOnce(sessionId))
+  persistQueues.set(sessionId, next)
+  void next.finally(() => {
+    if (persistQueues.get(sessionId) === next) {
+      persistQueues.delete(sessionId)
+    }
+  })
+  return next
+}
+
+const persistOnce = (sessionId: string): Promise<void> => {
   const session = getSession(sessionId)
   if (!session) {
     // 会话已经不在内存里（删除/整库替换），留着提示只会变成点不掉的条幅
@@ -403,15 +418,19 @@ const persist = (sessionId: string): Promise<void> => {
   const attempt = ++saveAttemptSequence
   saveAttempts.set(sessionId, attempt)
   const isLatest = () => epoch === historyEpoch && saveAttempts.get(sessionId) === attempt
+  // 正文已落库、只差附件时，重试跳过整条会话序列化，只补写附件
+  const skipRecord = get().sessionSaveErrors[sessionId]?.recordSaved === true && files.length > 0
   return (async () => {
-    try {
-      await db.saveSessionRecord(session)
-    } catch (error) {
-      db.reportStorageError('save session')(error)
-      if (isLatest() && getSession(sessionId)) {
-        markSaveFailure(sessionId, error, { recordSaved: false, filesPending: files.length })
+    if (!skipRecord) {
+      try {
+        await db.saveSessionRecord(session)
+      } catch (error) {
+        db.reportStorageError('save session')(error)
+        if (isLatest() && getSession(sessionId)) {
+          markSaveFailure(sessionId, error, { recordSaved: false, filesPending: files.length })
+        }
+        return
       }
-      return
     }
     if (files.length > 0) {
       try {
@@ -548,6 +567,7 @@ export const retrySaveSessions = (options: { silent?: boolean } = {}): Promise<b
 
 /** 离开前先合并尚未绘制的增量；隐藏期间浏览器可能暂停动画帧。 */
 export const bindChatPersistence = () => {
+  db.requestPersistentStorage()
   const save = () => {
     if (get().importingHistory) {
       return

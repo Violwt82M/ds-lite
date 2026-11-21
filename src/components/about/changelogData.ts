@@ -3,10 +3,9 @@ export type ChangelogEntry = { version: string; items: string[] }
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '0.9.60',
+    version: '0.9.61',
     items: [
-      '新增「气泡不透明度」自定义滑杆（设置 → 通用 → 自定义外观，30%~100%，默认 68%），搭配聊天背景可自由调节毛玻璃通透度',
-      '去掉气泡高光描边，恢复简洁细腻的边框观感',
+      '修复聊天过程中偶发「写入本机存储失败」且点击重试无效的问题：新增本地存储连接断线自动重连与串行写入队列，并申请持久化存储权限以降低系统清理风险',
     ],
   },
 ]
