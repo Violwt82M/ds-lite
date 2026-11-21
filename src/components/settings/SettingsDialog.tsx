@@ -52,6 +52,7 @@ import {
   setDocumentBudget,
   setMemoryKeepTokens,
   MEMORY_KEEP_MIN,
+  MEMORY_KEEP_SLIDER_MAX,
   MEMORY_KEEP_MAX,
   MEMORY_KEEP_STEP,
   useSettings,
@@ -526,28 +527,71 @@ const DocumentBudgetSetting = () => {
   )
 }
 
-/** 记忆整理保留的最近上下文 token 数：调小更省 token，调大衔接更顺 */
+/** 记忆整理保留的最近上下文 token 数：常用 4K~200K 滑杆调节，超出可在下方自定义输入（最高 800K） */
 const MemoryKeepSetting = () => {
   const t = useTranslate()
   const keep = useSettings((state) => state.memoryKeepTokens)
+  const keepK = Math.round(keep / 1000)
+  const [customText, setCustomText] = useState(() => String(keepK))
+
+  useEffect(() => {
+    setCustomText(String(keepK))
+  }, [keepK])
+
+  const commitCustom = () => {
+    const parsed = Number.parseInt(customText.trim(), 10)
+    if (!Number.isFinite(parsed)) {
+      setCustomText(String(keepK))
+      return
+    }
+    const clampedK = Math.min(
+      Math.round(MEMORY_KEEP_MAX / 1000),
+      Math.max(Math.round(MEMORY_KEEP_MIN / 1000), parsed)
+    )
+    setMemoryKeepTokens(clampedK * 1000)
+    setCustomText(String(clampedK))
+  }
+
   return (
     <SettingCell
       label={t('settingsMemoryKeep')}
       description={t('settingsMemoryKeepHint', { chars: formatCharCount(keep) })}
       status={null}
       action={
-        <div className={styles.rangeWrap}>
-          <input
-            className={styles.range}
-            type="range"
-            min={MEMORY_KEEP_MIN}
-            max={MEMORY_KEEP_MAX}
-            step={MEMORY_KEEP_STEP}
-            value={keep}
-            aria-label={t('settingsMemoryKeep')}
-            onChange={(event) => setMemoryKeepTokens(Number(event.currentTarget.value))}
-          />
-          <span className={styles.rangeValue}>{Math.round(keep / 1000)}K</span>
+        <div className={styles.memoryKeepControl}>
+          <div className={styles.rangeWrap}>
+            <input
+              className={styles.range}
+              type="range"
+              min={MEMORY_KEEP_MIN}
+              max={MEMORY_KEEP_SLIDER_MAX}
+              step={MEMORY_KEEP_STEP}
+              value={Math.min(keep, MEMORY_KEEP_SLIDER_MAX)}
+              aria-label={t('settingsMemoryKeep')}
+              onChange={(event) => setMemoryKeepTokens(Number(event.currentTarget.value))}
+            />
+            <span className={styles.rangeValue}>{keepK}K</span>
+          </div>
+          <div className={styles.memoryKeepCustom}>
+            <span className={styles.memoryKeepCustomLabel}>自定义（4~800K）</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={Math.round(MEMORY_KEEP_MIN / 1000)}
+              max={Math.round(MEMORY_KEEP_MAX / 1000)}
+              className={styles.memoryKeepInput}
+              value={customText}
+              aria-label="自定义保留上下文（单位 K token）"
+              onChange={(event) => setCustomText(event.currentTarget.value)}
+              onBlur={commitCustom}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  commitCustom()
+                }
+              }}
+            />
+            <span className={styles.memoryKeepCustomUnit}>K</span>
+          </div>
         </div>
       }
     />
@@ -876,12 +920,31 @@ const ThemeSetting = () => {
 /** `reason` 为失败原因的文案 key，展示时按当前语言翻译后填入 `message` 参数。 */
 type Status = (TranslationMessage & { error?: boolean; reason?: TranslationKey }) | null
 
+const isChunkLoadError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  return (
+    error.name === 'ChunkLoadError' ||
+    /loading chunk [\w-]+ failed/i.test(error.message) ||
+    /failed to fetch dynamically imported module/i.test(error.message)
+  )
+}
+
 /** 导出失败附带原因：预期的错误用对应文案作原因，其他错误用错误信息。 */
 const errorStatus = (key: TranslationKey, error: unknown): Status => ({
   key,
   ...(error instanceof BackupError
     ? { reason: error.key }
-    : { params: { message: error instanceof Error ? error.message : String(error) } }),
+    : {
+        params: {
+          message: isChunkLoadError(error)
+            ? '网页版已更新，请刷新页面后重试'
+            : error instanceof Error
+              ? error.message
+              : String(error),
+        },
+      }),
   error: true,
 })
 
@@ -918,6 +981,9 @@ const SettingCell = ({
 
 /** 导入失败的原因：归档错误用对应文案，存储写不下单独提示，其他错误把信息带出来，方便用户反馈。 */
 const importFailure = (error: unknown): TranslationMessage => {
+  if (isChunkLoadError(error)) {
+    return { key: 'historyImportFailedWithReason', params: { message: '网页版已更新，请刷新页面后重试' } }
+  }
   if (isStorageWriteError(error)) {
     // 浏览器没地方放附件原件了（配额不足 / 无痕模式 / 系统清理）：Chromium 的英文原文用户看不懂
     const message = error instanceof Error ? error.message : String(error)

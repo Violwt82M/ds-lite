@@ -57,7 +57,12 @@ import {
   type ContextUsage,
 } from '../memory/context.js'
 import { setCompactProgress, setCompacting, setMemoryError, setMemoryNotice } from '../memory/state.js'
-import { createLatestReminder } from './latestReminder.js'
+import {
+  createLatestReminder,
+  extractClockTime,
+  formatClockTime,
+  stripClockTime,
+} from './latestReminder.js'
 import {
   buildInternalRequest,
   buildRequest,
@@ -2296,9 +2301,28 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           trimmed ? trimmed.folded : folded,
           // v4 pro 不支持图片：历史里的图片块直接不发（用户选择「发得出去但看不见图」）
           isPro,
-          // v4 pro 不支持 latest_reminder：时间信息改由 system 携带，历史快照仍保留
+          // v4 pro 不支持 latest_reminder：日期并入 system 保缓存，具体时分附在最后一条提问尾部
           isPro
         )
+        // v4 pro：把具体时刻（HH:mm）附在最后一条 user 消息尾部（不放 system 开头，100% 不伤前缀缓存）
+        if (isPro) {
+          const clock = (latestReminder ? extractClockTime(latestReminder) : null) ?? formatClockTime()
+          const tailNote = `\n\n[当前时间：${clock}]`
+          for (let idx = messages.length - 1; idx >= 0; idx -= 1) {
+            const msg = messages[idx]
+            if (msg.role === 'user') {
+              if (typeof msg.content === 'string') {
+                messages[idx] = { ...msg, content: `${msg.content}${tailNote}` }
+              } else {
+                messages[idx] = {
+                  ...msg,
+                  content: [...msg.content, { type: 'text', text: tailNote }],
+                }
+              }
+              break
+            }
+          }
+        }
         // 请求体只从这里出去：扩展模式的四道闸门（工具 / 严格审查 / 标题 / 长输入）
         // 全在 buildRequest 里统一判定，别再往这里加字段。
         const systemBase = buildSystemPrompt(
@@ -2314,8 +2338,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         const systemWithSearch = useTwoStep
           ? `${systemBase}\n\n【本轮联网搜索参考资料】\n${twoStepSummary}\n请结合以上最新检索资料、完整历史上下文与附件内容回答用户问题。`
           : systemBase
-        // v4 pro 不支持 latest_reminder 消息：时间信息并入 system（官方实测 200）
-        const system = isPro ? `${systemWithSearch}\n\n【当前时间】${latestReminder}` : systemWithSearch
+        // v4 pro 不支持 latest_reminder 消息：仅把稳定日期与星期并入 system（一天只变一次，保住前缀缓存）
+        const system =
+          isPro && latestReminder
+            ? `${systemWithSearch}\n\n【当前日期】${stripClockTime(latestReminder)}`
+            : systemWithSearch
         const built = buildRequest({
           model,
           system,

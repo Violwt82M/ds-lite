@@ -24,12 +24,13 @@ const PersonaPicker = ({
   const t = useTranslate()
   const cards = usePersona((state) => state.cards)
   const persona = useChatPersona(sessionId)
+  const [draft, setDraft] = useState<string>(() => persona.cardId ?? 'none')
 
-  const pick = (value: string) => {
+  const confirm = () => {
     if (sessionId === null) {
-      setDraftPersona(value)
+      setDraftPersona(draft)
     } else {
-      setSessionPersona(sessionId, value)
+      setSessionPersona(sessionId, draft)
     }
     onClose()
   }
@@ -52,7 +53,7 @@ const PersonaPicker = ({
           >
             {t('chatPersonaManage')}
           </button>
-          <Button size="m" onClick={onClose}>
+          <Button size="m" onClick={confirm}>
             {t('confirm')}
           </Button>
         </div>
@@ -61,21 +62,21 @@ const PersonaPicker = ({
       <div className={styles.list}>
         <button
           type="button"
-          className={clsx(styles.option, persona.cardId === null && styles.optionActive)}
-          onClick={() => pick('none')}
+          className={clsx(styles.option, draft === 'none' && styles.optionActive)}
+          onClick={() => setDraft('none')}
         >
           <span className={styles.optionText}>
             <span className={styles.optionLabel}>{t('chatPersonaNone')}</span>
             <span className={styles.optionNote}>{t('chatPersonaNoneNote')}</span>
           </span>
-          {persona.cardId === null ? <span className={styles.check}>✓</span> : null}
+          {draft === 'none' ? <span className={styles.check}>✓</span> : null}
         </button>
 
         {cards.length === 0 ? (
           <div className={styles.empty}>{t('personaEmpty')}</div>
         ) : (
           cards.map((entry) => {
-            const selected = persona.cardId === entry.id
+            const selected = draft === entry.id
             return (
               <button
                 key={entry.id}
@@ -85,7 +86,7 @@ const PersonaPicker = ({
                   entry.builtin && styles.optionBuiltin,
                   selected && styles.optionActive
                 )}
-                onClick={() => pick(entry.id)}
+                onClick={() => setDraft(entry.id)}
               >
                 {entry.avatar ? (
                   <img className={styles.avatar} src={entry.avatar} alt="" />

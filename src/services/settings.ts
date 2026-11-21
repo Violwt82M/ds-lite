@@ -170,16 +170,18 @@ const clampDocumentBudget = (value: number) => {
 
 /** 记忆整理保留的上下文 token 范围（必须定义在 useSettings 之前，避免 TDZ） */
 export const MEMORY_KEEP_MIN = 4_000
-export const MEMORY_KEEP_MAX = 48_000
-export const MEMORY_KEEP_STEP = 2_000
+/** 滑杆常用区间上限：4K ~ 200K（步长 4K）；超出部分通过自定义框填写，最高 800K */
+export const MEMORY_KEEP_SLIDER_MAX = 200_000
+export const MEMORY_KEEP_MAX = 800_000
+export const MEMORY_KEEP_STEP = 4_000
 export const MEMORY_KEEP_DEFAULT = 24_000
 
 const clampMemoryKeepTokens = (value: number) => {
   if (!Number.isFinite(value)) {
     return MEMORY_KEEP_DEFAULT
   }
-  const stepped = Math.round(value / MEMORY_KEEP_STEP) * MEMORY_KEEP_STEP
-  return Math.min(MEMORY_KEEP_MAX, Math.max(MEMORY_KEEP_MIN, stepped))
+  const rounded = Math.round(value / 1_000) * 1_000
+  return Math.min(MEMORY_KEEP_MAX, Math.max(MEMORY_KEEP_MIN, rounded))
 }
 
 /** 人格温度滑杆：0~100，50 为官方默认（temperature 1.0） */

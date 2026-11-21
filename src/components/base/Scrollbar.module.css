@@ -5,7 +5,7 @@
   top: 0;
   right: 0;
   bottom: 0;
-  z-index: 5;
+  z-index: 30;
   width: 20px;
   /* 手指按住时由 JS 接管滑动；不写 none 的话安卓会先当成页面滚动，pointermove 直接被打断 */
   touch-action: none;
