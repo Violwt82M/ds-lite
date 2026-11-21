@@ -31,13 +31,13 @@ export const extractClockTime = (reminder: string): string | null => {
   return match?.[1] ?? null
 }
 
-/** 模型约定的五项信息；日期、具体时间与星期使用浏览器本地时区，避免 UTC 日期跨日。 */
+/** 模型约定的五项信息；日期与星期使用浏览器本地时区，避免 UTC 日期跨日（服务端只接受 YYYY-MM-DD，带具体时分会被 400 invalid date 拒绝）。 */
 export const createLatestReminder = (
   { locale, location }: { locale: Locale; location: UserLocation | null },
   now = new Date()
 ): string => {
   return [
-    `${formatDate(now)} ${formatClockTime(now)}`,
+    formatDate(now),
     new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(now),
     locationName(location, locale),
     'Web',

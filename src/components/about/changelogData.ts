@@ -3,6 +3,12 @@ export type ChangelogEntry = { version: string; items: string[] }
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.9.66',
+    items: [
+      '修复 v0.9.65 发送消息被服务端 400 拒绝的问题：日期提醒误带了具体时刻（如 2026-11-21 21:39），服务端只接受纯日期 YYYY-MM-DD；已恢复纯日期格式，v4-pro 的「当前时刻」仍附在最后一条提问尾部，不受影响',
+    ],
+  },
+  {
     version: '0.9.65',
     items: [
       '安卓客户端存储全面升级为 App 私有目录原生文件存储（支持原子写入与旧数据无感自动迁移），彻底摆脱 WebView 存储断连与误清风险',
