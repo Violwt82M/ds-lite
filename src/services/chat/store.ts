@@ -2304,23 +2304,22 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           // v4 pro 不支持 latest_reminder：日期并入 system 保缓存，具体时分附在最后一条提问尾部
           isPro
         )
-        // v4 pro：把具体时刻（HH:mm）附在最后一条 user 消息尾部（不放 system 开头，100% 不伤前缀缓存）
-        if (isPro) {
-          const clock = (latestReminder ? extractClockTime(latestReminder) : null) ?? formatClockTime()
-          const tailNote = `\n\n[当前时间：${clock}]`
-          for (let idx = messages.length - 1; idx >= 0; idx -= 1) {
-            const msg = messages[idx]
-            if (msg.role === 'user') {
-              if (typeof msg.content === 'string') {
-                messages[idx] = { ...msg, content: `${msg.content}${tailNote}` }
-              } else {
-                messages[idx] = {
-                  ...msg,
-                  content: [...msg.content, { type: 'text', text: tailNote }],
-                }
+        // 具体时刻（HH:mm）附在最后一条 user 消息尾部：服务端只认纯日期的 latest_reminder，
+        // 时间改走普通文本；放在提问尾部不影响前缀缓存，v4-pro 也靠它拿时间。
+        const clock = (latestReminder ? extractClockTime(latestReminder) : null) ?? formatClockTime()
+        const tailNote = `\n\n[当前时间：${clock}]`
+        for (let idx = messages.length - 1; idx >= 0; idx -= 1) {
+          const msg = messages[idx]
+          if (msg.role === 'user') {
+            if (typeof msg.content === 'string') {
+              messages[idx] = { ...msg, content: `${msg.content}${tailNote}` }
+            } else {
+              messages[idx] = {
+                ...msg,
+                content: [...msg.content, { type: 'text', text: tailNote }],
               }
-              break
             }
+            break
           }
         }
         // 请求体只从这里出去：扩展模式的四道闸门（工具 / 严格审查 / 标题 / 长输入）
