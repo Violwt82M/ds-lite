@@ -54,10 +54,11 @@ const buildStep1Messages = (
       ? `[本轮附件：${question.files.map((f) => f.displayName || f.name).join('、')}]\n`
       : ''
   const questionBody = clip(`${currentFileHint}${question.content}`, MAX_QUESTION_CHARS) || '请帮我检索相关最新资料。'
-  messages.push({ role: 'user', content: questionBody })
+  // latest_reminder 必须紧挨在 user 之前（服务端硬要求，放后面会 400）
   if (latestReminder) {
     messages.push({ role: 'latest_reminder', content: latestReminder })
   }
+  messages.push({ role: 'user', content: questionBody })
   return messages
 }
 

@@ -39,3 +39,25 @@
   color: #d92d20;
   border-color: rgba(217, 45, 32, 0.3);
 }
+
+/* 按当前计费时段着色：高峰橘色 / 空闲蓝色（只染文字，不动机身边框） */
+.peak .symbol,
+.peak .amount {
+  color: #f97316;
+}
+
+.offpeak .symbol,
+.offpeak .amount {
+  color: #3b82f6;
+}
+
+/* 深色主题下提亮一档，保证对比度 */
+:global(body.dark) .peak .symbol,
+:global(body.dark) .peak .amount {
+  color: #fb923c;
+}
+
+:global(body.dark) .offpeak .symbol,
+:global(body.dark) .offpeak .amount {
+  color: #60a5fa;
+}

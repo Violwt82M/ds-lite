@@ -213,6 +213,8 @@ export const zh = {
   balanceShowHint: '默认显示在聊天页顶栏，点一下刷新；关掉后只看设置里的余额',
   balanceShowOn: '已开启',
   balanceShowOff: '已关闭',
+  settingsBalanceTierColor: '余额文字按时段着色',
+  balanceTierColorHint: '顶栏余额文字：高峰时段橘色、空闲（半价）时段青蓝色；关掉恢复默认灰色',
   apiKeyGuideBalance: '余额和用量也可以随时去平台查看：',
   apiKeyGuideBalanceLink: '用量信息',
   apiKeyGuidePrice:

@@ -18,6 +18,7 @@ import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
 import { toAvatarDataUrl } from '../../utils/image.js'
 import {
   setAiBubble,
+  setBalanceTierColor,
   setBubbleSkin,
   setCollapseThinking,
   setShowReadMark,
@@ -196,6 +197,7 @@ export const AppearanceSetting = () => {
   const showReadMark = useSettings((state) => state.showReadMark)
   const collapseThinking = useSettings((state) => state.collapseThinking)
   const showTokenUsage = useSettings((state) => state.showTokenUsage)
+  const balanceTierColor = useSettings((state) => state.balanceTierColor)
   const fileRef = useRef<HTMLInputElement>(null)
   const [cropFile, setCropFile] = useState<File | null>(null)
 
@@ -361,6 +363,20 @@ export const AppearanceSetting = () => {
             onClick={() => setShowTokenUsage(!showTokenUsage)}
           >
             {t(showTokenUsage ? 'bubbleSkinOn' : 'bubbleSkinOff')}
+          </Button>
+        }
+      />
+      <Row
+        label={t('settingsBalanceTierColor')}
+        description={t('balanceTierColorHint')}
+        action={
+          <Button
+            variant={balanceTierColor ? 'primary' : 'outlined'}
+            size="m"
+            className={settingsStyles.cellButton}
+            onClick={() => setBalanceTierColor(!balanceTierColor)}
+          >
+            {t(balanceTierColor ? 'bubbleSkinOn' : 'bubbleSkinOff')}
           </Button>
         }
       />

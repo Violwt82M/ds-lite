@@ -41,6 +41,8 @@ type Settings = {
   autoMemory: boolean
   /** 顶栏显示账户余额（默认开，可在设置里关掉） */
   showBalance: boolean
+  /** 余额文字按当前计费时段着色（高峰橘色 / 空闲青蓝色），默认开 */
+  balanceTierColor: boolean
   /** 对话用的模型；v4 pro 更强但不支持图片理解 */
   model: ChatModel
   /** 界面字号百分比：90 / 100 / 110 / 120 / 130 */
@@ -86,6 +88,7 @@ const KEYS = {
   safety: 'chat-demo:safety',
   autoMemory: 'chat-demo:auto-memory',
   showBalance: 'chat-demo:show-balance',
+  balanceTierColor: 'chat-demo:balance-tier-color',
   model: 'chat-demo:model',
   fontScale: 'chat-demo:font-scale',
   recordModel: 'chat-demo:record-model',
@@ -218,6 +221,7 @@ export const useSettings = create<Settings>(() => ({
   autoMemory: read(KEYS.autoMemory) !== 'false',
   // 默认开启：顶栏显示余额，嫌碍眼可以关
   showBalance: read(KEYS.showBalance) !== 'false',
+  balanceTierColor: read(KEYS.balanceTierColor) !== 'false',
   fontScale: (() => {
     const saved = Number(read(KEYS.fontScale))
     return FONT_SCALES.includes(saved) ? saved : 100
@@ -385,6 +389,11 @@ export const setAutoMemory = (autoMemory: boolean) => {
 export const setShowBalance = (showBalance: boolean) => {
   write(KEYS.showBalance, String(showBalance))
   useSettings.setState({ showBalance })
+}
+
+export const setBalanceTierColor = (balanceTierColor: boolean) => {
+  write(KEYS.balanceTierColor, String(balanceTierColor))
+  useSettings.setState({ balanceTierColor })
 }
 
 export const setModel = (model: ChatModel) => {

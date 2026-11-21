@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { useEffect } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { refreshBalance, refreshBalanceIfStale, useBalance } from '../../services/balance.js'
+import { priceTierAt } from '../../services/usage.js'
 import { useSettings } from '../../services/settings.js'
 import styles from './BalanceChip.module.css'
 
@@ -19,6 +20,7 @@ const formatAmount = (value: string) => {
 export const BalanceChip = ({ className }: { className?: string }) => {
   const t = useTranslate()
   const showBalance = useSettings((state) => state.showBalance)
+  const balanceTierColor = useSettings((state) => state.balanceTierColor)
   const hasApiKey = useSettings((state) => Boolean(state.apiKey))
   const { infos, loading, error, available } = useBalance()
 
@@ -41,10 +43,18 @@ export const BalanceChip = ({ className }: { className?: string }) => {
         ? t('balanceTotal', { amount: info.total, currency: info.currency })
         : t('balanceLabel')
 
+  const tier = priceTierAt(Date.now())
+
   return (
     <button
       type="button"
-      className={clsx(styles.chip, !available && styles.warning, error !== null && styles.error, className)}
+      className={clsx(
+        styles.chip,
+        !available && styles.warning,
+        error !== null && styles.error,
+        balanceTierColor && available && error === null && (tier === 'peak' ? styles.peak : styles.offpeak),
+        className
+      )}
       aria-label={title}
       title={title}
       onClick={() => void refreshBalance()}

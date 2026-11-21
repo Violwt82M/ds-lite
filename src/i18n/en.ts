@@ -226,6 +226,8 @@ export const en = {
   balanceShowHint: 'Shown in the chat header by default - tap to refresh. Turn it off to only see it in Settings.',
   balanceShowOn: 'On',
   balanceShowOff: 'Off',
+  settingsBalanceTierColor: 'Tint balance text by pricing period',
+  balanceTierColorHint: 'Header balance text turns orange during peak hours and cyan during off-peak (half-price); turn off for the default grey.',
   apiKeyGuideBalance: 'You can also check your balance and usage on the platform any time:',
   apiKeyGuideBalanceLink: 'Usage',
   apiKeyGuidePrice:

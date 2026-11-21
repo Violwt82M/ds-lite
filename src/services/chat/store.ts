@@ -2161,7 +2161,6 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   let trimmedForExtended = false
   /** 两步法联网搜索的结果摘要（重试补传文件时复用，避免重复搜索） */
   let twoStepSummary: string | null = null
-  let twoStepNotified = false
   /** 服务端实际报 400 user input too long 时补触发两步法搜索 */
   let forceTwoStep = false
   try {
@@ -2357,10 +2356,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           forceStandard: standardForced || useTwoStep,
           temperature: requestTemperature(prefs.personalityTemperature),
         })
-        if (useTwoStep && !twoStepNotified) {
-          twoStepNotified = true
-          showToast('已通过两步联网搜索保留完整上下文与附件')
-        } else if (built.degraded) {
+        if (built.degraded) {
           // 自动降级要说得清楚：用户可能刚点了联网，不能悄悄当没点
           showToast({
             key: 'replyExtendedDowngraded',
