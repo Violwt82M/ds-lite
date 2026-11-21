@@ -112,8 +112,12 @@ export const bindPersonaForNewSession = (sessionId: string) => {
   }
   const { enabled, activeId, cards } = usePersona.getState()
   const draft = usePersonaDraft.getState().cardId
-  // 欢迎页选过卡就直接用；卡被删了则退回全局默认
-  const picked = draft !== undefined && cards.some((entry) => entry.id === draft) ? draft : undefined
+  // 欢迎页明确选过「不使用人设」必须生效（bug：以前会退回全局默认，用户不选角色也进角色扮演）；
+  // 选过卡就直接用；卡被删了则退回全局默认
+  const picked =
+    draft !== undefined && (draft === 'none' || cards.some((entry) => entry.id === draft))
+      ? draft
+      : undefined
   const usable = enabled && activeId !== null && cards.some((entry) => entry.id === activeId)
   const scope = picked ?? (usable ? (activeId as string) : 'none')
   commit({ ...map, [sessionId]: scope })

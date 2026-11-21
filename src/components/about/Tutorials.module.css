@@ -1,19 +1,89 @@
+.outer {
+  flex-shrink: 0;
+  margin: 4px 0 16px;
+  border: 1px solid rgba(77, 107, 254, 0.3);
+  border-left: 4px solid var(--dsw-alias-brand-primary, #4d6bfe);
+  border-radius: 14px;
+  background: rgba(77, 107, 254, 0.03);
+  overflow: hidden;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.outer[open] {
+  border-color: rgba(77, 107, 254, 0.5);
+  box-shadow: 0 3px 12px rgba(77, 107, 254, 0.08);
+}
+
 .wrap {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 4px 0 16px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid rgba(77, 107, 254, 0.22);
+  background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.03));
 }
 
-/* 标题做成一块品牌色卡片，一眼能看到「这里有教程」 */
+/* 标题做成一块品牌色卡片，一眼能看到「这里有教程」，默认收起不占屏 */
 .head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(77, 107, 254, 0.14), rgba(77, 107, 254, 0.04));
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.head::-webkit-details-marker {
+  display: none;
+}
+
+.headText {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 14px 16px;
-  border: 1px solid rgba(77, 107, 254, 0.28);
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(77, 107, 254, 0.16), rgba(77, 107, 254, 0.05));
+  min-width: 0;
+}
+
+.outerBadge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid rgba(77, 107, 254, 0.32);
+  border-radius: 999px;
+  background: rgba(77, 107, 254, 0.12);
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.outerLabelOpen {
+  display: none;
+}
+
+.outer[open] .outerLabelClosed {
+  display: none;
+}
+
+.outer[open] .outerLabelOpen {
+  display: inline;
+}
+
+.outerArrow {
+  display: inline-block;
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+
+.outer[open] .outerArrow {
+  transform: rotate(180deg);
 }
 
 .headTitle {

@@ -219,13 +219,40 @@ export const MessageList = ({
     } else {
       el.scrollTop = scrollTopRef.current
     }
-    const onScroll = () => {
-      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < STICKY_THRESHOLD
-      // 仅在用户向上滚动时停止跟随底部，布局或内容增高时保持跟随状态。
-      if (nearBottom && winRef.current.tail === 0) {
+    // 用户意图优先：只靠 onScroll 比较 scrollTop 不可靠——流式输出时 ResizeObserver 每帧把视图
+    // 拉回底部，手指/滚轮的小幅上滑会被吞掉，表现为「界面一直往下拽、没法慢慢看」。
+    // 所以手指按下、滚轮上滚、键盘上翻时立刻停止跟随；只有用户自己滑回底部才恢复。
+    let touching = false
+    const distance = () => el.scrollHeight - el.scrollTop - el.clientHeight
+    const onTouchStart = () => {
+      touching = true
+      stickyRef.current = false
+    }
+    const onTouchEnd = () => {
+      touching = false
+      if (distance() < STICKY_THRESHOLD && winRef.current.tail === 0) {
         stickyRef.current = true
-      } else if (el.scrollTop < scrollTopRef.current) {
+      }
+    }
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0) {
         stickyRef.current = false
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) {
+        stickyRef.current = false
+      }
+    }
+    const onScroll = () => {
+      const nearBottom = distance() < STICKY_THRESHOLD
+      // 向上滚动停止跟随；回到底部附近且是往下滚（不是刚上滑一点点）才恢复跟随。
+      // 手指还按着时不恢复，避免拖动途中被流式内容拽走。
+      // 内容变矮（如思考折叠）时浏览器会把 scrollTop 夹小，这不是用户上滑，所以贴底时不算。
+      if (el.scrollTop < scrollTopRef.current && !nearBottom) {
+        stickyRef.current = false
+      } else if (nearBottom && winRef.current.tail === 0 && !touching) {
+        stickyRef.current = true
       }
       // 停在历史位置往下滑到窗口末尾时，继续补后面的消息（内容追加在下方，视线不跳）
       if (nearBottom && winRef.current.tail > 0) {
@@ -236,14 +263,29 @@ export const MessageList = ({
           tail: Math.max(0, state.tail - RENDER_PAGE),
         })
       }
+      // 不跟随底部时（用户在看前文）只要离底稍远就给「回到底部」，方便生成中一键回去
       setShowJumpDown(
-        winRef.current.tail > 0 || el.scrollHeight - el.scrollTop - el.clientHeight > 360
+        winRef.current.tail > 0 ||
+          distance() > 360 ||
+          (!stickyRef.current && distance() > STICKY_THRESHOLD * 2)
       )
       setShowJumpUp(winRef.current.start > 0 || el.scrollTop > 360)
       scrollTopRef.current = el.scrollTop
     }
     el.addEventListener('scroll', onScroll, { passive: true })
-    return () => el.removeEventListener('scroll', onScroll)
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+    el.addEventListener('touchcancel', onTouchEnd, { passive: true })
+    el.addEventListener('wheel', onWheel, { passive: true })
+    el.addEventListener('keydown', onKeyDown)
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchEnd)
+      el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('keydown', onKeyDown)
+    }
   }, [isMobile, scrollToBottom])
 
   // 搜索结果点进来时要定位到具体那条消息；消息不在当前窗口里就换成以它为中心的窗口

@@ -46,6 +46,10 @@ import {
   setThinkingEffort,
   setTtsVoice,
   setDocumentBudget,
+  setMemoryKeepTokens,
+  MEMORY_KEEP_MIN,
+  MEMORY_KEEP_MAX,
+  MEMORY_KEEP_STEP,
   useSettings,
   type ThemePreference,
   type ThinkingEffort,
@@ -152,10 +156,41 @@ const SettingsContent = () => {
           {section === 'general' ? (
             <>
               <ThemeSetting />
-              <WallpaperSetting />
-              <AppearanceSetting />
+              <details className={styles.foldGroup}>
+                <summary className={styles.foldSummary}>
+                  <div className={styles.text}>
+                    <div className={styles.label}>{t('settingsCustomAppearance')}</div>
+                    <div className={styles.description}>{t('settingsCustomAppearanceHint')}</div>
+                  </div>
+                  <span className={styles.foldBadge} aria-hidden>
+                    <span className={styles.foldLabelClosed}>{t('foldExpand')}</span>
+                    <span className={styles.foldLabelOpen}>{t('foldCollapse')}</span>
+                    <span className={styles.foldArrow}>▾</span>
+                  </span>
+                </summary>
+                <div className={styles.foldBody}>
+                  <WallpaperSetting />
+                  <AppearanceSetting />
+                </div>
+              </details>
               <FontScaleSetting />
-              <DocumentBudgetSetting />
+              <details className={styles.foldGroup}>
+                <summary className={styles.foldSummary}>
+                  <div className={styles.text}>
+                    <div className={styles.label}>{t('settingsContextAndMemory')}</div>
+                    <div className={styles.description}>{t('settingsContextAndMemoryHint')}</div>
+                  </div>
+                  <span className={styles.foldBadge} aria-hidden>
+                    <span className={styles.foldLabelClosed}>{t('foldExpand')}</span>
+                    <span className={styles.foldLabelOpen}>{t('foldCollapse')}</span>
+                    <span className={styles.foldArrow}>▾</span>
+                  </span>
+                </summary>
+                <div className={styles.foldBody}>
+                  <DocumentBudgetSetting />
+                  <MemoryKeepSetting />
+                </div>
+              </details>
               <ModelSetting />
               <RecordModelSetting />
               <ThinkingEffortSetting />
@@ -480,6 +515,34 @@ const DocumentBudgetSetting = () => {
           <span className={styles.rangeValue}>
             {t('settingsDocBudgetValue', { count: budget / 10_000 })}
           </span>
+        </div>
+      }
+    />
+  )
+}
+
+/** 记忆整理保留的最近上下文 token 数：调小更省 token，调大衔接更顺 */
+const MemoryKeepSetting = () => {
+  const t = useTranslate()
+  const keep = useSettings((state) => state.memoryKeepTokens)
+  return (
+    <SettingCell
+      label={t('settingsMemoryKeep')}
+      description={t('settingsMemoryKeepHint', { chars: formatCharCount(keep) })}
+      status={null}
+      action={
+        <div className={styles.rangeWrap}>
+          <input
+            className={styles.range}
+            type="range"
+            min={MEMORY_KEEP_MIN}
+            max={MEMORY_KEEP_MAX}
+            step={MEMORY_KEEP_STEP}
+            value={keep}
+            aria-label={t('settingsMemoryKeep')}
+            onChange={(event) => setMemoryKeepTokens(Number(event.currentTarget.value))}
+          />
+          <span className={styles.rangeValue}>{Math.round(keep / 1000)}K</span>
         </div>
       }
     />
@@ -930,6 +993,7 @@ const useHistoryImport = () => {
     try {
       const result = await importHistory(file, {
         skipImages,
+        allowDuplicate: true,
         ...(full ? {} : { sessionIds: [...selected] }),
       })
       const done: TranslationMessage =
@@ -977,9 +1041,12 @@ const useHistoryImport = () => {
         }
         return next
       }),
-    // 本机已有的会话导入时会被跳过，全选就不把它们算进去
-    selectAll: () =>
-      setSelected(new Set((sessions ?? []).filter((item) => !existing.has(item.id)).map((item) => item.id))),
+    // 优先全选本机还没有的会话；如果包里所有会话本机都已有，则全选全部，方便用户手动重导
+    selectAll: () => {
+      const list = sessions ?? []
+      const fresh = list.filter((item) => !existing.has(item.id))
+      setSelected(new Set((fresh.length > 0 ? fresh : list).map((item) => item.id)))
+    },
     selectNone: () => setSelected(new Set()),
     toggleSkipImages: () => setSkipImages((value) => !value),
     cancel: () => {

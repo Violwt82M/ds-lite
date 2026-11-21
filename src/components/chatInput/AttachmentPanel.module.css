@@ -1,0 +1,69 @@
+/* 「更多」展开的附件面板：在输入框下方，随输入框一起上移，不是浮层 */
+.panel {
+  box-sizing: border-box;
+  width: 100%;
+  padding-top: 10px;
+  animation: panelIn 0.18s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+/* 从输入框下沿「拉出来」：先轻微下移再归位 */
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 拍照 / 相册 / 文件：原版是三张浅灰圆角卡片，图标在上、文字在下 */
+.actions {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.action {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 74px;
+  padding: 12px 8px;
+  border: none;
+  border-radius: 14px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  &:hover {
+    background: var(--dsw-alias-interactive-bg-active);
+  }
+
+  &:active {
+    background: var(--dsw-alias-interactive-bg-hover-accent);
+  }
+}
+
+.actionIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}

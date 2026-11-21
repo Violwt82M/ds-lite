@@ -78,6 +78,30 @@ const updateBlock = (
  * 把一个流式事件合并进回复：只追加可识别的内容块，用本次请求的临时索引映射处理增量。
  * 跳过的块不占位；续写直接追加到已有内容之后，message_delta 更新结束原因与累计用量。
  */
+const mergeUsage = (
+  prev: AssistantMessage['usage'],
+  incoming: AssistantMessage['usage']
+): AssistantMessage['usage'] => {
+  if (!incoming) {
+    return prev
+  }
+  if (!prev) {
+    return incoming
+  }
+  const hasInput =
+    incoming.input_tokens > 0 ||
+    incoming.cache_creation_input_tokens > 0 ||
+    incoming.cache_read_input_tokens > 0
+  return {
+    input_tokens: hasInput ? incoming.input_tokens : prev.input_tokens,
+    cache_creation_input_tokens: hasInput
+      ? incoming.cache_creation_input_tokens
+      : prev.cache_creation_input_tokens,
+    cache_read_input_tokens: hasInput ? incoming.cache_read_input_tokens : prev.cache_read_input_tokens,
+    output_tokens: incoming.output_tokens > 0 ? incoming.output_tokens : prev.output_tokens,
+  }
+}
+
 export const applyEvent = (
   reply: AssistantMessage,
   event: MessageStreamEvent,
@@ -88,7 +112,7 @@ export const applyEvent = (
     reply.status === 'streaming' ? reply : { ...reply, status: 'streaming' }
   switch (event.type) {
     case 'message_start':
-      return { ...next, usage: event.message.usage ?? next.usage }
+      return { ...next, usage: mergeUsage(next.usage, event.message.usage) }
     case 'content_block_start': {
       blockIndexes.delete(event.index)
       const block = toReplyBlock(event.content_block, now)
@@ -148,7 +172,7 @@ export const applyEvent = (
         ...next,
         stopReason: event.delta.stop_reason,
         stopDetails: event.delta.stop_details,
-        usage: event.usage ?? next.usage,
+        usage: mergeUsage(next.usage, event.usage),
       }
     default:
       return next
@@ -337,16 +361,19 @@ export const toRequestMessages = (
   /** 已折叠进记忆的回答消息 id：原文仍在本机，但不再进入请求上下文 */
   folded?: ReadonlySet<string>,
   /** 只发文字附件（v4 pro 不支持图片） */
-  textOnly = false
+  textOnly = false,
+  /** v4 pro 不支持 latest_reminder：跳过所有提醒消息（时间信息改由 system 携带） */
+  dropReminder = false
 ): MessageParam[] => {
   const messages: MessageParam[] = []
   let previousReminder: string | undefined
   const appendReminder = (reminder: string | undefined) => {
     // 仅在当前分支首次出现或内容变化时插入快照；缺少快照的消息保持原有内容。
-    if (reminder && reminder !== previousReminder) {
-      messages.push({ role: 'latest_reminder', content: reminder })
-      previousReminder = reminder
+    if (dropReminder || !reminder || reminder === previousReminder) {
+      return
     }
+    messages.push({ role: 'latest_reminder', content: reminder })
+    previousReminder = reminder
   }
   for (const [user, reply] of getContextRounds(history)) {
     if (folded?.has(reply.id)) {

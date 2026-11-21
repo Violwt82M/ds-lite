@@ -974,3 +974,85 @@
   line-height: 1.6;
   color: var(--dsw-alias-label-primary, inherit);
 }
+
+/* 折叠设置分组：品牌色左边框 + 圆角卡片 + 展开/收起胶囊徽标，明确区分普通行与内部边界 */
+.foldGroup {
+  flex-shrink: 0;
+  margin: 12px 0;
+  border: 1px solid rgba(77, 107, 254, 0.3);
+  border-left: 4px solid var(--dsw-alias-brand-primary, #4d6bfe);
+  border-radius: 14px;
+  background: rgba(77, 107, 254, 0.03);
+  overflow: hidden;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.foldGroup[open] {
+  border-color: rgba(77, 107, 254, 0.5);
+  box-shadow: 0 3px 12px rgba(77, 107, 254, 0.08);
+}
+
+.foldSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  background: linear-gradient(135deg, rgba(77, 107, 254, 0.12), rgba(77, 107, 254, 0.03));
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.foldSummary::-webkit-details-marker {
+  display: none;
+}
+
+.foldBadge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid rgba(77, 107, 254, 0.32);
+  border-radius: 999px;
+  background: rgba(77, 107, 254, 0.12);
+  color: var(--dsw-alias-brand-primary, #4d6bfe);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.foldLabelOpen {
+  display: none;
+}
+
+.foldGroup[open] .foldLabelClosed {
+  display: none;
+}
+
+.foldGroup[open] .foldLabelOpen {
+  display: inline;
+}
+
+.foldArrow {
+  display: inline-block;
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+
+.foldGroup[open] .foldArrow {
+  transform: rotate(180deg);
+}
+
+.foldBody {
+  padding: 4px 14px 8px;
+  border-top: 1px solid rgba(77, 107, 254, 0.22);
+  background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.03));
+}
+
+.foldBody > :last-child {
+  border-bottom: none;
+}

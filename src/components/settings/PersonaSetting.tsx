@@ -14,7 +14,12 @@ import {
   usePersona,
 } from '../../services/persona/store.js'
 import { toAvatarDataUrl } from '../../utils/image.js'
-import { setSafety, useSettings } from '../../services/settings.js'
+import {
+  setPersonalityTemperature,
+  setSafety,
+  temperatureValue,
+  useSettings,
+} from '../../services/settings.js'
 import { usesOpenAiProtocol } from '../../services/api/protocol.js'
 import { Button } from '../base/Button.js'
 import { IconEditOutline16, IconUploadOutline14 } from '../base/icons.js'
@@ -68,6 +73,8 @@ export const PersonaSetting = () => {
   const activeId = usePersona((state) => state.activeId)
   const showAvatar = usePersona((state) => state.showAvatar)
   const safety = useSettings((state) => state.safety)
+  const thinking = useSettings((state) => state.thinking)
+  const personalityTemperature = useSettings((state) => state.personalityTemperature)
   const active = cards.find((entry) => entry.id === activeId)
 
   const onPick = async (file: File | undefined) => {
@@ -109,6 +116,32 @@ export const PersonaSetting = () => {
           >
             {t(enabled ? 'personaTurnOff' : 'personaTurnOn')}
           </Button>
+        }
+      />
+      <Row
+        label={t('settingsPersonalityTemp')}
+        description={
+          thinking ? t('settingsPersonalityTempThinkingHint') : t('settingsPersonalityTempHint')
+        }
+        action={
+          <div className={settingsStyles.rangeWrap}>
+            <input
+              className={clsx(settingsStyles.range, thinking && styles.rangeDisabled)}
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={personalityTemperature}
+              disabled={thinking}
+              aria-label={t('settingsPersonalityTemp')}
+              onChange={(event) => setPersonalityTemperature(Number(event.currentTarget.value))}
+            />
+            <span className={settingsStyles.rangeValue}>
+              {t('settingsPersonalityTempValue', {
+                value: temperatureValue(personalityTemperature).toFixed(2).replace(/0$/, ''),
+              })}
+            </span>
+          </div>
         }
       />
       <Row
@@ -175,23 +208,28 @@ export const PersonaSetting = () => {
                   <span className={styles.avatarText}>{entry.card.name.slice(0, 1)}</span>
                 )}
                 {entry.card.name}
+                {entry.builtin ? <span className={styles.tag}>{t('personaBuiltinBadge')}</span> : null}
                 {entry.id === activeId ? <span className={styles.tag}>{t('personaInUse')}</span> : null}
               </button>
-              <button
-                type="button"
-                className={styles.editButton}
-                aria-label={t('personaEdit')}
-                onClick={() => setEditor({ id: entry.id, initial: entry.card, avatar: entry.avatar })}
-              >
-                <IconEditOutline16 />
-              </button>
-              <button
-                type="button"
-                className={styles.remove}
-                onClick={() => removePersonaCard(entry.id)}
-              >
-                {t('personaDelete')}
-              </button>
+              {entry.builtin ? null : (
+                <>
+                  <button
+                    type="button"
+                    className={styles.editButton}
+                    aria-label={t('personaEdit')}
+                    onClick={() => setEditor({ id: entry.id, initial: entry.card, avatar: entry.avatar })}
+                  >
+                    <IconEditOutline16 />
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.remove}
+                    onClick={() => removePersonaCard(entry.id)}
+                  >
+                    {t('personaDelete')}
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>

@@ -73,6 +73,38 @@
   background: rgba(77, 107, 254, 0.06);
 }
 
+/* 官方内置使用助手在角色列表里置顶高亮，一眼能认出 */
+.optionBuiltin {
+  border-color: rgba(77, 107, 254, 0.42);
+  border-left: 3.5px solid var(--dsw-alias-brand-primary, #4d6bfe);
+  background: linear-gradient(135deg, rgba(77, 107, 254, 0.13), rgba(77, 107, 254, 0.04));
+}
+
+.avatarBuiltin {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(77, 107, 254, 0.16);
+  font-size: 16px;
+}
+
+.builtinBadge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--dsw-alias-brand-primary, #4d6bfe);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: 1px;
+}
+
 .optionText {
   display: flex;
   flex-direction: column;

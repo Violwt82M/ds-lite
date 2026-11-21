@@ -231,11 +231,162 @@ export const IconPaperclipOutline16 = () => (
   </svg>
 )
 
+export const IconPlusOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M8.7002 1.7002H7.2998V7.2998H1.7002V8.7002H7.2998V14.2998H8.7002V8.7002H14.2998V7.2998H8.7002V1.7002Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+/** 「更多」：原版是细线圆圈里一个十字；点击时整体顺时针转 45° 变成圆圈叉 */
+export const IconMoreCircle26 = () => (
+  <svg width={26} height={26} viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="13" cy="13" r="11" stroke="currentColor" strokeWidth="1.7" />
+    <path
+      d="M13 7.6V18.4M7.6 13H18.4"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
+/** 语音输入：原版是细线圆圈里的「一个点 + 两道声波」 */
+export const IconVoiceSignal26 = () => (
+  <svg width={26} height={26} viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="13" cy="13" r="11" stroke="currentColor" strokeWidth="1.7" />
+    <circle cx="9.4" cy="13" r="1.5" fill="currentColor" />
+    <path
+      d="M12.6 10.6a3.4 3.4 0 0 1 0 4.8"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+    <path
+      d="M15.4 8.8a6.2 6.2 0 0 1 0 8.4"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
+/** 语音模式里切回键盘：细线圆圈里一个键盘点阵 */
+export const IconKeyboardCircle26 = () => (
+  <svg width={26} height={26} viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="13" cy="13" r="11" stroke="currentColor" strokeWidth="1.7" />
+    <circle cx="9.2" cy="10.4" r="1.1" fill="currentColor" />
+    <circle cx="13" cy="10.4" r="1.1" fill="currentColor" />
+    <circle cx="16.8" cy="10.4" r="1.1" fill="currentColor" />
+    <circle cx="9.2" cy="14" r="1.1" fill="currentColor" />
+    <circle cx="13" cy="14" r="1.1" fill="currentColor" />
+    <circle cx="16.8" cy="14" r="1.1" fill="currentColor" />
+    <path d="M10 17.4h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+)
+
+export const IconCameraOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M3 3.7002H5.1498L6.04834 2.19824C6.09761 2.11609 6.17577 2.06822 6.25005 2.04961C6.44538 2.00853 6.67832 2.00006 6.9502 2.00006H9.0498C9.32168 2.00006 9.55462 2.00853 9.74995 2.04961C9.82423 2.06822 9.90239 2.11609 9.95166 2.19824L10.8502 3.7002H13C13.8284 3.7002 14.5 4.37177 14.5 5.2002V12.5C14.5 13.3284 13.8284 14 13 14H3C2.17157 14 1.5 13.3284 1.5 12.5V5.2002C1.5 4.37177 2.17157 3.7002 3 3.7002ZM3 5.1002C2.94477 5.1002 2.9 5.14498 2.9 5.2002V12.5C2.9 12.5552 2.94477 12.6 3 12.6H13C13.0552 12.6 13.1 12.5552 13.1 12.5V5.2002C13.1 5.14498 13.0552 5.1002 13 5.1002H3ZM8 6.00006C6.76134 6.00006 5.75586 7.00554 5.75586 8.2442C5.75586 9.48286 6.76134 10.4883 8 10.4883C9.23866 10.4883 10.2441 9.48286 10.2441 8.2442C10.2441 7.00554 9.23866 6.00006 8 6.00006ZM4.35586 8.2442C4.35586 6.23196 5.98776 4.60006 8 4.60006C10.0122 4.60006 11.6441 6.23196 11.6441 8.2442C11.6441 10.2564 10.0122 11.8883 8 11.8883C5.98776 11.8883 4.35586 10.2564 4.35586 8.2442Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+export const IconPhotoOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M2.4 3.00006C2.06863 3.00006 1.8 3.26869 1.8 3.60006V12.4001C1.8 12.7314 2.06863 13.0001 2.4 13.0001H13.6C13.9314 13.0001 14.2 12.7314 14.2 12.4001V3.60006C14.2 3.26869 13.9314 3.00006 13.6 3.00006H2.4ZM0.400002 3.60006C0.400002 2.49549 1.29543 1.60006 2.4 1.60006H13.6C14.7046 1.60006 15.6 2.49549 15.6 3.60006V12.4001C15.6 13.5046 14.7046 14.4001 13.6 14.4001H2.4C1.29543 14.4001 0.400002 13.5046 0.400002 12.4001V3.60006ZM5.3 6.15006C5.76944 6.15006 6.15 5.7695 6.15 5.30006C6.15 4.83062 5.76944 4.45006 5.3 4.45006C4.83056 4.45006 4.45 4.83062 4.45 5.30006C4.45 5.7695 4.83056 6.15006 5.3 6.15006ZM4.43885 11.6001H11.5611L8.8501 7.90006L6.26248 11.2781L5.07303 9.60006L4.43885 11.6001ZM9.61767 8.53559L12.0768 11.6001H12.6V4.60006H3.4V10.1726L4.61035 8.46224C4.74469 8.25655 4.98964 8.15517 5.24957 8.16577C5.50949 8.17638 5.74259 8.29752 5.85674 8.50151L6.93604 10.4104L9.05101 7.66677C9.19473 7.47778 9.42337 7.37703 9.65536 7.38583C9.88735 7.39463 10.1063 7.51207 10.2348 7.69868L11.6133 9.65346L10.6885 10.4701L9.61767 8.53559Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+/** 「更多」面板里的大号描边图标：拍照 / 相册 / 文件（原版是细线图标卡片） */
+export const IconCameraOutline24 = () => (
+  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M8.1 5.3L9.2 3.9c.22-.28.56-.44.92-.44h3.76c.36 0 .7.16.92.44l1.1 1.4H19a2 2 0 0 1 2 2v9.3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.3a2 2 0 0 1 2-2h3.1Z"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    />
+    <circle cx="12" cy="12.2" r="3.4" stroke="currentColor" strokeWidth="1.6" />
+  </svg>
+)
+
+export const IconPhotoOutline24 = () => (
+  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect
+      x="3"
+      y="4.4"
+      width="18"
+      height="15.2"
+      rx="2.4"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    />
+    <circle cx="8.3" cy="9.3" r="1.6" stroke="currentColor" strokeWidth="1.4" />
+    <path
+      d="M4.2 17.4l4.4-4.4c.4-.4 1-.4 1.4 0l2.5 2.5 3.4-3.4c.4-.4 1-.4 1.4 0l2.7 2.7"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+export const IconPaperclipOutline24 = () => (
+  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M16.4 7v8.9a4.4 4.4 0 0 1-8.8 0V6.6a2.9 2.9 0 0 1 5.8 0v9.2a1.45 1.45 0 0 1-2.9 0V7.3"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
 export const IconRefreshOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
       d="M7.92136 0.349152C10.3744 0.349234 12.5564 1.5052 13.9557 3.29894L15.1281 2.12759C15.3303 1.92546 15.6767 2.06943 15.6767 2.35538V5.53923C15.6766 5.71626 15.5329 5.85976 15.3559 5.86002H12.171C11.8854 5.8597 11.7426 5.51465 11.9443 5.31249L12.9641 4.29056C11.8237 2.74305 9.98908 1.74106 7.92136 1.74097C4.46436 1.74097 1.66233 4.543 1.66233 8C1.66233 11.457 4.46436 14.259 7.92136 14.259C11.3782 14.2589 14.1804 11.4569 14.1804 8H15.5722C15.5722 12.2251 12.1465 15.6507 7.92136 15.6508C3.69614 15.6508 0.270508 12.2252 0.270508 8C0.270508 3.77478 3.69614 0.349152 7.92136 0.349152Z"
       fill="currentColor"
+    />
+  </svg>
+)
+
+/** 发送：原版是蓝色圆底上一个白色上箭头 */
+export const IconArrowUp16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M8 13.2V3.2M3.6 7.6L8 3.2l4.4 4.4"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+/** 发送：原版是蓝色圆底上一个白色上箭头 */
+export const IconArrowUp18 = () => (
+  <svg width={18} height={18} viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M9 15V3.6M3.9 8.6L9 3.6l5.1 5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     />
   </svg>
 )

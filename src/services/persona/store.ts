@@ -1,9 +1,15 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
+import { getBuiltinHelperEntry, isBuiltinPersona } from './builtin.js'
 import type { PersonaCard } from './card.js'
 
-/** 角色库条目：id 只用于本地标识，卡片内容随条目一起保存；avatar 是本机设置的头像（data URL） */
-export type PersonaEntry = { id: string; card: PersonaCard; avatar?: string }
+/** 角色库条目：id 只用于本地标识，卡片内容随条目一起保存；avatar 是本机设置的头像（data URL）；builtin 为官方内置只读卡 */
+export type PersonaEntry = { id: string; card: PersonaCard; avatar?: string; builtin?: boolean }
+
+const withBuiltins = (cards: PersonaEntry[]): PersonaEntry[] => [
+  getBuiltinHelperEntry(),
+  ...cards.filter((entry) => !entry.builtin && !isBuiltinPersona(entry.id)),
+]
 
 /** 本机角色扮演设置，存 localStorage；不涉及任何服务端 */
 export type PersonaState = {
@@ -43,7 +49,7 @@ const markPersonaUpdated = (ts: number) => {
 const emptyState = (): PersonaState => ({
   enabled: false,
   userName: '',
-  cards: [],
+  cards: withBuiltins([]),
   activeId: null,
   showAvatar: false,
 })
@@ -86,7 +92,11 @@ const readState = (): PersonaState => {
     if (!raw) {
       return emptyState()
     }
-    return normalizeState(JSON.parse(raw))
+    // 落盘的只有用户卡，读取时再注入官方内置卡
+    const normalized = normalizeState(JSON.parse(raw))
+    const cards = withBuiltins(normalized.cards)
+    const activeId = cards.some((entry) => entry.id === normalized.activeId) ? normalized.activeId : null
+    return { ...normalized, cards, activeId, enabled: normalized.enabled && activeId !== null }
   } catch {
     return emptyState()
   }
@@ -99,16 +109,19 @@ export const usePersona = create<PersonaState>(() => readState())
  * - 卡片按 id 取并集；同 id / 同名的卡以修改时间更晚的一方为准
  * - 本机独有的卡片不会被删
  * - activeId / enabled 以更晚修改的一方为准，但不会指向不存在的卡
+ * - 官方内置卡不参与同步合并，始终由当前版本的 withBuiltins 注入、不落盘
  */
 export const mergePersonaState = (value: unknown, updatedAt = Date.now()) => {
   const incoming = normalizeState(value)
+  const incomingUserCards = incoming.cards.filter((entry) => !entry.builtin && !isBuiltinPersona(entry.id))
   const local = usePersona.getState()
   const localTs = personaUpdatedAt()
   const remoteNewer = updatedAt >= localTs
 
-  const cardMap = new Map(local.cards.map((entry) => [entry.id, entry]))
-  const nameMap = new Map(local.cards.map((entry) => [entry.card.name, entry]))
-  for (const entry of incoming.cards) {
+  const localUserCards = local.cards.filter((entry) => !entry.builtin && !isBuiltinPersona(entry.id))
+  const cardMap = new Map(localUserCards.map((entry) => [entry.id, entry]))
+  const nameMap = new Map(localUserCards.map((entry) => [entry.card.name, entry]))
+  for (const entry of incomingUserCards) {
     const sameId = cardMap.get(entry.id)
     if (sameId) {
       if (remoteNewer) cardMap.set(entry.id, { ...sameId, card: entry.card, avatar: entry.avatar ?? sameId.avatar })
@@ -122,11 +135,12 @@ export const mergePersonaState = (value: unknown, updatedAt = Date.now()) => {
     cardMap.set(entry.id, entry)
   }
 
-  const cards = [...cardMap.values()]
+  const userCards = [...cardMap.values()]
+  const cards = withBuiltins(userCards)
   const preferredActiveId = remoteNewer ? incoming.activeId : local.activeId
   const activeId = cards.some((entry) => entry.id === preferredActiveId)
     ? preferredActiveId
-    : (cards[0]?.id ?? null)
+    : (userCards[0]?.id ?? null)
   const preferredEnabled = remoteNewer ? incoming.enabled : local.enabled
 
   const next: PersonaState = {
@@ -139,19 +153,25 @@ export const mergePersonaState = (value: unknown, updatedAt = Date.now()) => {
 
   usePersona.setState(next)
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    // 与 commit 保持一致：内置角色卡不落盘，随版本自动更新
+    const persisted: PersonaState = { ...next, cards: userCards }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted))
   } catch {
     // 存储不可用时只更新内存
   }
   markPersonaUpdated(Math.max(localTs, updatedAt))
 }
 
-/** 写入失败只在内存中生效，与 settings.ts 的处理保持一致 */
+/** 写入失败只在内存中生效，与 settings.ts 的处理保持一致；内置角色卡不落盘，随版本自动更新 */
 const commit = (patch: Partial<PersonaState>) => {
   const next = { ...usePersona.getState(), ...patch }
   usePersona.setState(patch)
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    const persisted: PersonaState = {
+      ...next,
+      cards: next.cards.filter((entry) => !entry.builtin && !isBuiltinPersona(entry.id)),
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted))
   } catch {
     // 存储不可用时不阻断使用
   }
@@ -176,9 +196,12 @@ export const addPersonaCard = (card: PersonaCard) => {
 }
 
 export const removePersonaCard = (id: string) => {
+  if (isBuiltinPersona(id)) {
+    return
+  }
   const state = usePersona.getState()
   const cards = state.cards.filter((entry) => entry.id !== id)
-  const activeId = state.activeId === id ? (cards[0]?.id ?? null) : state.activeId
+  const activeId = state.activeId === id ? (cards.find((entry) => !entry.builtin)?.id ?? null) : state.activeId
   commit({ cards, activeId, enabled: activeId !== null ? state.enabled : false })
 }
 
@@ -190,6 +213,9 @@ export const setActivePersona = (id: string) => {
 
 /** 新建（id 为 null）或覆盖保存一张卡；新建的卡自动成为当前角色并启用 */
 export const savePersonaCard = (id: string | null, card: PersonaCard): string => {
+  if (isBuiltinPersona(id)) {
+    return id!
+  }
   const state = usePersona.getState()
   if (id === null) {
     const entry = { id: createId(), card }
@@ -215,6 +241,9 @@ export const setPersonaShowAvatar = (showAvatar: boolean) => commit({ showAvatar
 
 /** 设置某张卡的头像；传 null 移除。图片已在调用侧压成小图，存进 localStorage */
 export const setPersonaAvatar = (id: string, avatar: string | null) => {
+  if (isBuiltinPersona(id)) {
+    return
+  }
   const state = usePersona.getState()
   if (!state.cards.some((entry) => entry.id === id)) {
     return

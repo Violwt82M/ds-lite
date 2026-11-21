@@ -166,10 +166,15 @@ export type Session = {
   memory?: SessionMemory
   /** 观赏性记录（AI 按提示词写的回顾/日记）：不进上下文，也不随导出备份 */
   records?: SessionRecord[]
+  /** 整理记忆前自动生成的备份分支，会话列表里带小标志与正常会话区分 */
+  memoryBackup?: boolean
 }
 
 /** 会话列表元数据；消息只在打开会话时加载。 */
-export type SessionSummary = Pick<Session, 'id' | 'title' | 'createdAt' | 'updatedAt'>
+export type SessionSummary = Pick<
+  Session,
+  'id' | 'title' | 'createdAt' | 'updatedAt' | 'memoryBackup'
+>
 
 /** 显式提取字段，避免将完整会话的消息带进列表。 */
 export const toSessionSummary = (session: SessionSummary): SessionSummary => ({
@@ -177,4 +182,5 @@ export const toSessionSummary = (session: SessionSummary): SessionSummary => ({
   title: session.title,
   createdAt: session.createdAt,
   updatedAt: session.updatedAt,
+  ...(session.memoryBackup ? { memoryBackup: true } : {}),
 })

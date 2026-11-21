@@ -109,13 +109,13 @@ body[data-wallpaper='custom'] .app-frame {
   background-repeat: no-repeat;
 }
 
-/* 有背景时气泡改成半透明，让底色透出来一点，不然像贴了两块白纸 */
+/* 有背景时气泡用毛玻璃半透明（不透明度由「气泡不透明度」滑杆控制，默认 68%），既透出壁纸又不遮字 */
 body[data-wallpaper]:not([data-wallpaper='none']) {
-  --dsw-specific-bubble: rgba(219, 239, 255, 0.82);
+  --dsw-specific-bubble: rgba(219, 239, 255, var(--ds-bubble-alpha, 0.68));
 }
 
 body[data-wallpaper]:not([data-wallpaper='none']).dark {
-  --dsw-specific-bubble: rgba(48, 66, 86, 0.78);
+  --dsw-specific-bubble: rgba(44, 62, 84, var(--ds-bubble-alpha, 0.68));
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -125,32 +125,34 @@ body[data-wallpaper]:not([data-wallpaper='none']).dark {
 }
 
 /*
- * 有背景图时，消息必须自己带一层"纸"，否则文字直接压在照片上没法看。
- * 助手侧本来没有气泡，这里补一块半透明面板；用户气泡加深并加描边。
+ * 有背景图时，消息带一层柔和毛玻璃：保持简洁细描边，不加高光内阴影。
  */
 body[data-wallpaper]:not([data-wallpaper='none']) .ds-assistant-message-main-content {
   padding: 12px 16px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.93);
-  backdrop-filter: blur(16px) saturate(120%);
+  background: rgba(255, 255, 255, var(--ds-bubble-alpha, 0.68));
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 body[data-wallpaper]:not([data-wallpaper='none']).dark .ds-assistant-message-main-content {
   border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(24, 26, 31, 0.9);
+  background: rgba(24, 26, 31, var(--ds-bubble-alpha, 0.68));
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 body[data-wallpaper]:not([data-wallpaper='none']) .ds-user-bubble {
   border: 1px solid rgba(0, 0, 0, 0.08);
-  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 body[data-wallpaper]:not([data-wallpaper='none']).dark .ds-user-bubble {
   border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 /*
@@ -177,41 +179,41 @@ body[data-user-bubble='1'][data-wallpaper]:not([data-wallpaper='none']) .ds-user
 /*
  * 自定义 AI 气泡色：AI 气泡本体带 ds-ai-bubble 类（见 AssistantMessage.tsx）。
  * 和用户气泡一样只换背景和字色；有背景图时用同一个 0.82 透明版本，
- * 气泡自己的 backdrop-filter 模糊在 AssistantMessage.module.css 里已按 data-bubble-skin 设好。
+ * 气泡自己的 backdrop-filter 模糊在 AssistantMessage.module.css 里已按 data-ai-bubble-on 设好。
  */
-body[data-bubble-skin='1'][data-ai-bubble='1'] .ds-ai-bubble {
+body[data-ai-bubble-on='1'][data-ai-bubble='1'] .ds-ai-bubble {
   background-color: var(--ds-ai-bubble-bg);
   color: var(--ds-ai-bubble-text);
 }
 
 /* 正文的 markdown 自带 color，统一改成气泡字色；行内代码/代码块自己有底色，保留主题字色 */
-body[data-bubble-skin='1'][data-ai-bubble='1'] .ds-ai-bubble .ds-markdown {
+body[data-ai-bubble-on='1'][data-ai-bubble='1'] .ds-ai-bubble .ds-markdown {
   color: var(--ds-ai-bubble-text);
 }
 
-body[data-bubble-skin='1'][data-ai-bubble='1'] .ds-ai-bubble .ds-markdown code {
+body[data-ai-bubble-on='1'][data-ai-bubble='1'] .ds-ai-bubble .ds-markdown code {
   color: var(--dsw-alias-label-primary);
 }
 
-body[data-bubble-skin='1'][data-ai-bubble='1'] .ds-ai-bubble .ds-markdown li::marker {
+body[data-ai-bubble-on='1'][data-ai-bubble='1'] .ds-ai-bubble .ds-markdown li::marker {
   color: var(--ds-ai-bubble-text);
 }
 
-body[data-bubble-skin='1'][data-ai-bubble='1'][data-wallpaper]:not([data-wallpaper='none'])
+body[data-ai-bubble-on='1'][data-ai-bubble='1'][data-wallpaper]:not([data-wallpaper='none'])
   .ds-ai-bubble {
   background-color: var(--ds-ai-bubble-bg-soft);
 }
 
-body[data-bubble-skin='1'][data-ai-bubble='1'][data-wallpaper]:not([data-wallpaper='none'])
+body[data-ai-bubble-on='1'][data-ai-bubble='1'][data-wallpaper]:not([data-wallpaper='none'])
   .ds-ai-bubble::before {
   background-color: var(--ds-ai-bubble-bg-soft);
 }
 
 /* 系统要求减少透明效果时退回不透明色，保证对比度 */
 @media (prefers-reduced-transparency: reduce) {
-  body[data-bubble-skin='1'][data-ai-bubble='1'][data-wallpaper]:not([data-wallpaper='none'])
+  body[data-ai-bubble-on='1'][data-ai-bubble='1'][data-wallpaper]:not([data-wallpaper='none'])
     .ds-ai-bubble,
-  body[data-bubble-skin='1'][data-ai-bubble='1'][data-wallpaper]:not([data-wallpaper='none'])
+  body[data-ai-bubble-on='1'][data-ai-bubble='1'][data-wallpaper]:not([data-wallpaper='none'])
     .ds-ai-bubble::before {
     background-color: var(--ds-ai-bubble-bg);
   }

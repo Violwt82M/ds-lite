@@ -3,16 +3,27 @@ import { useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import {
   AI_BUBBLE_PRESETS,
+  BUBBLE_OPACITY_MAX,
+  BUBBLE_OPACITY_MIN,
+  BUBBLE_OPACITY_STEP,
   BUBBLE_PRESETS,
   setAiBubbleColor,
   setBubbleColor,
+  setBubbleOpacity,
   setUserAvatar,
   useAppearance,
   type BubblePreset,
 } from '../../services/appearance.js'
 import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
 import { toAvatarDataUrl } from '../../utils/image.js'
-import { setBubbleSkin, useSettings } from '../../services/settings.js'
+import {
+  setAiBubble,
+  setBubbleSkin,
+  setCollapseThinking,
+  setShowReadMark,
+  setShowTokenUsage,
+  useSettings,
+} from '../../services/settings.js'
 import { Button } from '../base/Button.js'
 import { IconCheckOutline16 } from '../base/icons.js'
 import { ImageCropDialog } from '../base/ImageCropDialog.js'
@@ -179,7 +190,12 @@ export const AppearanceSetting = () => {
   const userAvatar = useAppearance((state) => state.userAvatar)
   const bubbleColor = useAppearance((state) => state.bubbleColor)
   const aiBubbleColor = useAppearance((state) => state.aiBubbleColor)
+  const bubbleOpacity = useAppearance((state) => state.bubbleOpacity)
   const bubbleSkin = useSettings((state) => state.bubbleSkin)
+  const aiBubble = useSettings((state) => state.aiBubble)
+  const showReadMark = useSettings((state) => state.showReadMark)
+  const collapseThinking = useSettings((state) => state.collapseThinking)
+  const showTokenUsage = useSettings((state) => state.showTokenUsage)
   const fileRef = useRef<HTMLInputElement>(null)
   const [cropFile, setCropFile] = useState<File | null>(null)
 
@@ -260,6 +276,25 @@ export const AppearanceSetting = () => {
         onChange={setAiBubbleColor}
       />
       <Row
+        label={t('settingsBubbleOpacity')}
+        description={t('bubbleOpacityHint')}
+        action={
+          <div className={settingsStyles.rangeWrap}>
+            <input
+              className={settingsStyles.range}
+              type="range"
+              min={BUBBLE_OPACITY_MIN}
+              max={BUBBLE_OPACITY_MAX}
+              step={BUBBLE_OPACITY_STEP}
+              value={bubbleOpacity}
+              aria-label={t('settingsBubbleOpacity')}
+              onChange={(event) => setBubbleOpacity(Number(event.currentTarget.value))}
+            />
+            <span className={settingsStyles.rangeValue}>{bubbleOpacity}%</span>
+          </div>
+        }
+      />
+      <Row
         label={t('settingsBubbleSkin')}
         description={t('bubbleSkinHint')}
         action={
@@ -270,6 +305,62 @@ export const AppearanceSetting = () => {
             onClick={() => setBubbleSkin(!bubbleSkin)}
           >
             {t(bubbleSkin ? 'bubbleSkinOn' : 'bubbleSkinOff')}
+          </Button>
+        }
+      />
+      <Row
+        label={t('settingsAiBubble')}
+        description={t('aiOutputBubbleHint')}
+        action={
+          <Button
+            variant={aiBubble ? 'primary' : 'outlined'}
+            size="m"
+            className={settingsStyles.cellButton}
+            onClick={() => setAiBubble(!aiBubble)}
+          >
+            {t(aiBubble ? 'bubbleSkinOn' : 'bubbleSkinOff')}
+          </Button>
+        }
+      />
+      <Row
+        label={t('settingsShowReadMark')}
+        description={t('showReadMarkHint')}
+        action={
+          <Button
+            variant={showReadMark ? 'primary' : 'outlined'}
+            size="m"
+            className={settingsStyles.cellButton}
+            onClick={() => setShowReadMark(!showReadMark)}
+          >
+            {t(showReadMark ? 'bubbleSkinOn' : 'bubbleSkinOff')}
+          </Button>
+        }
+      />
+      <Row
+        label={t('settingsCollapseThinking')}
+        description={t('collapseThinkingHint')}
+        action={
+          <Button
+            variant={collapseThinking ? 'primary' : 'outlined'}
+            size="m"
+            className={settingsStyles.cellButton}
+            onClick={() => setCollapseThinking(!collapseThinking)}
+          >
+            {t(collapseThinking ? 'bubbleSkinOn' : 'bubbleSkinOff')}
+          </Button>
+        }
+      />
+      <Row
+        label={t('settingsShowTokenUsage')}
+        description={t('showTokenUsageHint')}
+        action={
+          <Button
+            variant={showTokenUsage ? 'primary' : 'outlined'}
+            size="m"
+            className={settingsStyles.cellButton}
+            onClick={() => setShowTokenUsage(!showTokenUsage)}
+          >
+            {t(showTokenUsage ? 'bubbleSkinOn' : 'bubbleSkinOff')}
           </Button>
         }
       />

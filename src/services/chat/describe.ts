@@ -66,6 +66,10 @@ export const describeReply = (reply: AssistantMessage): Notice | null => {
     if (status === 400 && /maximum context length/i.test(reply.error.message)) {
       return { text: translate('replyContextTooLong'), detail }
     }
+    // 官方已对 v4 pro 关闭服务端联网 / 标题 / 时间提醒：专门的文案，别再说「内容不合规」
+    if (status === 400 && /unavailable for model deepseek-v4-pro/i.test(reply.error.message)) {
+      return { text: translate('replyProCapsUnavailable'), detail }
+    }
     switch (classifyStatus(status)) {
       case 'unauthorized':
         return { text: translate('replyInvalidApiKey'), action: 'apiKey', detail }

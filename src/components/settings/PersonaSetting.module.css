@@ -120,3 +120,9 @@
   font: inherit;
   font-size: 13px;
 }
+
+/* 深度思考开启时温度被服务端固定为 1.0：滑杆置灰，明确「现在调了不生效」 */
+.rangeDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

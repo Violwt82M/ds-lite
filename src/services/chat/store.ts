@@ -9,8 +9,9 @@ import type { ChatModel } from '../api/types.js'
 import { isCustomApiOrigin } from '../api/base.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
-import { useSettings } from '../settings.js'
+import { useSettings, requestTemperature } from '../settings.js'
 import { showToast } from '../../components/base/toastState.js'
+import { classifyStorageWriteFailure } from '../storage.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
 import { notifyLocalSessionSaved, notifyLocalSessionsReplaced } from '../sync/bridge.js'
@@ -49,8 +50,6 @@ import {
   estimateMessageTokens,
   formatCharCount,
   getContextUsage,
-  MANUAL_KEEP_TOKENS,
-  MEMORY_KEEP_TOKENS,
   splitFoldableRounds,
   getFoldedChars,
   getFoldedIds,
@@ -135,6 +134,26 @@ const CONTEXT_BLOCK_TOKENS = 1_000_000
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
 const titleRequests = new Set<AbortController>()
 
+/**
+ * 一次落盘失败的详情：界面据此说明「哪部分没存下来、为什么」，并给重试入口。
+ * 以前只记 true，条幅永远是同一句话，用户点「重试」看不到任何变化（0.9.51 用户反馈）。
+ */
+export type SessionSaveFailure = {
+  /** quota：本机空间不足；other：其余写入失败（浏览器/WebView 偶发拒绝写库） */
+  kind: 'quota' | 'other'
+  /** 原始错误，只进控制台和「技术详情」，不当主文案 */
+  message: string
+  /** 累计失败次数：手动重试后数字会变，点击就有反馈 */
+  attempts: number
+  /** 用户点过几次重试 */
+  manualRetries: number
+  /** 会话正文是否已经落地：true 表示只差附件 */
+  recordSaved: boolean
+  /** 这次没写进本机的附件个数 */
+  filesPending: number
+  at: number
+}
+
 type ChatState = {
   ready: boolean
   initError: boolean
@@ -144,7 +163,7 @@ type ChatState = {
   sessions: SessionSummary[]
   sessionCache: Record<string, Session>
   sessionLoadErrors: Record<string, boolean>
-  sessionSaveErrors: Record<string, boolean>
+  sessionSaveErrors: Record<string, SessionSaveFailure>
   /** null 表示新对话（欢迎页） */
   activeId: string | null
   /** 正在生成回复的会话 */
@@ -206,7 +225,10 @@ const getStreamController = (id: string) => {
 }
 
 const sameSummary = (a: SessionSummary, b: SessionSummary) =>
-  a.title === b.title && a.createdAt === b.createdAt && a.updatedAt === b.updatedAt
+  a.title === b.title &&
+  a.createdAt === b.createdAt &&
+  a.updatedAt === b.updatedAt &&
+  Boolean(a.memoryBackup) === Boolean(b.memoryBackup)
 
 const sessionAccess = new Map<string, number>()
 const unsavedSessions = new Set<string>()
@@ -219,6 +241,18 @@ let accessSequence = 0
 let historyEpoch = 0
 let initTask: Promise<void> | undefined
 const sessionLoads = new Map<string, { promise: Promise<void> }>()
+/**
+ * 每次落盘一个递增序号：只有最新那次能改界面状态。
+ * 旧的一次保存晚到（无论成功还是失败）不能盖掉后一次已经定下的结论，
+ * 否则条幅会在保存成功之后又被点亮，而这时「重试」已经没有可写的东西。
+ */
+const saveAttempts = new Map<string, number>()
+let saveAttemptSequence = 0
+/** 正在执行的重试：连点「重试」复用同一个任务 */
+let retryTask: Promise<boolean> | undefined
+/** 偶发失败（非空间不足）自动补试的定时器与已用次数 */
+let autoRetryTimer: number | undefined
+let autoRetryCount = 0
 
 const touchSession = (id: string) => sessionAccess.set(id, ++accessSequence)
 
@@ -282,47 +316,133 @@ const updateReply = (sessionId: string, reply: AssistantMessage) =>
     ),
   }))
 
-const persist = (sessionId: string) => {
+/** 停掉自动补试的定时器（保存成功或整库替换时调用） */
+const stopAutoRetry = () => {
+  autoRetryCount = 0
+  if (autoRetryTimer !== undefined) {
+    window.clearTimeout(autoRetryTimer)
+    autoRetryTimer = undefined
+  }
+}
+
+/** 清掉某条会话的保存失败提示；全部清空时条幅消失 */
+const clearSaveFailure = (sessionId: string) => {
+  if (!Object.hasOwn(get().sessionSaveErrors, sessionId)) {
+    return
+  }
+  set((state) => {
+    const next = Object.fromEntries(
+      Object.entries(state.sessionSaveErrors).filter(([id]) => id !== sessionId)
+    )
+    if (Object.keys(next).length === 0) {
+      stopAutoRetry()
+    }
+    return { sessionSaveErrors: next }
+  })
+}
+
+/** 空间不足补试无意义（要把空间清出来），其余偶发写入失败过几秒自动补试两次 */
+const scheduleAutoRetry = () => {
+  if (autoRetryTimer !== undefined || autoRetryCount >= 2) {
+    return
+  }
+  if (Object.values(get().sessionSaveErrors).every((failure) => failure.kind === 'quota')) {
+    return
+  }
+  autoRetryTimer = window.setTimeout(() => {
+    autoRetryTimer = undefined
+    autoRetryCount += 1
+    if (Object.keys(get().sessionSaveErrors).length > 0) {
+      void retrySaveSessions({ silent: true })
+    }
+  }, 2500)
+}
+
+/** 记一次落盘失败：带上「正文存没存下来、还差几个附件、为什么」给界面用 */
+const markSaveFailure = (
+  sessionId: string,
+  error: unknown,
+  info: { recordSaved: boolean; filesPending: number }
+) => {
+  const { kind, message } = classifyStorageWriteFailure(error)
+  const previous = get().sessionSaveErrors[sessionId]
+  const failure: SessionSaveFailure = {
+    kind,
+    message,
+    attempts: (previous?.attempts ?? 0) + 1,
+    manualRetries: previous?.manualRetries ?? 0,
+    recordSaved: info.recordSaved,
+    filesPending: info.filesPending,
+    at: Date.now(),
+  }
+  // 失败后一定留在待写集合里：重试按钮永远有目标可写。
+  // 以前只标一个 true，另一次保存成功把待写集合清空后，点「重试」就是空转（用户反馈的「没反应」）。
+  unsavedSessions.add(sessionId)
+  set((state) => ({
+    sessionSaveErrors: { ...state.sessionSaveErrors, [sessionId]: failure },
+  }))
+  scheduleAutoRetry()
+}
+
+/**
+ * 把会话写进本机，返回这次落盘结束的 promise（失败不算 reject，结论体现在状态里）。
+ * 先写正文/摘要、再写附件原件：空间不足时正文照样落地，用户不会因为一个附件丢掉整轮对话。
+ */
+const persist = (sessionId: string): Promise<void> => {
   const session = getSession(sessionId)
-  if (session) {
-    unsavedSessions.add(sessionId)
-    if (deletingSessions.has(sessionId)) {
+  if (!session) {
+    // 会话已经不在内存里（删除/整库替换），留着提示只会变成点不掉的条幅
+    clearSaveFailure(sessionId)
+    return Promise.resolve()
+  }
+  unsavedSessions.add(sessionId)
+  if (deletingSessions.has(sessionId)) {
+    return Promise.resolve()
+  }
+  const epoch = historyEpoch
+  const files = pendingFiles.get(sessionId) ?? []
+  const attempt = ++saveAttemptSequence
+  saveAttempts.set(sessionId, attempt)
+  const isLatest = () => epoch === historyEpoch && saveAttempts.get(sessionId) === attempt
+  return (async () => {
+    try {
+      await db.saveSessionRecord(session)
+    } catch (error) {
+      db.reportStorageError('save session')(error)
+      if (isLatest() && getSession(sessionId)) {
+        markSaveFailure(sessionId, error, { recordSaved: false, filesPending: files.length })
+      }
       return
     }
-    const epoch = historyEpoch
-    const files = pendingFiles.get(sessionId)
-    void db
-      .saveSession(session, files)
-      .then(() => {
-        if (epoch !== historyEpoch || !getSession(sessionId)) {
-          return
+    if (files.length > 0) {
+      try {
+        await db.saveSessionFiles(files)
+      } catch (error) {
+        db.reportStorageError('save attachments')(error)
+        // 正文已经在库里了：这时候提示「对话没保存」会吓人，界面按 recordSaved 说明只差附件
+        if (isLatest() && getSession(sessionId)) {
+          markSaveFailure(sessionId, error, { recordSaved: true, filesPending: files.length })
         }
-        // 正文搜索索引跟着数据走：会话存进库后顺手重建它那一条（防抖，流式期间不会反复写）
-        scheduleSessionIndex(session)
-        // 通知同步引擎：这条会话有新内容，推给已连接的设备
-        notifyLocalSessionSaved(session)
-        if (pendingFiles.get(sessionId) === files) {
-          pendingFiles.delete(sessionId)
-        }
-        if (getSession(sessionId) === session) {
-          unsavedSessions.delete(sessionId)
-          set((state) => ({
-            sessionSaveErrors: Object.fromEntries(
-              Object.entries(state.sessionSaveErrors).filter(([id]) => id !== sessionId)
-            ),
-          }))
-          trimSessionCache()
-        }
-      })
-      .catch((error: unknown) => {
-        db.reportStorageError('save session')(error)
-        if (epoch === historyEpoch && getSession(sessionId)) {
-          set((state) => ({
-            sessionSaveErrors: { ...state.sessionSaveErrors, [sessionId]: true },
-          }))
-        }
-      })
-  }
+        return
+      }
+    }
+    if (!isLatest()) {
+      return
+    }
+    saveAttempts.delete(sessionId)
+    // 正文搜索索引跟着数据走：会话存进库后顺手重建它那一条（防抖，流式期间不会反复写）
+    scheduleSessionIndex(session)
+    // 通知同步引擎：这条会话有新内容，推给已连接的设备
+    notifyLocalSessionSaved(session)
+    if (pendingFiles.get(sessionId) === files) {
+      pendingFiles.delete(sessionId)
+    }
+    if (getSession(sessionId) === session) {
+      unsavedSessions.delete(sessionId)
+      trimSessionCache()
+    }
+    clearSaveFailure(sessionId)
+  })()
 }
 
 /**
@@ -380,10 +500,53 @@ const runReplyStream = (
   })
 }
 
-export const retrySaveSessions = () => {
-  if (!get().importingHistory) {
-    unsavedSessions.forEach(persist)
+/**
+ * 重试落盘：把待写的会话和带失败标记的会话都重写一遍。
+ * 返回是否已全部保存；手动点击时先给失败次数 +1，用户看得到「点了有反应」。
+ */
+export const retrySaveSessions = (options: { silent?: boolean } = {}): Promise<boolean> => {
+  if (retryTask) {
+    return retryTask
   }
+  if (get().importingHistory) {
+    return Promise.resolve(false)
+  }
+  const targets = new Set([...unsavedSessions, ...Object.keys(get().sessionSaveErrors)])
+  for (const id of [...targets]) {
+    if (!getSession(id)) {
+      targets.delete(id)
+      clearSaveFailure(id)
+    }
+  }
+  if (targets.size === 0) {
+    return Promise.resolve(Object.keys(get().sessionSaveErrors).length === 0)
+  }
+  if (!options.silent) {
+    autoRetryCount = 0
+    set((state) => ({
+      sessionSaveErrors: Object.fromEntries(
+        Object.entries(state.sessionSaveErrors).map(([id, failure]) => [
+          id,
+          targets.has(id) ? { ...failure, manualRetries: failure.manualRetries + 1 } : failure,
+        ])
+      ),
+    }))
+  }
+  retryTask = Promise.all([...targets].map((id) => persist(id)))
+    .then(() => {
+      if (Object.keys(get().sessionSaveErrors).length > 0) {
+        // 重试期间可能又攒了新的失败：留给自动补试或下一次手动重试
+        return false
+      }
+      if (!options.silent) {
+        showToast({ key: 'sessionSaved' })
+      }
+      return true
+    })
+    .finally(() => {
+      retryTask = undefined
+    })
+  return retryTask
 }
 
 /** 离开前先合并尚未绘制的增量；隐藏期间浏览器可能暂停动画帧。 */
@@ -407,6 +570,11 @@ export const bindChatPersistence = () => {
   const onVisibilityChange = () => {
     if (document.visibilityState === 'hidden') {
       save()
+      return
+    }
+    // 用户可能刚去清理了空间或切走又回来：自动再补一次，别让条幅一直挂着
+    if (Object.keys(get().sessionSaveErrors).length > 0) {
+      void retrySaveSessions({ silent: true })
     }
   }
   document.addEventListener('visibilitychange', onVisibilityChange)
@@ -590,13 +758,13 @@ export const mergeRemoteSession = async (
             memory: incoming.memory ?? stored.memory,
           }
         : { ...stored, messages: merged }
-      await db.saveSession(next)
+      await db.saveSessionRecord(next)
     }
     return { isNew: false, added }
   }
   // 只带元数据的 diff（如同步压缩 memory）先到了、整条会话还没来：不建空会话，等全量推送
   if (incoming.messages.length === 0) return { isNew: false, added: 0 }
-  await db.saveSession(incoming)
+  await db.saveSessionRecord(incoming)
   return { isNew: true, added: incoming.messages.length }
 }
 
@@ -717,6 +885,8 @@ export const replaceHistory = async (
     sessionAccess.clear()
     unsavedSessions.clear()
     pendingFiles.clear()
+    saveAttempts.clear()
+    stopAutoRetry()
     clearAllDrafts()
     set({
       ready: true,
@@ -826,6 +996,7 @@ const removeSessionData = async (id: string): Promise<boolean> => {
     sessionAccess.delete(id)
     unsavedSessions.delete(id)
     pendingFiles.delete(id)
+    saveAttempts.delete(id)
     clearDraft(id)
     set((state) => ({
       sessions: state.sessions.filter((session) => session.id !== id),
@@ -999,6 +1170,44 @@ export const forkSession = (sessionId: string, messageId: string): string | null
   }))
   persist(forked.id)
   return forked.id
+}
+
+/**
+ * 复制整条会话为独立分支（0 token 消耗）：完整保留消息树、已整理的记忆笔记与 foldedIds，
+ * 以及人设绑定；两边后续聊天互不干扰，共同前缀还能继续命中 DeepSeek 缓存。
+ */
+export const duplicateSession = async (sessionId: string): Promise<string | null> => {
+  const state = get()
+  if (state.importingHistory || deletingSessions.has(sessionId) || getStreamController(sessionId)) {
+    return null
+  }
+  const source = getSession(sessionId) ?? (await db.loadSession(sessionId))
+  if (!source) {
+    return null
+  }
+  const now = Date.now()
+  const baseTitle = source.title.trim() || translate('untitledChat')
+  const copy: Session = {
+    ...(JSON.parse(JSON.stringify(source)) as Session),
+    id: createId(),
+    title: `${baseTitle}${translate('sessionCopySuffix')}`,
+    createdAt: now,
+    updatedAt: now,
+  }
+  const scope = usePersonaScope.getState().map[sessionId]
+  if (scope !== undefined) {
+    setSessionPersona(copy.id, scope)
+  } else {
+    bindPersonaForNewSession(copy.id)
+  }
+  touchSession(copy.id)
+  set((current) => ({
+    sessions: sortSessions([toSessionSummary(copy), ...current.sessions], current.pins),
+    sessionCache: { ...current.sessionCache, [copy.id]: copy },
+    activeId: copy.id,
+  }))
+  persist(copy.id)
+  return copy.id
 }
 
 /** 重新生成当前路径上的回答：在原问题下新增版本，不覆盖旧回答和后续对话。 */
@@ -1410,9 +1619,10 @@ const runCompaction = async (
   const rounds = getUnfoldedRounds(session)
   // 近期原文按 token 保底，不按轮数：同一轮可以是 200 字也可以是 3000 字。
   // 切法与横幅、面板共用 splitFoldableRounds，界面上说「能整理」就一定能整理。
+  const keepTokens = useSettings.getState().memoryKeepTokens
   const { kept, foldable: candidates } = splitFoldableRounds(
     rounds,
-    source === 'manual' ? MANUAL_KEEP_TOKENS : MEMORY_KEEP_TOKENS,
+    keepTokens,
     options.keep
   )
   const minimum = options.minimum ?? (source === 'manual' ? 1 : MEMORY_MIN_FOLD_ROUNDS)
@@ -1581,6 +1791,29 @@ const runCompaction = async (
     }
     const now = Date.now()
     const foldedIds = folded.map(([, reply]) => reply.id)
+    // 整理前自动复制一份完整分支作为「后悔药」：保留整理前的上下文、旧笔记、foldedIds 与人设绑定
+    const preCompact = getSession(sessionId)
+    if (preCompact) {
+      const baseTitle = preCompact.title.trim() || translate('untitledChat')
+      const backup: Session = {
+        ...(JSON.parse(JSON.stringify(preCompact)) as Session),
+        id: createId(),
+        title: `${baseTitle}${translate('memoryBackupTitleSuffix')}`,
+        createdAt: now,
+        updatedAt: now - 1,
+        memoryBackup: true,
+      }
+      const scope = usePersonaScope.getState().map[sessionId]
+      if (scope !== undefined) {
+        setSessionPersona(backup.id, scope)
+      }
+      touchSession(backup.id)
+      set((current) => ({
+        sessions: sortSessions([toSessionSummary(backup), ...current.sessions], current.pins),
+        sessionCache: { ...current.sessionCache, [backup.id]: backup },
+      }))
+      persist(backup.id)
+    }
     updateMemory(sessionId, (memory) => ({
       // 覆盖式：模型输出的就是最新一版笔记，旧笔记被整体替换
       notes: rewriteNotes(memory, notes, now, MAX_BIG_NOTE_CHARS),
@@ -1588,9 +1821,10 @@ const runCompaction = async (
       foldedRounds: memory.foldedRounds + foldedIds.length,
       updatedAt: now,
     }))
-    // 自动整理是后台行为，留一条一次性提示，免得用户觉得"它怎么突然失忆了"
+    // 自动整理是后台行为，留一条一次性提示并弹 toast 告知已自动备份原会话
     if (source === 'auto') {
       setMemoryNotice(sessionId, foldedIds.length)
+      showToast({ key: 'memoryAutoCompactBackupToast', params: { count: foldedIds.length } })
     }
     return true
   } catch (error) {
@@ -2003,7 +2237,10 @@ const trimHistoryForExtended = (
  */
 const streamReply = async (sessionId: string, initial: AssistantMessage, request: Request) => {
   const controller = new AbortController()
-  if (!getSession(sessionId)?.title) {
+  // v4 pro 不支持服务端标题：不请求，交给下面的本地兜底标题
+  const model = initial.model ?? currentModel()
+  const isPro = model === 'deepseek-v4-pro'
+  if (!isPro && !getSession(sessionId)?.title) {
     titleRequests.add(controller)
   }
   set((state) => ({ streaming: { ...state.streaming, [sessionId]: controller } }))
@@ -2084,6 +2321,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             questionText: prepared.question.content,
             search: initial.search ?? false,
             safety: prefs.safety,
+            model,
           })
             ? trimHistoryForExtended(
                 activeSession,
@@ -2101,22 +2339,27 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           latestReminder,
           trimmed ? trimmed.folded : folded,
           // v4 pro 不支持图片：历史里的图片块直接不发（用户选择「发得出去但看不见图」）
-          initial.model === 'deepseek-v4-pro'
+          isPro,
+          // v4 pro 不支持 latest_reminder：时间信息改由 system 携带，历史快照仍保留
+          isPro
         )
         // 请求体只从这里出去：扩展模式的四道闸门（工具 / 严格审查 / 标题 / 长输入）
         // 全在 buildRequest 里统一判定，别再往这里加字段。
+        const systemBase = buildSystemPrompt(
+          SYSTEM_PROMPT,
+          renderMemorySection(activeSession?.memory, prefs.locale),
+          (() => {
+            const entry = resolveSessionPersona(sessionId).entry
+            return entry === null
+              ? null
+              : { card: entry.card, userName: usePersona.getState().userName }
+          })()
+        )
+        // v4 pro 不支持 latest_reminder 消息：时间信息并入 system（官方实测 200）
+        const system = isPro ? `${systemBase}\n\n【当前时间】${latestReminder}` : systemBase
         const built = buildRequest({
-          model: initial.model ?? currentModel(),
-          system: buildSystemPrompt(
-            SYSTEM_PROMPT,
-            renderMemorySection(activeSession?.memory, prefs.locale),
-            (() => {
-              const entry = resolveSessionPersona(sessionId).entry
-              return entry === null
-                ? null
-                : { card: entry.card, userName: usePersona.getState().userName }
-            })()
-          ),
+          model,
+          system,
           messages,
           questionText: prepared.question.content,
           search: initial.search ?? false,
@@ -2127,6 +2370,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           // 传裁剪后的估算值：degraded 只该反映「真的降级了」，裁完还能联网就不算降级
           inputTokens: trimmed ? trimmed.tokens : requestTokens,
           forceStandard: standardForced,
+          temperature: requestTemperature(prefs.personalityTemperature),
         })
         if (built.degraded) {
           // 自动降级要说得清楚：用户可能刚点了联网，不能悄悄当没点
@@ -2135,8 +2379,13 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             params: { chars: Math.max(1, Math.round(charsForTokens(requestTokens) / 10_000)) },
           })
         }
+        // v4 pro 按无联网发送：同样不能静默，让用户知道为什么这轮没搜
+        if (built.proCapsBlocked) {
+          showToast({ key: 'modelProNoSearch' })
+        }
         // 没要到服务端标题时本地兜一个，免得会话一直叫「新对话」
-        if (titleRequests.has(controller) && !built.titleRequested) {
+        // （长输入降级、以及不支持标题的 v4 pro 都走这里）
+        if (!built.titleRequested) {
           titleRequests.delete(controller)
           const fallback = prepared.question.content.trim().replace(/\s+/g, ' ')
           if (fallback) {

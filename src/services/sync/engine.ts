@@ -474,7 +474,7 @@ export class SyncEngine {
         // 兜底：store 钩子没注册（理论上不会发生）才由引擎直接写库
         const local = await db.loadSession(op.session.id)
         if (!local) {
-          await db.saveSession(op.session)
+          await db.saveSessionRecord(op.session)
           this.cachedUpdatedAt.set(op.session.id, op.session.updatedAt ?? Date.now())
           this.rememberSent(op.session.id, op.session.messages)
           this.emit('session-written', { sessionId: op.session.id, isNew: true })
@@ -491,7 +491,7 @@ export class SyncEngine {
           if (op.session.rootMessageId !== undefined) mergedSession.rootMessageId = op.session.rootMessageId
           if (op.session.memory !== undefined) mergedSession.memory = op.session.memory
         }
-        await db.saveSession(mergedSession)
+        await db.saveSessionRecord(mergedSession)
         this.cachedUpdatedAt.set(mergedSession.id, mergedSession.updatedAt ?? Date.now())
         this.rememberSent(mergedSession.id, op.session.messages)
         this.emit('session-written', { sessionId: mergedSession.id, isNew: false })
@@ -525,13 +525,13 @@ export class SyncEngine {
           if (op.applied.updatedAt !== undefined) local.updatedAt = op.applied.updatedAt
           if (op.applied.rootMessageId !== undefined) local.rootMessageId = op.applied.rootMessageId
           if (op.applied.memory !== undefined) local.memory = op.applied.memory
-          await db.saveSession(local)
+          await db.saveSessionRecord(local)
           this.cachedUpdatedAt.set(local.id, local.updatedAt ?? Date.now())
           this.rememberSent(local.id, op.applied.messages)
           this.emit('session-diff-applied', { sessionId: local.id, isNew: false, added: op.applied.messages.length })
         } else {
           // 本机没有 → 直接存对方版本
-          await db.saveSession(op.applied)
+          await db.saveSessionRecord(op.applied)
           this.cachedUpdatedAt.set(op.applied.id, op.applied.updatedAt ?? Date.now())
           this.rememberSent(op.applied.id, op.applied.messages)
           this.emit('session-diff-applied', { sessionId: op.applied.id, isNew: true, added: op.applied.messages.length })

@@ -29,8 +29,15 @@ export const wantsExtendedRequest = (options: {
   questionText?: string
   search?: boolean
   safety?: SafetyLevel
+  /** 请求模型：v4 pro 不发联网/读链接工具，只有严格审查会把它送进扩展模式 */
+  model?: ChatModel
 }): boolean => {
-  const { questionText = '', search = false, safety = 'low' } = options
+  const { questionText = '', search = false, safety = 'low', model } = options
+  if (!usesOpenAiProtocol() && model === 'deepseek-v4-pro') {
+    // v4 pro 已关闭服务端联网/读链接/标题能力，本轮不会声明这些扩展字段；
+    // 只有 safety_check.level 为 high 时会进 32768 token 的扩展模式。
+    return safety === 'high'
+  }
   return !usesOpenAiProtocol() && (search || safety === 'high' || URL_PATTERN.test(questionText))
 }
 
@@ -52,6 +59,8 @@ export type BuildRequestOptions = {
   inputTokens?: number
   /** 上一次已经撞过 32768 的墙，强制标准模式重发 */
   forceStandard?: boolean
+  /** 采样温度（0~2）；undefined 表示不传，走服务端默认 1.0 */
+  temperature?: number
 }
 
 export type BuiltRequest = {
@@ -60,6 +69,8 @@ export type BuiltRequest = {
   degraded: boolean
   /** 是否真的向服务端要了标题（长输入时为 false，调用方自行兜一个本地标题） */
   titleRequested: boolean
+  /** v4 pro 且本轮本来想联网 / 读链接：按无联网发送，界面需要说明 */
+  proCapsBlocked: boolean
 }
 
 /**
@@ -125,6 +136,7 @@ export const buildRequest = (options: BuildRequestOptions): BuiltRequest => {
     wantTitle = false,
     inputTokens = 0,
     forceStandard = false,
+    temperature,
   } = options
 
   /**
@@ -132,15 +144,21 @@ export const buildRequest = (options: BuildRequestOptions): BuiltRequest => {
    * 所以这里一个扩展字段都不声明（也别让 degraded 提示误报）。
    */
   const openAi = usesOpenAiProtocol()
+  /**
+   * v4 pro：官方 2026-11-20 起关闭了它的服务端联网 / 读链接 / 标题能力
+   * （带 latest_reminder 也 400，见 reply.ts 的 dropReminder），
+   * 所以 pro 一律走「纯文本模式」：不声明服务端工具、不请求标题。
+   */
+  const isPro = !openAi && model === 'deepseek-v4-pro'
   const hasUrl = !openAi && URL_PATTERN.test(questionText)
   /** 只要出现任意扩展字段，本轮就落进 32768 token 的小房间 */
-  const wantsExtended = wantsExtendedRequest({ questionText, search, safety })
+  const wantsExtended = wantsExtendedRequest({ questionText, search, safety, model })
   const tooLong = inputTokens > EXTENDED_INPUT_LIMIT_TOKENS
   /** 长输入一律标准模式：扩展能力全部让位，否则请求必被拒 */
   const standardOnly = tooLong || forceStandard
 
   const tools: CreateMessageRequest['tools'] = []
-  if (!standardOnly && !openAi) {
+  if (!standardOnly && !openAi && !isPro) {
     if (hasUrl) {
       tools.push({ type: 'deepseek_read_url', name: 'deepseek_read_url' })
     }
@@ -159,8 +177,15 @@ export const buildRequest = (options: BuildRequestOptions): BuiltRequest => {
     ...(thinking && effort ? { output_config: { effort } } : {}),
     safety_check: { level: standardOnly ? 'low' : safety },
     tools,
-    ...(wantTitle && !standardOnly ? { title: { enabled: true } } : {}),
+    ...(wantTitle && !standardOnly && !isPro ? { title: { enabled: true } } : {}),
+    // 只在用户调过人格温度且未开深度思考时传（默认 1.0 与不传等价；思考模式服务端固定 1.0）
+    ...(temperature !== undefined && !thinking ? { temperature } : {}),
   }
 
-  return { body, degraded: tooLong && wantsExtended, titleRequested: wantTitle && !standardOnly }
+  return {
+    body,
+    degraded: tooLong && wantsExtended,
+    titleRequested: wantTitle && !standardOnly && !isPro,
+    proCapsBlocked: isPro && (search || hasUrl),
+  }
 }
