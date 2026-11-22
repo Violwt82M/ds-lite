@@ -51,6 +51,7 @@ import {
   setTtsVoice,
   setDocumentBudget,
   setMemoryKeepTokens,
+  setSendClockTime,
   MEMORY_KEEP_MIN,
   MEMORY_KEEP_SLIDER_MAX,
   MEMORY_KEEP_MAX,
@@ -202,6 +203,7 @@ const SettingsContent = () => {
               <LocaleSetting />
               <TtsVoiceSetting />
               <LocationSetting />
+              <SendClockTimeSetting />
             </>
           ) : section === 'persona' ? (
             <PersonaSetting />
@@ -314,6 +316,27 @@ const useHistoryDelete = () => {
     },
     confirm,
   }
+}
+
+const SendClockTimeSetting = () => {
+  const enabled = useSettings((state) => state.sendClockTime)
+  return (
+    <SettingCell
+      label="向模型提供具体时间"
+      description="默认关闭（仅提供日期）；开启后会附带当前时刻（HH:mm）作为温和环境参考且不伤缓存"
+      status={null}
+      action={
+        <Button
+          variant={enabled ? 'primary' : 'outlined'}
+          size="m"
+          className={styles.cellButton}
+          onClick={() => setSendClockTime(!enabled)}
+        >
+          {enabled ? '已开启' : '已关闭'}
+        </Button>
+      }
+    />
+  )
 }
 
 const LocationSetting = () => {

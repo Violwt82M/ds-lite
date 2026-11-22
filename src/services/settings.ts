@@ -67,6 +67,8 @@ type Settings = {
   memoryKeepTokens: number
   /** 人格温度（0~100）：映射到 API temperature 0~1.5，默认 50 = 官方默认 1.0 */
   personalityTemperature: number
+  /** 是否在提问尾部向模型附带当前具体时刻（HH:mm），默认关；开启后仅作温和环境参考 */
+  sendClockTime: boolean
 }
 
 /** 记忆整理模式：auto 让模型自己判断对话类型 */
@@ -101,6 +103,7 @@ const KEYS = {
   showTokenUsage: 'chat-demo:show-token-usage',
   memoryKeepTokens: 'chat-demo:memory-keep-tokens',
   personalityTemperature: 'chat-demo:personality-temperature',
+  sendClockTime: 'chat-demo:send-clock-time',
 } as const
 
 const read = (key: string) => {
@@ -261,6 +264,8 @@ export const useSettings = create<Settings>(() => ({
     // 没存过时 Number(null) 是 0，会把默认温度误判成 0.0；必须先用 null 判断
     return raw === null ? PERSONALITY_TEMPERATURE_DEFAULT : clampPersonalityTemperature(Number(raw))
   })(),
+  // 默认关：需要模型感知具体几点几分时可在「设置 → 通用」开启（放在提问尾部，不伤前缀缓存）
+  sendClockTime: read(KEYS.sendClockTime) === 'true',
 }))
 
 /** 消息气泡开关：模型输出纯文本，气泡由客户端绘制 */
@@ -291,6 +296,12 @@ export const setCollapseThinking = (collapseThinking: boolean) => {
 export const setShowTokenUsage = (showTokenUsage: boolean) => {
   write(KEYS.showTokenUsage, String(showTokenUsage))
   useSettings.setState({ showTokenUsage })
+}
+
+/** 向模型提供具体时刻开关，默认关 */
+export const setSendClockTime = (sendClockTime: boolean) => {
+  write(KEYS.sendClockTime, String(sendClockTime))
+  useSettings.setState({ sendClockTime })
 }
 
 /** 记忆整理保留的最近上下文 token 数（4K~48K） */

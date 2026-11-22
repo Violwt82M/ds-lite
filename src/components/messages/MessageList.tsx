@@ -109,8 +109,10 @@ export const MessageList = ({
       : null
   // 上滑离底部太远、或正停在被跳转到的历史位置时浮出「回到底部」
   const [showJumpDown, setShowJumpDown] = useState(false)
-  // 往上翻过一屏、或正停在历史窗口里时浮出「回到顶部」
+  // 往上翻过一屏、或正停在历史窗口里时浮出「到顶 / 返回上一条对话」展开按钮
   const [showJumpUp, setShowJumpUp] = useState(false)
+  const [jumpUpOpen, setJumpUpOpen] = useState(false)
+  const jumpUpWrapRef = useRef<HTMLDivElement>(null)
   const expandAnchor = useRef<{ scrollTop: number; scrollHeight: number } | null>(null)
   const bottomAfterRender = useRef(false)
   const topAfterRender = useRef(false)
@@ -364,6 +366,54 @@ export const MessageList = ({
       el.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }
+  useEffect(() => {
+    if (!showJumpUp) {
+      setJumpUpOpen(false)
+    }
+  }, [showJumpUp])
+
+  useEffect(() => {
+    if (!jumpUpOpen) {
+      return
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (jumpUpWrapRef.current && !jumpUpWrapRef.current.contains(event.target as Node)) {
+        setJumpUpOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [jumpUpOpen])
+
+  const jumpToPrevMessage = () => {
+    const el = scrollRef.current
+    if (!el) {
+      return
+    }
+    stickyRef.current = false
+    const nodes = Array.from(el.querySelectorAll<HTMLElement>('[data-message-id]'))
+    const elRect = el.getBoundingClientRect()
+    let targetTop: number | null = null
+    for (let idx = nodes.length - 1; idx >= 0; idx -= 1) {
+      const node = nodes[idx]
+      const nodeTop = el.scrollTop + (node.getBoundingClientRect().top - elRect.top)
+      if (nodeTop < el.scrollTop - 16) {
+        targetTop = Math.max(0, nodeTop - 12)
+        break
+      }
+    }
+    if (targetTop !== null) {
+      el.scrollTo({ top: targetTop, behavior: 'smooth' })
+      return
+    }
+    if (hiddenCount > 0) {
+      loadEarlier()
+      return
+    }
+    el.scrollTo({ top: 0, behavior: 'smooth' })
+    setJumpUpOpen(false)
+  }
+
   return (
     <ScrollToBottomContext.Provider value={scrollToBottom}>
       <div className={styles.container}>
@@ -371,23 +421,49 @@ export const MessageList = ({
           <div ref={scrollRef} id={SCROLLER_ID} className={styles.scroll}>
             <div ref={contentRef} className={styles.column}>
               {showJumpUp ? (
-                <button
-                  type="button"
-                  className={`${styles.jumpDown} ${styles.jumpUp}`}
-                  aria-label={t('scrollToTop')}
-                  title={t('scrollToTop')}
-                  onClick={jumpToTop}
-                >
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-                    <path
-                      d="M8 13V4m0 0 4 4m-4-4-4 4"
-                      stroke="currentColor"
-                      strokeWidth="1.7"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
+                <div ref={jumpUpWrapRef} className={styles.jumpUpWrap}>
+                  {jumpUpOpen ? (
+                    <div className={styles.jumpUpMenu} role="menu">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={styles.jumpUpItem}
+                        onClick={() => {
+                          setJumpUpOpen(false)
+                          jumpToTop()
+                        }}
+                      >
+                        回到顶部
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={styles.jumpUpItem}
+                        onClick={jumpToPrevMessage}
+                      >
+                        返回上一条对话
+                      </button>
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    className={`${styles.jumpDown} ${styles.jumpUpBtn}`}
+                    aria-label={t('scrollToTop')}
+                    aria-expanded={jumpUpOpen}
+                    title="快捷跳转：回到顶部 / 返回上一条对话"
+                    onClick={() => setJumpUpOpen((prev) => !prev)}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                      <path
+                        d="M8 13V4m0 0 4 4m-4-4-4 4"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
               ) : null}
               {hiddenCount > 0 ? (
                 <button type="button" className={styles.loadEarlier} onClick={loadEarlier}>
