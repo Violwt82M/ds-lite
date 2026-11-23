@@ -59,12 +59,18 @@ export const AI_BUBBLE_PRESETS: readonly BubblePreset[] = [
   { id: 'deep', color: '#2c2c2e', labelKey: 'bubbleColorDeep' },
 ]
 
-export const BUBBLE_OPACITY_MIN = 30
+export const BUBBLE_OPACITY_MIN = 15
 export const BUBBLE_OPACITY_MAX = 100
 export const BUBBLE_OPACITY_STEP = 5
-export const BUBBLE_OPACITY_DEFAULT = 68
+export const BUBBLE_OPACITY_DEFAULT = 45
+
+export const BUBBLE_BLUR_MIN = 0
+export const BUBBLE_BLUR_MAX = 20
+export const BUBBLE_BLUR_STEP = 1
+export const BUBBLE_BLUR_DEFAULT = 6
 
 const BUBBLE_OPACITY_KEY = 'ds-lite:bubble-opacity'
+const BUBBLE_BLUR_KEY = 'ds-lite:bubble-blur'
 
 const clampBubbleOpacity = (value: number) => {
   if (!Number.isFinite(value)) {
@@ -72,6 +78,14 @@ const clampBubbleOpacity = (value: number) => {
   }
   const stepped = Math.round(value / BUBBLE_OPACITY_STEP) * BUBBLE_OPACITY_STEP
   return Math.min(BUBBLE_OPACITY_MAX, Math.max(BUBBLE_OPACITY_MIN, stepped))
+}
+
+const clampBubbleBlur = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return BUBBLE_BLUR_DEFAULT
+  }
+  const stepped = Math.round(value / BUBBLE_BLUR_STEP) * BUBBLE_BLUR_STEP
+  return Math.min(BUBBLE_BLUR_MAX, Math.max(BUBBLE_BLUR_MIN, stepped))
 }
 
 const readBubbleOpacity = (): number => {
@@ -83,6 +97,15 @@ const readBubbleOpacity = (): number => {
   }
 }
 
+const readBubbleBlur = (): number => {
+  try {
+    const raw = localStorage.getItem(BUBBLE_BLUR_KEY)
+    return raw === null ? BUBBLE_BLUR_DEFAULT : clampBubbleBlur(Number(raw))
+  } catch {
+    return BUBBLE_BLUR_DEFAULT
+  }
+}
+
 export type AppearanceState = {
   /** 128px PNG data URL；null = 不显示头像 */
   userAvatar: string | null
@@ -90,8 +113,10 @@ export type AppearanceState = {
   bubbleColor: string | null
   /** #rrggbb；null = 跟随主题默认气泡色（AI 回答侧） */
   aiBubbleColor: string | null
-  /** 有壁纸时的气泡不透明度（30~100%，默认 68%） */
+  /** 有壁纸时的气泡不透明度（15~100%，默认 45% 通透玻璃） */
   bubbleOpacity: number
+  /** 有壁纸时的气泡背景模糊度（0~20px，默认 6px 轻磨砂） */
+  bubbleBlur: number
 }
 
 /** 坏数据一律按没设置处理：外观设置坏了不能阻塞启动 */
@@ -109,6 +134,7 @@ export const useAppearance = create<AppearanceState>(() => ({
   bubbleColor: readSaved(BUBBLE_KEY, isBubbleColor),
   aiBubbleColor: readSaved(AI_BUBBLE_KEY, isBubbleColor),
   bubbleOpacity: readBubbleOpacity(),
+  bubbleBlur: readBubbleBlur(),
 }))
 
 const parseRgb = (hex: string): [number, number, number] => [
@@ -155,9 +181,10 @@ const applyBubbleColor = (kind: 'user' | 'ai', color: string | null, alpha: stri
 
 /** 把外观写到 body 上：CSS 只认 data 属性和变量，气泡组件不用重复算颜色 */
 const applyAppearance = () => {
-  const { bubbleColor, aiBubbleColor, bubbleOpacity } = useAppearance.getState()
+  const { bubbleColor, aiBubbleColor, bubbleOpacity, bubbleBlur } = useAppearance.getState()
   const alpha = (bubbleOpacity / 100).toFixed(2)
   document.body.style.setProperty('--ds-bubble-alpha', alpha)
+  document.body.style.setProperty('--ds-bubble-blur', `${bubbleBlur}px`)
   applyBubbleColor('user', bubbleColor, alpha)
   applyBubbleColor('ai', aiBubbleColor, alpha)
 }
@@ -204,4 +231,24 @@ export const setBubbleOpacity = (value: number) => {
   const next = clampBubbleOpacity(value)
   useAppearance.setState({ bubbleOpacity: next })
   persist(BUBBLE_OPACITY_KEY, String(next))
+}
+
+export const setBubbleBlur = (value: number) => {
+  const next = clampBubbleBlur(value)
+  useAppearance.setState({ bubbleBlur: next })
+  persist(BUBBLE_BLUR_KEY, String(next))
+}
+
+/** 一键恢复气泡外观默认参数（保留用户头像不清空） */
+export const resetBubbleAppearance = () => {
+  useAppearance.setState({
+    bubbleColor: null,
+    aiBubbleColor: null,
+    bubbleOpacity: BUBBLE_OPACITY_DEFAULT,
+    bubbleBlur: BUBBLE_BLUR_DEFAULT,
+  })
+  persist(BUBBLE_KEY, null)
+  persist(AI_BUBBLE_KEY, null)
+  persist(BUBBLE_OPACITY_KEY, null)
+  persist(BUBBLE_BLUR_KEY, null)
 }

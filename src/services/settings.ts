@@ -69,7 +69,14 @@ type Settings = {
   personalityTemperature: number
   /** 是否在提问尾部向模型附带当前具体时刻（HH:mm），默认关；开启后仅作温和环境参考 */
   sendClockTime: boolean
+  /** 回复篇幅偏好：default 不干预 / detailed 偏详尽 / concise 偏精简 */
+  replyLength: ReplyLength
+  /** AI 回复输出完毕后自动开始朗读（默认关闭） */
+  autoReadAloud: boolean
 }
+
+/** 回复篇幅偏好：静态拼进 system，不伤前缀缓存 */
+export type ReplyLength = 'default' | 'detailed' | 'concise'
 
 /** 记忆整理模式：auto 让模型自己判断对话类型 */
 export type MemoryMode = 'auto' | 'rp' | 'plain'
@@ -104,6 +111,8 @@ const KEYS = {
   memoryKeepTokens: 'chat-demo:memory-keep-tokens',
   personalityTemperature: 'chat-demo:personality-temperature',
   sendClockTime: 'chat-demo:send-clock-time',
+  replyLength: 'chat-demo:reply-length',
+  autoReadAloud: 'chat-demo:auto-read-aloud',
 } as const
 
 const read = (key: string) => {
@@ -266,6 +275,13 @@ export const useSettings = create<Settings>(() => ({
   })(),
   // 默认关：需要模型感知具体几点几分时可在「设置 → 通用」开启（放在提问尾部，不伤前缀缓存）
   sendClockTime: read(KEYS.sendClockTime) === 'true',
+  // 默认不干预；偏详尽 / 偏精简时静态写入 system，不伤前缀缓存
+  replyLength: ((): ReplyLength => {
+    const saved = read(KEYS.replyLength)
+    return saved === 'detailed' || saved === 'concise' ? saved : 'default'
+  })(),
+  // 默认关闭：开启后每次 AI 回复完成且停留在当前会话时自动朗读
+  autoReadAloud: read(KEYS.autoReadAloud) === 'true',
 }))
 
 /** 消息气泡开关：模型输出纯文本，气泡由客户端绘制 */
@@ -302,6 +318,18 @@ export const setShowTokenUsage = (showTokenUsage: boolean) => {
 export const setSendClockTime = (sendClockTime: boolean) => {
   write(KEYS.sendClockTime, String(sendClockTime))
   useSettings.setState({ sendClockTime })
+}
+
+/** 回复篇幅偏好，默认不干预 */
+export const setReplyLength = (replyLength: ReplyLength) => {
+  write(KEYS.replyLength, replyLength)
+  useSettings.setState({ replyLength })
+}
+
+/** 输出完毕自动朗读开关，默认关 */
+export const setAutoReadAloud = (autoReadAloud: boolean) => {
+  write(KEYS.autoReadAloud, String(autoReadAloud))
+  useSettings.setState({ autoReadAloud })
 }
 
 /** 记忆整理保留的最近上下文 token 数（4K~48K） */

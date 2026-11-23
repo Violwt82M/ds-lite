@@ -1,5 +1,12 @@
 import { streamMessage } from '../api/client.js'
-import type { AssistantMessage, MemoryNote, SessionMemory, UserMessage } from '../chat/types.js'
+import type {
+  AssistantMessage,
+  AttachmentMemory,
+  FileAttachment,
+  MemoryNote,
+  SessionMemory,
+  UserMessage,
+} from '../chat/types.js'
 import type { Locale } from '../settings.js'
 import { safeSlice, safeTail, safeTruncate, truncatePercent } from '../../utils/safeText.js'
 import { formatSize, getExtension } from '../attachments.js'
@@ -36,9 +43,9 @@ export const MAX_OUTPUT_NOTES = 30
 /** 送进整理调用的对话原文上限（字符数）；超出只保留最近的 */
 /** 中文实测 0.59~0.70 token/字符，取 0.65 折算：预算用 token 表达，别按字符猜 */
 export const charsForTokens = (tokens: number) => Math.floor(tokens / 0.65)
-const MAX_TRANSCRIPT_CHARS = charsForTokens(15_600)
-/** 单条消息在整理原文里的截断长度 */
-const MAX_MESSAGE_CHARS = charsForTokens(780)
+const MAX_TRANSCRIPT_CHARS = charsForTokens(39_000)
+/** 单条消息在整理原文里的截断长度（约 4,000 字，避免长文档轮次被切得太碎） */
+const MAX_MESSAGE_CHARS = charsForTokens(2_600)
 
 const SYSTEM_PROMPTS: Record<Locale, string> = {
   'zh-CN': `你是对话记忆整理助手。你会看到同一个 AI 助手此前的记忆笔记，以及一段即将被折叠、原文不再留在上下文里的较早对话。请把「旧笔记 + 这段对话」整理成**一份**最新的压缩记录：它是被折叠原文的替代索引，供助手在原文看不到时**备查**，而不是让助手照着它把故事讲下去。
@@ -151,7 +158,7 @@ const truncate = (text: string, limit: number) => safeTruncate(text, limit)
  * 一段一次请求，前面的结果作为下一段的【已有记忆】传下去，
  * 这样上百万字的会话也不会被一次性丢掉（旧实现只取最后 24k 字）。
  */
-export const SEGMENT_CHARS = 18_000
+export const SEGMENT_CHARS = 45_000
 
 const roundChars = (round: [UserMessage, AssistantMessage]): number => {
   const [user, reply] = round
@@ -237,6 +244,339 @@ export const buildTranscript = (
   }
   const text = lines.join('\n\n')
   return safeTail(text, maxChars)
+}
+
+/**
+ * 独立资料记忆：附件正文不留在上下文里，但「这份资料讲了什么」必须留得下来。
+ * 摘要按结构化小标题组织，单份 300~800 字，绝不复制全文；整份列表再控总量。
+ */
+const ATTACHMENT_SUMMARY_MAX_CHARS = 800
+/** 送进提炼调用的附件正文上限：超长按前/中/后抽样 */
+const ATTACHMENT_DOC_CHARS = 24_000
+/** 提炼时带上的提问 / 回复各自的上限 */
+const ATTACHMENT_CONTEXT_CHARS = 2_000
+/** attachments 列表总字数预算：约 1.5K~2K token，避免资料区反客为主 */
+const ATTACHMENT_TOTAL_CHARS = 3_000
+
+/**
+ * 超长正文按「前 42% + 中间 20% + 后 38%」抽样：
+ * 开头通常是设定/目录，中间是主体，结尾是结论/数据表，三处都不丢。
+ */
+export const sampleAttachmentText = (
+  text: string,
+  locale: Locale,
+  limit: number = ATTACHMENT_DOC_CHARS
+): string => {
+  const clean = text.replace(/\r\n/g, '\n').trim()
+  if (clean.length <= limit) {
+    return clean
+  }
+  const marker =
+    locale === 'zh-CN' ? '\n\n……（中间部分省略）……\n\n' : '\n\n[... middle omitted ...]\n\n'
+  const room = Math.max(600, limit - marker.length * 2)
+  const headLen = Math.floor(room * 0.42)
+  const midLen = Math.floor(room * 0.2)
+  const tailLen = room - headLen - midLen
+  const midStart = Math.max(headLen, Math.floor((clean.length - midLen) / 2))
+  const tailStart = Math.max(midStart + midLen, clean.length - tailLen)
+  return [
+    safeSlice(clean, 0, headLen),
+    safeSlice(clean, midStart, midStart + midLen),
+    safeSlice(clean, tailStart, clean.length),
+  ].join(marker)
+}
+
+const ATTACHMENT_PROMPTS: Record<Locale, string> = {
+  'zh-CN': `你是资料提炼助手。用户上传过一份附件，并围绕它与 AI 助手聊过。请为后续对话留下一份可备查的结构化资料摘要，而不是复述原文。
+
+要求：
+1. 输出 300~800 字，按下面小标题分段，没有内容的段直接省略：
+【资料概况】文件是什么、主题与用途
+【核心设定】世界观、人物、术语、规则等（如有）
+【关键数据】重要的数字、参数、名单、结论
+【对话结论】用户这次关心的点与 AI 给出的重要结论
+【后续可用】以后回答时需要遵守或反复引用的信息
+2. 只写对后续对话有用的事实，按主题归纳；不要逐段复述、不要整段翻译、不要写「开头说…结尾说…」。
+3. 正文被抽样截断的部分不要编造，只依据给出的内容总结，不要假装读过没给出的部分。
+4. 关键名称、数字、专有名词保留原写法。
+5. 只输出摘要正文，不要代码块、不要前言后语。`,
+  'en-US': `You distill reference material. The user uploaded a file earlier and talked about it with an AI assistant. Produce a structured digest that stays available for later turns - do not restate the file.
+
+Rules:
+1. Output 300-800 characters, grouped under these headings and skipping empty ones:
+[Overview] what the file is, its topic and purpose
+[Core setting] world, characters, terms, rules (if any)
+[Key data] important numbers, parameters, names, conclusions
+[Conversation outcome] what the user cared about and the assistant's important conclusions
+[Reusable later] facts to follow or cite in future replies
+2. Keep only facts useful later, grouped by theme; no section-by-section retelling, no full translation, no "the beginning says ... the end says ...".
+3. Never invent the parts that were sampled out; summarise only what is given and do not pretend to have read the rest.
+4. Preserve names, numbers and proper nouns as written.
+5. Output the digest only, no code fences, no preamble or closing.`,
+}
+
+const ATTACHMENT_LABELS: Record<
+  Locale,
+  {
+    fileName: string
+    question: string
+    answer: string
+    content: string
+    noContent: string
+    sampled: string
+    image: string
+    asked: string
+    reply: string
+  }
+> = {
+  'zh-CN': {
+    fileName: '【文件名】',
+    question: '【用户提问】',
+    answer: '【AI 回复（节选）】',
+    content: '【附件正文（节选）】',
+    noContent: '（本地未能读取到正文，例如扫描件或需要服务端解析的格式。请不要假装读过正文。）',
+    sampled: '（正文超长，已按前/中/后抽样，未给出的部分不要编造。）',
+    image: '图片附件',
+    asked: '本轮提问',
+    reply: '当时回复要点',
+  },
+  'en-US': {
+    fileName: '[File name]',
+    question: '[User question]',
+    answer: '[Assistant reply (excerpt)]',
+    content: '[File text (excerpt)]',
+    noContent:
+      '(The local text could not be read, e.g. a scan or a format that must be parsed server-side. Do not pretend to have read it.)',
+    sampled: '(The file was too long and has been sampled from the start/middle/end; do not invent the missing parts.)',
+    image: 'Image attachment',
+    asked: 'User asked',
+    reply: 'Reply highlights',
+  },
+}
+
+const buildAttachmentPrompt = ({
+  locale,
+  file,
+  question,
+  answer,
+  content,
+  sampled,
+}: {
+  locale: Locale
+  file: FileAttachment
+  question: string
+  answer: string
+  content: string
+  sampled: boolean
+}): string => {
+  const label = ATTACHMENT_LABELS[locale]
+  const parts = [`${label.fileName}${file.name}`]
+  if (question) {
+    parts.push(`${label.question}\n${question}`)
+  }
+  if (answer) {
+    parts.push(`${label.answer}\n${answer}`)
+  }
+  if (content) {
+    parts.push(`${label.content}\n${content}`)
+    if (sampled) {
+      parts.push(label.sampled)
+    }
+  } else {
+    parts.push(label.noContent)
+  }
+  return parts.join('\n\n')
+}
+
+/** 图片附件没有可读正文：用这一轮的提问与回复做一条简短要点，不再多花一次请求 */
+const imageMemorySummary = ({
+  locale,
+  file,
+  question,
+  answer,
+}: {
+  locale: Locale
+  file: FileAttachment
+  question: string
+  answer: string
+}): string => {
+  const label = ATTACHMENT_LABELS[locale]
+  const title =
+    locale === 'zh-CN' ? `图片附件《${file.name}》` : `Image attachment "${file.name}"`
+  return truncate(
+    [
+      title,
+      question ? `${label.asked}：${truncate(question, 300)}` : '',
+      answer ? `${label.reply}：${truncate(answer, 500)}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n'),
+    ATTACHMENT_SUMMARY_MAX_CHARS
+  )
+}
+
+const cleanAttachmentSummary = (raw: string, limit: number): string =>
+  truncate(
+    raw
+      .replace(/^\s*```[a-zA-Z]*\s*/, '')
+      .replace(/\s*```\s*$/, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim(),
+    limit
+  )
+
+/** 总量控制：优先保留较新的资料；最后一条放不下时温和截断，不整条丢 */
+const fitAttachmentBudget = (
+  list: AttachmentMemory[],
+  budget: number = ATTACHMENT_TOTAL_CHARS
+): AttachmentMemory[] => {
+  const newestFirst = [...list].sort((a, b) => b.createdAt - a.createdAt)
+  const kept: AttachmentMemory[] = []
+  let used = 0
+  for (const item of newestFirst) {
+    const left = budget - used
+    if (left < 120) {
+      break
+    }
+    if (item.summary.length <= left) {
+      kept.push(item)
+      used += item.summary.length
+      continue
+    }
+    kept.push({ ...item, summary: truncate(item.summary, Math.max(120, left - 1)) })
+    break
+  }
+  return kept.sort((a, b) => a.createdAt - b.createdAt)
+}
+
+/**
+ * 独立提炼附件资料记忆。它不写库，只返回合并后的完整列表：
+ * 已有附件（按 fileId 或文件名去重）+ 本次新提炼的，总量约 3,000 字。
+ * 调用方直接把返回值写入 memory.attachments 即可。
+ */
+export const extractAttachmentMemories = async ({
+  apiKey,
+  locale,
+  rounds,
+  existingAttachments = [],
+  readFileContent,
+  signal,
+}: {
+  apiKey: string
+  locale: Locale
+  /** 待整理的轮次；只处理 user.files 非空的轮次 */
+  rounds: [UserMessage, AssistantMessage][]
+  /** 会话里已有的资料记忆，用于去重与合并 */
+  existingAttachments?: AttachmentMemory[]
+  /** 读取本地附件正文；图片或读不到时返回 null / 空串 */
+  readFileContent: (file: FileAttachment) => Promise<string | null | undefined>
+  signal: AbortSignal
+}): Promise<AttachmentMemory[]> => {
+  const baseTime = Date.now()
+  const seenFileIds = new Set(
+    existingAttachments
+      .map((item) => item.fileId)
+      .filter((value): value is string => typeof value === 'string' && value !== '')
+  )
+  const seenNames = new Set(existingAttachments.map((item) => item.name))
+  const created: AttachmentMemory[] = []
+  for (const [user, reply] of rounds) {
+    if (user.files.length === 0) {
+      continue
+    }
+    const answer = reply.blocks
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('\n')
+      .trim()
+    for (const file of user.files) {
+      if (signal.aborted) {
+        throw new Error('Aborted')
+      }
+      if (
+        seenFileIds.has(file.id) ||
+        (file.serverId !== null && seenFileIds.has(file.serverId)) ||
+        seenNames.has(file.name)
+      ) {
+        continue
+      }
+      try {
+        let summary = ''
+        if (file.isImage) {
+          // 没有可读的图片正文：只从这一轮对话里留一条要点，避免再发一次请求
+          summary = answer ? imageMemorySummary({ locale, file, question: user.content, answer }) : ''
+        } else {
+          const raw = (await readFileContent(file)) ?? ''
+          if (signal.aborted) {
+            throw new Error('Aborted')
+          }
+          const sampled = raw.replace(/\r\n/g, '\n').trim().length > ATTACHMENT_DOC_CHARS
+          const text = sampleAttachmentText(raw, locale)
+          const question = truncate(user.content.trim(), ATTACHMENT_CONTEXT_CHARS)
+          const replyText = truncate(answer, ATTACHMENT_CONTEXT_CHARS)
+          if (!text && !question && !replyText) {
+            continue
+          }
+          const events = streamMessage(
+            apiKey,
+            {
+              model: 'deepseek-flash',
+              system: ATTACHMENT_PROMPTS[locale],
+              messages: [
+                {
+                  role: 'user',
+                  content: buildAttachmentPrompt({
+                    locale,
+                    file,
+                    question,
+                    answer: replyText,
+                    content: text,
+                    sampled,
+                  }),
+                },
+              ],
+              ...STANDARD_MODE,
+            },
+            signal
+          )
+          let output = ''
+          for await (const event of events) {
+            if (
+              event.type === 'content_block_delta' &&
+              event.delta.type === 'text_delta' &&
+              event.index === 0
+            ) {
+              output += event.delta.text
+            }
+          }
+          summary = cleanAttachmentSummary(output, ATTACHMENT_SUMMARY_MAX_CHARS)
+        }
+        if (!summary.trim()) {
+          continue
+        }
+        const id = `att-${file.id}`
+        created.push({
+          id,
+          name: file.name,
+          summary,
+          fileId: file.id,
+          createdAt: baseTime + created.length,
+        })
+        seenFileIds.add(file.id)
+        if (file.serverId !== null) {
+          seenFileIds.add(file.serverId)
+        }
+        seenNames.add(file.name)
+      } catch (error) {
+        if (signal.aborted) {
+          throw error
+        }
+        // 单份附件读不出来/提炼失败不该让整次整理失败，跳过它
+        continue
+      }
+    }
+  }
+  return fitAttachmentBudget([...existingAttachments, ...created])
 }
 
 /** 由已有笔记与新对话整理出新的笔记列表；只读流式文本，落库由调用方负责。 */
@@ -496,6 +836,28 @@ export const rewriteNotes = (
 const MAX_MEMORY_SECTION_CHARS = 24_000
 /** 单条手写笔记的上限：超长按行截断并提示，但绝不整条丢掉 */
 const MAX_MANUAL_NOTE_RENDER_CHARS = 8_000
+/** 单条资料记忆在 system 里的渲染上限（正常提炼结果 ≤ 800 字） */
+const MAX_ATTACHMENT_RENDER_CHARS = 1_200
+/** 资料区整体渲染上限：即使被手动改长，也不让它撑爆 system */
+const MAX_ATTACHMENT_SECTION_CHARS = 6_000
+
+/**
+ * 笔记是压缩索引，不是回复范本。
+ * 不写这句，模型会照着清单的极简文风回话（用户反馈「整理后回复变短、变列表」）。
+ */
+const STYLE_GUARD: Record<Locale, string> = {
+  'zh-CN':
+    '【文风提醒】以上笔记只是压缩备查索引，不是回复范本；请勿模仿其简略清单文风，回复请保持充分、自然的篇幅与细节。',
+  'en-US':
+    '[Style note] The notes above are a compressed index for reference, not a model for your replies. Do not imitate their terse checklist style; keep replies full, natural and detailed.',
+}
+
+const ATTACHMENT_RENDER_HEAD: Record<Locale, string> = {
+  'zh-CN':
+    '【资料记忆】以下是用户此前上传附件的提炼摘要，供需要时备查；不要整段复述，也不要把它当成当前话题。',
+  'en-US':
+    '[Attachment memory] Condensed summaries of files the user uploaded earlier, kept for reference. Do not recite them or treat them as the current topic.',
+}
 
 const noteLine = (text: string) => (text.includes('\n') ? text : `- ${text}`)
 
@@ -529,7 +891,8 @@ const clipLines = (text: string, limit: number, locale: Locale) => {
  */
 export const renderMemorySection = (memory: SessionMemory | undefined, locale: Locale): string => {
   const notes = (memory?.notes ?? []).filter((note) => note.text.trim() !== '')
-  if (notes.length === 0) {
+  const attachments = (memory?.attachments ?? []).filter((item) => item.summary.trim() !== '')
+  if (notes.length === 0 && attachments.length === 0) {
     return ''
   }
   const zh = locale === 'zh-CN'
@@ -578,6 +941,33 @@ export const renderMemorySection = (memory: SessionMemory | undefined, locale: L
     }
     if (lines.length > 0) {
       sections.push([head, ...lines].join('\n'))
+    }
+  }
+  if (notes.length > 0) {
+    const guard = STYLE_GUARD[locale]
+    used += guard.length
+    sections.push(guard)
+  }
+  if (attachments.length > 0) {
+    const head = ATTACHMENT_RENDER_HEAD[locale]
+    let attachmentUsed = head.length
+    const lines: string[] = []
+    for (const item of attachments) {
+      const body = clipLines(item.summary.trim(), MAX_ATTACHMENT_RENDER_CHARS, locale)
+      const line = zh ? `· 《${item.name}》\n${body}` : `· "${item.name}"\n${body}`
+      if (
+        attachmentUsed + line.length > MAX_ATTACHMENT_SECTION_CHARS ||
+        used + line.length > MAX_MEMORY_SECTION_CHARS
+      ) {
+        lines.push(zh ? '（资料记忆较多，已省略一部分）' : '(More attachment memories omitted)')
+        break
+      }
+      attachmentUsed += line.length
+      used += line.length
+      lines.push(line)
+    }
+    if (lines.length > 0) {
+      sections.push([head, ...lines].join('\n\n'))
     }
   }
   return sections.join('\n\n')

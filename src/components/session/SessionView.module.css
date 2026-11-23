@@ -9,6 +9,7 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  min-width: 0;
   height: 60px;
   padding: 12px 18px 0;
   box-sizing: border-box;
@@ -16,6 +17,8 @@
 }
 
 .title {
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 480px;
   padding: 8px 12px;
   overflow: hidden;
@@ -32,6 +35,8 @@
 .headerActions {
   display: flex;
   align-items: center;
+  flex: none;
+  min-width: 0;
   gap: 8px;
   margin-left: auto;
   padding-right: 4px;
@@ -73,6 +78,28 @@
     bottom: auto;
     flex-shrink: 0;
     margin: 0 auto;
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: var(--ds-nav-inset, env(safe-area-inset-bottom, 0px));
   }
+}
+
+/* 壁纸模式下取消实心底部黑/白条，让圆角输入框干净悬浮在壁纸上方 */
+:global(body[data-wallpaper]:not([data-wallpaper='none'])) .inputContainer {
+  background: transparent;
+  padding-bottom: calc(6px + var(--ds-nav-inset, env(safe-area-inset-bottom, 0px)));
+}
+
+:global(body[data-wallpaper]:not([data-wallpaper='none'])) .caveat {
+  width: fit-content;
+  margin-top: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: rgba(28, 32, 40, 0.82);
+}
+
+:global(body[data-wallpaper]:not([data-wallpaper='none']).dark) .caveat {
+  background: rgba(16, 18, 24, 0.68);
+  color: rgba(235, 240, 248, 0.8);
 }

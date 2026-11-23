@@ -74,21 +74,17 @@ export const describeReadAloudError = (error: unknown): TranslationMessage | str
 }
 
 /**
- * 开始朗读一条回复的正文；同一条正在朗读时调用等于停止。
- * 必须在点击事件中同步调用：AudioContext 需要用户手势才能出声。
+ * 开始朗读一条回复的正文；总是从头开始（供「输出完毕自动朗读」与点击朗读共用）。
  */
-export const toggleReadAloud = (
+export const startReadAloud = (
   messageId: string,
   text: string,
   onError: (error: unknown) => void
 ) => {
-  const reading = useReadAloud.getState().messageId
   stopReadAloud()
-  if (reading === messageId) {
-    return
-  }
   const controller = new AbortController()
   const context = new AudioContext({ sampleRate: TTS_SAMPLE_RATE })
+  void context.resume().catch(() => {})
   current = { controller, context }
   useReadAloud.setState({ messageId, status: 'loading' })
   // 音色在开始朗读时读取，设置中切换后下一次朗读生效
@@ -141,4 +137,21 @@ export const toggleReadAloud = (
       }
     }
   })()
+}
+
+/**
+ * 开始朗读一条回复的正文；同一条正在朗读时调用等于停止。
+ * 必须在点击事件中同步调用：AudioContext 需要用户手势才能出声。
+ */
+export const toggleReadAloud = (
+  messageId: string,
+  text: string,
+  onError: (error: unknown) => void
+) => {
+  const reading = useReadAloud.getState().messageId
+  stopReadAloud()
+  if (reading === messageId) {
+    return
+  }
+  startReadAloud(messageId, text, onError)
 }

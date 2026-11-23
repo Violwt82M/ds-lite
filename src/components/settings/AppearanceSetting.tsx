@@ -3,11 +3,16 @@ import { useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import {
   AI_BUBBLE_PRESETS,
+  BUBBLE_BLUR_MAX,
+  BUBBLE_BLUR_MIN,
+  BUBBLE_BLUR_STEP,
   BUBBLE_OPACITY_MAX,
   BUBBLE_OPACITY_MIN,
   BUBBLE_OPACITY_STEP,
   BUBBLE_PRESETS,
+  resetBubbleAppearance,
   setAiBubbleColor,
+  setBubbleBlur,
   setBubbleColor,
   setBubbleOpacity,
   setUserAvatar,
@@ -192,6 +197,7 @@ export const AppearanceSetting = () => {
   const bubbleColor = useAppearance((state) => state.bubbleColor)
   const aiBubbleColor = useAppearance((state) => state.aiBubbleColor)
   const bubbleOpacity = useAppearance((state) => state.bubbleOpacity)
+  const bubbleBlur = useAppearance((state) => state.bubbleBlur)
   const bubbleSkin = useSettings((state) => state.bubbleSkin)
   const aiBubble = useSettings((state) => state.aiBubble)
   const showReadMark = useSettings((state) => state.showReadMark)
@@ -294,6 +300,39 @@ export const AppearanceSetting = () => {
             />
             <span className={settingsStyles.rangeValue}>{bubbleOpacity}%</span>
           </div>
+        }
+      />
+      <Row
+        label={t('settingsBubbleBlur')}
+        description={t('bubbleBlurHint')}
+        action={
+          <div className={settingsStyles.rangeWrap}>
+            <input
+              className={settingsStyles.range}
+              type="range"
+              min={BUBBLE_BLUR_MIN}
+              max={BUBBLE_BLUR_MAX}
+              step={BUBBLE_BLUR_STEP}
+              value={bubbleBlur}
+              aria-label={t('settingsBubbleBlur')}
+              onChange={(event) => setBubbleBlur(Number(event.currentTarget.value))}
+            />
+            <span className={settingsStyles.rangeValue}>{bubbleBlur}px</span>
+          </div>
+        }
+      />
+      <Row
+        label={t('settingsBubbleReset')}
+        description={t('bubbleResetHint')}
+        action={
+          <Button
+            variant="outlined"
+            size="m"
+            className={settingsStyles.cellButton}
+            onClick={resetBubbleAppearance}
+          >
+            {t('bubbleResetAction')}
+          </Button>
         }
       />
       <Row

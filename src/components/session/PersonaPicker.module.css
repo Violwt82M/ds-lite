@@ -3,9 +3,12 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 150px;
   height: 28px;
   padding: 0 10px 0 4px;
+  overflow: hidden;
   border: 1px solid var(--ds-border, rgba(128, 128, 128, 0.25));
   border-radius: 999px;
   background: none;
@@ -13,7 +16,6 @@
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  flex: none;
 }
 
 .chipOff {
@@ -39,9 +41,18 @@
 }
 
 .chipLabel {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* 窄屏给右侧固定按钮让位：人设名再长也只占一小段，其余省略 */
+@media (max-width: 480px) {
+  .chip {
+    max-width: min(150px, 34vw);
+  }
 }
 
 .dialog {
@@ -114,6 +125,10 @@
 }
 
 .optionLabel {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: 14px;
 }
 

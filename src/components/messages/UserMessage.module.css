@@ -149,6 +149,30 @@
   margin-top: 6px;
 }
 
+/* 壁纸模式下给用户消息下方的复制/编辑/版本操作栏加半透磨砂胶囊底板，防止图标看不清 */
+:global(body[data-wallpaper]:not([data-wallpaper='none'])) .bottom {
+  height: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #1f2329;
+  --dsw-alias-label-primary: #1f2329;
+  --dsw-alias-label-secondary: #374151;
+  --dsw-alias-label-tertiary: #4b5563;
+}
+
+:global(body[data-wallpaper]:not([data-wallpaper='none']).dark) .bottom {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(18, 22, 30, 0.78);
+  color: #f0f4fa;
+  --dsw-alias-label-primary: #f0f4fa;
+  --dsw-alias-label-secondary: rgba(240, 244, 250, 0.86);
+  --dsw-alias-label-tertiary: rgba(240, 244, 250, 0.74);
+}
+
 .actions {
   display: flex;
   align-items: center;

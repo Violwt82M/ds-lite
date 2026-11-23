@@ -4,6 +4,11 @@ import { useTranslate } from '../../i18n/index.js'
 import { cardToJsonText, emptyCard, type PersonaCard } from '../../services/persona/card.js'
 import { saveFile } from '../../services/export/saveFile.js'
 import { savePersonaCard, setPersonaAvatar } from '../../services/persona/store.js'
+import {
+  clearScopedWallpaper,
+  hasScopedWallpaper,
+  setScopedWallpaperBlob,
+} from '../../services/wallpaper.js'
 import { toAvatarDataUrl } from '../../utils/image.js'
 import { ImageCropDialog } from '../base/ImageCropDialog.js'
 import { Button } from '../base/Button.js'
@@ -47,8 +52,13 @@ export const PersonaEditor = ({
 }) => {
   const t = useTranslate()
   const avatarInputRef = useRef<HTMLInputElement>(null)
+  const bgInputRef = useRef<HTMLInputElement>(null)
   const [avatar, setAvatar] = useState<string | undefined>(initialAvatar)
   const [cropFile, setCropFile] = useState<File | null>(null)
+  const [bgCropFile, setBgCropFile] = useState<File | null>(null)
+  const [hasBg, setHasBg] = useState<boolean>(() => (id ? hasScopedWallpaper('persona', id) : false))
+  const [pendingBgBlob, setPendingBgBlob] = useState<Blob | null>(null)
+  const [bgCleared, setBgCleared] = useState(false)
   const [draft, setDraft] = useState<PersonaCard>(() => ({
     ...(initial ?? emptyCard()),
   }))
@@ -63,6 +73,11 @@ export const PersonaEditor = ({
     const entryId = savePersonaCard(id, { ...draft, name })
     if (avatar !== initialAvatar) {
       setPersonaAvatar(entryId, avatar ?? null)
+    }
+    if (pendingBgBlob !== null) {
+      void setScopedWallpaperBlob('persona', entryId, pendingBgBlob)
+    } else if (bgCleared) {
+      void clearScopedWallpaper('persona', entryId)
     }
     showToast({ key: 'personaSaved', params: { name } })
     onClose()
@@ -164,6 +179,58 @@ export const PersonaEditor = ({
                 showToast({ key: 'personaAvatarFailed', type: 'error' })
               }
             })
+          }}
+        />
+      ) : null}
+
+      <div className={styles.field}>
+        <div className={styles.label}>角色专属聊天背景</div>
+        <div className={styles.avatarRow}>
+          <span style={{ fontSize: 12, color: 'var(--dsw-alias-label-secondary)' }}>
+            {hasBg ? '已绑定专属背景（低于单会话背景，高于全局背景）' : '未设置（默认跟随全局背景）'}
+          </span>
+          <Button variant="outlined" size="s" onClick={() => bgInputRef.current?.click()}>
+            {hasBg ? '更换背景' : '选择背景'}
+          </Button>
+          {hasBg ? (
+            <Button
+              variant="outlined"
+              size="s"
+              onClick={() => {
+                setHasBg(false)
+                setPendingBgBlob(null)
+                setBgCleared(true)
+              }}
+            >
+              清除
+            </Button>
+          ) : null}
+          <input
+            ref={bgInputRef}
+            type="file"
+            accept="image/*"
+            style={HIDDEN_FILE_INPUT_STYLE}
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) {
+                setBgCropFile(file)
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      {bgCropFile !== null ? (
+        <ImageCropDialog
+          file={bgCropFile}
+          aspect="screen"
+          onCancel={() => setBgCropFile(null)}
+          onConfirm={(blob) => {
+            setBgCropFile(null)
+            setPendingBgBlob(blob)
+            setHasBg(true)
+            setBgCleared(false)
           }}
         />
       ) : null}

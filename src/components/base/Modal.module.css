@@ -64,6 +64,16 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+/*
+ * 弹窗里的滑杆（头像/背景缩放、设置里的各种 range）：横滑必须归滑杆自己，
+ * 不能被页面滚动或 WebView 的触摸手势抢走，否则触摸屏上拖不动。
+ */
+.content :global(input[type='range']) {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .footer {
   display: flex;
   justify-content: flex-end;

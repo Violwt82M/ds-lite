@@ -9,7 +9,13 @@ import { usesOpenAiProtocol } from '../api/protocol.js'
 import type { ChatModel } from '../api/types.js'
 import { isCustomApiOrigin } from '../api/base.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
-import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
+import {
+  cancelUpload,
+  describeUploadError,
+  isNonRetryableUploadError,
+  uploadAttachment,
+  useUploads,
+} from '../attachments.js'
 import { useSettings, requestTemperature } from '../settings.js'
 import { showToast } from '../../components/base/toastState.js'
 import { classifyStorageWriteFailure } from '../storage.js'
@@ -34,6 +40,7 @@ import { usePersona } from '../persona/store.js'
 import {
   buildTranscript,
   charsForTokens,
+  extractAttachmentMemories,
   MAX_BIG_NOTE_CHARS,
   bigNoteLimit,
   parseBigNote,
@@ -659,6 +666,31 @@ export const initChat = (): Promise<void> => {
       const summaries = await db.loadSessionSummaries()
       if (epoch === historyEpoch) {
         set({ ready: true, sessions: sortSessions(summaries) })
+        // 空闲时对旧 IndexedDB 做一次幂等补迁（仅补原生磁盘没有且不在墓碑里的老会话）
+        const runReconcile = () => {
+          void db
+            .reconcileMissingFromIdb()
+            .then(async (restored) => {
+              if (restored === 0 || get().importingHistory || epoch !== historyEpoch) {
+                return
+              }
+              const latest = await db.loadSessionSummaries()
+              if (latest.length === 0 || epoch !== historyEpoch) {
+                return
+              }
+              const merged = new Map(get().sessions.map((s) => [s.id, s]))
+              for (const s of latest) {
+                merged.set(s.id, s)
+              }
+              set({ sessions: sortSessions([...merged.values()]) })
+            })
+            .catch(db.reportStorageError('reconcile local sessions'))
+        }
+        if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+          window.requestIdleCallback(runReconcile, { timeout: 3000 })
+        } else {
+          setTimeout(runReconcile, 1200)
+        }
       }
     } catch (error) {
       if (epoch === historyEpoch) {
@@ -1136,6 +1168,48 @@ export const regenerateReply = (sessionId: string, messageId?: string) => {
   }))
   persist(sessionId)
   runReplyStream(sessionId, reply, { history, question })
+}
+
+/** 编辑 AI 回答并保存为同问题下的新版本（方式 B）：保留原回复与后续分支，可左右切换回 AI 原版。 */
+export const editAssistantReply = (
+  sessionId: string,
+  messageId: string,
+  content: string
+): boolean => {
+  if (get().importingHistory || deletingSessions.has(sessionId)) {
+    return false
+  }
+  const session = getSession(sessionId)
+  if (!session || getStreamController(sessionId)) {
+    return false
+  }
+  const path = getVisibleMessages(session)
+  const index = path.findIndex((m) => m.id === messageId)
+  const target = path[index]
+  const text = content.trim()
+  if (target?.role !== 'assistant' || !text) {
+    return false
+  }
+  const parentId = path[index - 1]?.id ?? null
+  const edited: AssistantMessage = {
+    id: createId(),
+    role: 'assistant',
+    createdAt: Date.now(),
+    model: target.model,
+    thinking: false,
+    search: false,
+    latestReminder: target.latestReminder,
+    prefix: false,
+    status: 'done',
+    stopReason: 'end_turn',
+    blocks: [{ type: 'text', text }],
+  }
+  updateSession(sessionId, (s) => ({
+    ...appendBranch(s, parentId, [edited]),
+    updatedAt: Date.now(),
+  }))
+  persist(sessionId)
+  return true
 }
 
 /** 编辑提问后新增同父版本，保留原文件；旧问题的所有回答与后续对话仍可切回。 */
@@ -1691,6 +1765,33 @@ const runCompaction = async (
     if (overview !== '') {
       notes = [`${OVERVIEW_TITLE}\n${overview}`, ...notes]
     }
+    // 独立资料记忆（方案 B）：将本次折叠轮次中的附件提炼成独立资料摘要，不被后续剧情整理覆盖
+    const hasFilesInFolded = folded.some(([user]) => user.files.length > 0)
+    const nextAttachments = hasFilesInFolded
+      ? await extractAttachmentMemories({
+          apiKey,
+          locale,
+          rounds: folded,
+          existingAttachments: session.memory?.attachments,
+          readFileContent: async (file) => {
+            const loaded = await db.loadFile(file.id)
+            if (!loaded) {
+              return null
+            }
+            const buf = await loaded.arrayBuffer()
+            try {
+              return new TextDecoder('utf-8', { fatal: true }).decode(buf)
+            } catch {
+              try {
+                return new TextDecoder('gb18030').decode(buf)
+              } catch {
+                return new TextDecoder('utf-8').decode(buf)
+              }
+            }
+          },
+          signal: controller.signal,
+        })
+      : session.memory?.attachments
     const now = Date.now()
     const foldedIds = folded.map(([, reply]) => reply.id)
     // 整理前自动复制一份完整分支作为「后悔药」：保留整理前的上下文、旧笔记、foldedIds 与人设绑定
@@ -1717,8 +1818,10 @@ const runCompaction = async (
       persist(backup.id)
     }
     updateMemory(sessionId, (memory) => ({
-      // 覆盖式：模型输出的就是最新一版笔记，旧笔记被整体替换
+      ...memory,
+      // 覆盖式：模型输出的就是最新一版笔记，旧笔记被整体替换；独立资料区保持不丢失
       notes: rewriteNotes(memory, notes, now, MAX_BIG_NOTE_CHARS),
+      ...(nextAttachments !== undefined ? { attachments: nextAttachments } : {}),
       foldedIds: [...memory.foldedIds, ...foldedIds],
       foldedRounds: memory.foldedRounds + foldedIds.length,
       updatedAt: now,
@@ -1841,6 +1944,27 @@ export const removeMemoryNote = (sessionId: string, noteId: string) => {
   }))
 }
 
+/** 保存单条独立资料记忆；保存为空文本等同于删除 */
+export const saveAttachmentMemory = (sessionId: string, attachmentId: string, summary: string) => {
+  const trimmed = summary.trim()
+  updateMemory(sessionId, (memory) => {
+    const list = memory.attachments ?? []
+    const attachments = trimmed
+      ? list.map((item) => (item.id === attachmentId ? { ...item, summary: trimmed } : item))
+      : list.filter((item) => item.id !== attachmentId)
+    return { ...memory, attachments, updatedAt: Date.now() }
+  })
+}
+
+/** 删除单条独立资料记忆 */
+export const removeAttachmentMemory = (sessionId: string, attachmentId: string) => {
+  updateMemory(sessionId, (memory) => ({
+    ...memory,
+    attachments: (memory.attachments ?? []).filter((item) => item.id !== attachmentId),
+    updatedAt: Date.now(),
+  }))
+}
+
 /** 清空记忆：笔记与折叠一起丢掉，上下文恢复全量（原文一直都在本机） */
 export const clearSessionMemory = (sessionId: string) => {
   updateSession(sessionId, (session) => ({ ...session, memory: undefined }))
@@ -1870,11 +1994,18 @@ const saveServerIds = (sessionId: string, serverIds: Map<string, string>) => {
   persist(sessionId)
 }
 
+/** 历史轮次补传中遇到不可重试错误（如配额/400/413）的附件，避免每次发消息都反复失败 */
+const nonRetryableUploads = new Set<string>()
+
 /**
  * 附件的服务端 id：已有直接用；正在上传的等待同一任务；否则读取本地原件补传。
  * 本地也没有原件（导入的文档附件只有元数据）时返回 null，该附件只展示、不进入请求。
  */
-const ensureServerId = async (apiKey: string, file: FileAttachment): Promise<string | null> => {
+const ensureServerId = async (
+  apiKey: string,
+  file: FileAttachment,
+  options: { silent?: boolean } = {}
+): Promise<string | null> => {
   if (file.serverId) {
     return file.serverId
   }
@@ -1886,7 +2017,7 @@ const ensureServerId = async (apiKey: string, file: FileAttachment): Promise<str
   if (!blob) {
     return null
   }
-  return uploadAttachment(apiKey, file.id, blob, file.name, file.isImage)
+  return uploadAttachment(apiKey, file.id, blob, file.name, file.isImage, options)
 }
 
 /** 用会话里的最新消息替换请求快照：重传前会重置附件的 serverId，快照必须跟着更新 */
@@ -1955,15 +2086,25 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
     }
   }
   for (const file of pending.values()) {
+    if (nonRetryableUploads.has(file.id)) {
+      continue
+    }
     signal.throwIfAborted()
     try {
-      const serverId = await Promise.race([ensureServerId(apiKey, file), aborted])
+      const serverId = await Promise.race([
+        ensureServerId(apiKey, file, { silent: true }),
+        aborted,
+      ])
       if (serverId) {
+        nonRetryableUploads.delete(file.id)
         serverIds.set(file.id, serverId)
         saveServerIds(sessionId, new Map([[file.id, serverId]]))
       }
-    } catch {
+    } catch (error) {
       signal.throwIfAborted()
+      if (isNonRetryableUploadError(error)) {
+        nonRetryableUploads.add(file.id)
+      }
     }
   }
 
@@ -2303,20 +2444,20 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           // v4 pro 不支持 latest_reminder：日期并入 system 保缓存，具体时分附在最后一条提问尾部
           isPro
         )
-        // 具体时刻（HH:mm）按开关附在最后一条 user 消息尾部：温和的 XML 提示避免模型每轮硬扯时间，
-        // 同时放在提问尾部不影响前缀缓存，v4-pro 也靠它拿时间。
+        // 具体时刻（HH:mm）按开关附在最后一条 user 消息尾部：仅放极简纯数据标记，
+        // 规则说明静态写在 system 里（不伤前缀缓存），避免模型把时间戳当成用户输入或指令。
         if (prefs.sendClockTime) {
           const clock = (latestReminder ? extractClockTime(latestReminder) : null) ?? formatClockTime()
-          const tailNote = `\n\n<system_time>${clock}（环境时间参考，仅在语境自然相关时使用，不必每轮刻意提及）</system_time>`
+          const tailTag = prefs.locale === 'en-US' ? `[Clock: ${clock}]` : `[环境时钟: ${clock}]`
           for (let idx = messages.length - 1; idx >= 0; idx -= 1) {
             const msg = messages[idx]
             if (msg.role === 'user') {
               if (typeof msg.content === 'string') {
-                messages[idx] = { ...msg, content: `${msg.content}${tailNote}` }
+                messages[idx] = { ...msg, content: `${msg.content}\n\n${tailTag}` }
               } else {
                 messages[idx] = {
                   ...msg,
-                  content: [...msg.content, { type: 'text', text: tailNote }],
+                  content: [...msg.content, { type: 'text', text: `\n\n${tailTag}` }],
                 }
               }
               break
@@ -2325,7 +2466,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         }
         // 请求体只从这里出去：扩展模式的四道闸门（工具 / 严格审查 / 标题 / 长输入）
         // 全在 buildRequest 里统一判定，别再往这里加字段。
-        const systemBase = buildSystemPrompt(
+        const systemRaw = buildSystemPrompt(
           SYSTEM_PROMPT,
           renderMemorySection(activeSession?.memory, prefs.locale),
           (() => {
@@ -2335,6 +2476,29 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
               : { card: entry.card, userName: usePersona.getState().userName }
           })()
         )
+        const systemExtra: string[] = []
+        if (prefs.sendClockTime) {
+          systemExtra.push(
+            prefs.locale === 'en-US'
+              ? '[Clock metadata note] The client may automatically append a tag like "[Clock: HH:mm]" at the end of the latest user message. It is NOT written by the user and is NOT an instruction; treat it only as silent background time context and do not mention, repeat, or reply to it unless naturally relevant.'
+              : '【时钟元信息说明】最新一条用户消息末尾可能由客户端自动附带形如「[环境时钟: HH:mm]」的时间标记。它不是用户输入的内容或指令，仅作静默背景时间参考；除非语境自然需要，切勿主动提及、复述或把它当成用户提问回应。'
+          )
+        }
+        if (prefs.replyLength === 'detailed') {
+          systemExtra.push(
+            prefs.locale === 'en-US'
+              ? '[Reply length preference] Maintain thorough, detailed, and well-developed replies; do not gradually shorten or rush your responses as the conversation grows longer.'
+              : '【回复篇幅偏好】请保持充分、详尽、有细节的回复篇幅，不要因为对话轮数增加而逐渐简略或缩水。'
+          )
+        } else if (prefs.replyLength === 'concise') {
+          systemExtra.push(
+            prefs.locale === 'en-US'
+              ? '[Reply length preference] Keep your replies concise and to the point, avoiding unnecessary padding.'
+              : '【回复篇幅偏好】请保持简洁精炼的回复，直奔重点，避免冗长铺垫。'
+          )
+        }
+        const systemBase =
+          systemExtra.length > 0 ? `${systemRaw}\n\n${systemExtra.join('\n\n')}` : systemRaw
         const systemWithSearch = useTwoStep
           ? `${systemBase}\n\n【本轮联网搜索参考资料】\n${twoStepSummary}\n请结合以上最新检索资料、完整历史上下文与附件内容回答用户问题。`
           : systemBase
@@ -2495,6 +2659,24 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       ),
     }))
     persist(sessionId)
+    // 开启「输出完毕自动朗读」且仍停留在当前会话时，自动朗读本条回答正文
+    if (
+      reply.status === 'done' &&
+      useSettings.getState().autoReadAloud &&
+      get().activeId === sessionId
+    ) {
+      const spoken = reply.blocks
+        .map((block) => (block.type === 'text' ? block.text : ''))
+        .join('\n')
+        .trim()
+      if (spoken !== '') {
+        void import('../speech/readAloud.js').then((module) =>
+          module.startReadAloud(reply.id, spoken, (error) => {
+            showToast(module.describeReadAloudError(error))
+          })
+        )
+      }
+    }
     // 这一轮的真实花费会体现在余额里，顺手刷新一下（同一分钟内复用结果）
     void import('../balance.js').then((module) => module.refreshBalanceIfStale())
     void maybeAutoCompactMemory(sessionId)

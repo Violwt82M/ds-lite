@@ -1,12 +1,22 @@
 import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
-import { memo } from 'react'
-import { IconForkOutline16, IconRefreshOutline16, IconWarningOutline16 } from '../base/icons.js'
+import { memo, useLayoutEffect, useRef, useState } from 'react'
+import {
+  IconEditOutline16,
+  IconForkOutline16,
+  IconRefreshOutline16,
+  IconWarningOutline16,
+} from '../base/icons.js'
 import { describeReply } from '../../services/chat/describe.js'
 import { useSettings } from '../../services/settings.js'
 import { formatTokens } from '../../services/usage.js'
 import { canContinueReply } from '../../services/chat/reply.js'
-import { continueReply, forkSession, regenerateReply } from '../../services/chat/store.js'
+import {
+  continueReply,
+  editAssistantReply,
+  forkSession,
+  regenerateReply,
+} from '../../services/chat/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import { showToast } from '../base/toastState.js'
 import { closeMobileSider } from '../sider/mobileSiderState.js'
@@ -70,6 +80,48 @@ export const AssistantMessage = memo(function AssistantMessage({
   const charCount = responseText ? responseText.replace(/\s/g, '').length : 0
   const waiting = streaming && view.steps.length === 0 && !view.answer && !message.thinking
   const summaryEntry = `${message.id}-summary`
+  // 编辑回答：保存为同问题下的新版本（方式 B），原 AI 回复仍可用版本切换器切回
+  const locale = useSettings((state) => state.locale)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // 只有已完成、不在流式输出、且有正文的回答可以编辑（拒答模板不参与）
+  const canEdit = !streaming && message.status === 'done' && !!answer?.text && !refused
+  const canSave = draft.trim() !== '' && !busy
+
+  // 编辑框随内容高度自适应，超过上限后内部滚动（手机上不会撑破气泡）
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current
+    if (editing && textarea) {
+      textarea.style.height = 'auto'
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 360)}px`
+    }
+  }, [editing, draft])
+
+  const startEditing = () => {
+    if (!answer) {
+      return
+    }
+    stopReadAloud()
+    setDraft(answer.text)
+    setEditing(true)
+  }
+
+  const cancelEditing = () => {
+    setEditing(false)
+    setDraft('')
+  }
+
+  const saveEdit = () => {
+    if (!canSave) {
+      return
+    }
+    if (editAssistantReply(sessionId, message.id, draft)) {
+      stopReadAloud()
+      setEditing(false)
+      setDraft('')
+    }
+  }
   return (
     <div
       className={clsx(styles.message, avatar && styles.withAvatar)}
@@ -83,7 +135,12 @@ export const AssistantMessage = memo(function AssistantMessage({
         )
       ) : null}
       {/* 气泡皮肤：AI 输出气泡由「AI 输出气泡」开关控制（默认关），模型只输出纯文本 */}
-      <div className={showBubble ? `${styles.bubbleBody} ds-ai-bubble` : styles.bubbleBodyOff}>
+      <div
+        className={clsx(
+          showBubble ? `${styles.bubbleBody} ds-ai-bubble` : styles.bubbleBodyOff,
+          editing && styles.editingBody
+        )}
+      >
       {refused ? null : (
         <ReplyArea
           message={message}
@@ -92,7 +149,40 @@ export const AssistantMessage = memo(function AssistantMessage({
           hasResponse={!!responseText}
         />
       )}
-      {answer ? (
+      {editing ? (
+        <div className={styles.editor}>
+          <textarea
+            ref={textareaRef}
+            className={styles.textarea}
+            aria-label={t('editMessage')}
+            value={draft}
+            rows={2}
+            autoFocus
+            disabled={busy}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) {
+                return
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                cancelEditing()
+              } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault()
+                saveEdit()
+              }
+            }}
+          />
+          <div className={styles.editorActions}>
+            <Button size="s" variant="outlined" onClick={cancelEditing}>
+              {t('cancel')}
+            </Button>
+            <Button size="s" disabled={!canSave} onClick={saveEdit}>
+              {locale === 'zh-CN' ? '保存为新版本' : 'Save as new version'}
+            </Button>
+          </div>
+        </div>
+      ) : answer ? (
         <Markdown
           className="ds-assistant-message-main-content"
           content={answer.markdown}
@@ -158,10 +248,10 @@ export const AssistantMessage = memo(function AssistantMessage({
           </div>
         </div>
       ) : null}
-      {!streaming && charCount > 0 ? (
+      {!streaming && !editing && charCount > 0 ? (
         <div className={styles.charCount}>{t('messageCharCount', { count: charCount })}</div>
       ) : null}
-      {!streaming && showTokenUsage && message.usage ? (
+      {!streaming && !editing && showTokenUsage && message.usage ? (
         <div className={styles.charCount}>
           {t('messageTokenUsage', {
             input: formatTokens(
@@ -174,7 +264,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           })}
         </div>
       ) : null}
-      {!streaming && !refused && view.searchResults.length > 0 ? (
+      {!streaming && !editing && !refused && view.searchResults.length > 0 ? (
         <div
           className={clsx(styles.summary, panelEntry === summaryEntry && styles.summaryActive)}
           onClick={() => toggleSearchPanel(summaryEntry, view.searchResults)}
@@ -188,11 +278,11 @@ export const AssistantMessage = memo(function AssistantMessage({
           </span>
         </div>
       ) : null}
-      {showBubble && showReadMark && !streaming && responseText ? (
+      {showBubble && showReadMark && !streaming && !editing && responseText ? (
         <span className={styles.readMark}>{t('readMark')}</span>
       ) : null}
       </div>
-      {streaming ? null : (
+      {streaming || editing ? null : (
         <div className={styles.bottom}>
 
           <BranchSwitcher versions={versions} disabled={busy} onSelect={onSelectVersion} />
@@ -214,6 +304,15 @@ export const AssistantMessage = memo(function AssistantMessage({
             {copyText ? <CopyButton text={copyText} /> : null}
             {responseText && !refused ? (
               <ReadAloudButton messageId={message.id} text={responseText} />
+            ) : null}
+            {canEdit ? (
+              <IconButton
+                icon={<IconEditOutline16 />}
+                tooltip={t('editMessage')}
+                tooltipPlacement="bottom"
+                disabled={busy}
+                onClick={startEditing}
+              />
             ) : null}
             <IconButton
               icon={<IconRefreshOutline16 />}

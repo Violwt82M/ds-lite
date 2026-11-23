@@ -115,7 +115,7 @@ body[data-wallpaper]:not([data-wallpaper='none']) {
 }
 
 body[data-wallpaper]:not([data-wallpaper='none']).dark {
-  --dsw-specific-bubble: rgba(44, 62, 84, var(--ds-bubble-alpha, 0.68));
+  --dsw-specific-bubble: rgba(34, 46, 64, var(--ds-bubble-alpha, 0.45));
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -125,34 +125,37 @@ body[data-wallpaper]:not([data-wallpaper='none']).dark {
 }
 
 /*
- * 有背景图时，消息带一层柔和毛玻璃：保持简洁细描边，不加高光内阴影。
+ * 有背景图时，消息带一层通透玻璃（默认 45% 不透明度 + 6px 轻磨砂），
+ * 让背景图清晰透出，同时以细描边和轻文字阴影维持可读性。
  */
 body[data-wallpaper]:not([data-wallpaper='none']) .ds-assistant-message-main-content {
   padding: 12px 16px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 14px;
-  background: rgba(255, 255, 255, var(--ds-bubble-alpha, 0.68));
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  backdrop-filter: blur(20px) saturate(160%);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, var(--ds-bubble-alpha, 0.45));
+  -webkit-backdrop-filter: blur(var(--ds-bubble-blur, 6px)) saturate(135%);
+  backdrop-filter: blur(var(--ds-bubble-blur, 6px)) saturate(135%);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
 }
 
 body[data-wallpaper]:not([data-wallpaper='none']).dark .ds-assistant-message-main-content {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(24, 26, 31, var(--ds-bubble-alpha, 0.68));
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(18, 22, 30, var(--ds-bubble-alpha, 0.45));
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.32);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 body[data-wallpaper]:not([data-wallpaper='none']) .ds-user-bubble {
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  backdrop-filter: blur(20px) saturate(160%);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  -webkit-backdrop-filter: blur(var(--ds-bubble-blur, 6px)) saturate(135%);
+  backdrop-filter: blur(var(--ds-bubble-blur, 6px)) saturate(135%);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
 }
 
 body[data-wallpaper]:not([data-wallpaper='none']).dark .ds-user-bubble {
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 /*
@@ -221,12 +224,23 @@ body[data-ai-bubble-on='1'][data-ai-bubble='1'][data-wallpaper]:not([data-wallpa
 
 /*
  * 顶栏：有背景时给它一层"纸"，否则标题和图标直接压在照片上。
- * 深色背景必须把字反过来——不然就是黑底黑字，状态栏和时间电量同理（系统图标由原生侧处理）。
+ * 深色主题或深色背景必须使用深色顶栏 + 浅色字，防止浅色壁纸 + 深色主题出现白底白字。
  */
 body[data-wallpaper]:not([data-wallpaper='none']) .ds-top-bar {
   background: rgba(255, 255, 255, 0.86);
   backdrop-filter: blur(18px) saturate(130%);
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+body.dark[data-wallpaper]:not([data-wallpaper='none']) .ds-top-bar {
+  background: rgba(18, 20, 26, 0.86);
+  backdrop-filter: blur(18px) saturate(140%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  --dsw-alias-label-primary: #ffffff;
+  --dsw-alias-label-secondary: rgba(255, 255, 255, 0.82);
+  --dsw-alias-label-caption: rgba(255, 255, 255, 0.66);
+  --dsw-alias-interactive-bg-hover: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
 }
 
 /*

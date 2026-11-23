@@ -218,6 +218,31 @@
   word-break: break-word;
 }
 
+/* 资料记忆：文件名 + 摘要，沿用笔记卡片的外观 */
+.attachmentBody {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.attachmentName {
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  word-break: break-word;
+}
+
+.attachmentSummary {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .noteMeta {
   display: flex;
   align-items: center;

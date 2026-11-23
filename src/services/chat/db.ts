@@ -16,6 +16,7 @@ import {
   nativeSaveSessionRecord,
   nativeSaveStagingFiles,
   nativeUpdateStagingFileTypes,
+  reconcileMissingFromIdb as reconcileNativeMissingFromIdb,
   type IdbMigrationSource,
 } from './nativeDb.js'
 import { toSessionSummary, type Session, type SessionSummary } from './types.js'
@@ -211,6 +212,19 @@ const idbLoadSessionSummaries = async (): Promise<SessionSummary[]> => {
 const idbLoadSession = async (id: string): Promise<Session | undefined> =>
   (await getDB()).get('sessions', id)
 
+/**
+ * 迁移/对账要枚举的旧会话 id：`sessions` 是正文来源，`sessionSummaries` 兜住只有摘要的历史记录。
+ * 不能只枚举摘要——摘要损坏或缺失的记录会被漏迁（见 nativeDb.ensureNativeMigrated）。
+ */
+const idbLoadSessionIds = async (): Promise<string[]> =>
+  withDB(async (db) => {
+    const [sessions, summaries] = await Promise.all([
+      db.getAllKeys('sessions'),
+      db.getAllKeys('sessionSummaries'),
+    ])
+    return [...new Set([...sessions, ...summaries].map(String))]
+  })
+
 const idbLoadFile = async (id: string): Promise<Blob | undefined> =>
   (await (await getDB()).get('files', id))?.blob
 
@@ -218,7 +232,7 @@ const idbLoadAllSearchDocs = async (): Promise<SessionSearchDocs[]> =>
   (await getDB()).getAll('searchDocs')
 
 const idbSource: IdbMigrationSource = {
-  loadSessionSummaries: idbLoadSessionSummaries,
+  loadSessionIds: idbLoadSessionIds,
   loadSession: idbLoadSession,
   loadFile: idbLoadFile,
   loadAllSearchDocs: idbLoadAllSearchDocs,
@@ -229,6 +243,14 @@ export const loadSessionSummaries = async (): Promise<SessionSummary[]> =>
 
 export const loadSession = async (id: string): Promise<Session | undefined> =>
   isNative() ? nativeLoadSession(id, idbSource) : idbLoadSession(id)
+
+/**
+ * 幂等补迁：只补「原生磁盘里没有、且不在墓碑里」的旧 IndexedDB 会话（连同附件）。
+ * 不覆盖原生已有数据，可安全随时调用；返回补回的会话数。
+ * 建议启动后空闲时调用一次，补到会话时再刷新列表。
+ */
+export const reconcileMissingFromIdb = (): Promise<number> =>
+  isNative() ? reconcileNativeMissingFromIdb(idbSource) : Promise.resolve(0)
 
 /**
  * 写会话正文与列表摘要。

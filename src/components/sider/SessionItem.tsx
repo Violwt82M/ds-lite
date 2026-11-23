@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { memo, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import {
   IconCopyOutline16,
@@ -16,9 +16,16 @@ import {
   selectSession,
   unpinSession,
 } from '../../services/chat/store.js'
+import {
+  clearScopedWallpaper,
+  setScopedWallpaperBlob,
+  useWallpaper,
+} from '../../services/wallpaper.js'
+import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
 import { showToast } from '../base/toastState.js'
 import type { SessionSummary } from '../../services/chat/types.js'
 import { IconButton } from '../base/IconButton.js'
+import { ImageCropDialog } from '../base/ImageCropDialog.js'
 import { Menu } from '../base/Menu.js'
 import { ExportTxtDialog } from './ExportTxtDialog.js'
 import { closeMobileSider } from './mobileSiderState.js'
@@ -39,6 +46,9 @@ export const SessionItem = memo(function SessionItem({
   const t = useTranslate()
   const [editing, setEditing] = useState(false)
   const [exportTxtOpen, setExportTxtOpen] = useState(false)
+  const [bgCropFile, setBgCropFile] = useState<File | null>(null)
+  const bgInputRef = useRef<HTMLInputElement>(null)
+  const hasSessionBg = useWallpaper((state) => Boolean(state.sessionWallpapers[session.id]))
   const displayTitle = session.title || t('untitledChat')
 
   if (editing) {
@@ -120,6 +130,24 @@ export const SessionItem = memo(function SessionItem({
               onSelect: () => setExportTxtOpen(true),
             },
             {
+              key: 'sessionWallpaper',
+              label: hasSessionBg ? '更换会话聊天背景' : '设置会话聊天背景',
+              icon: <IconEditOutline16 />,
+              onSelect: () => bgInputRef.current?.click(),
+            },
+            ...(hasSessionBg
+              ? [
+                  {
+                    key: 'clearSessionWallpaper',
+                    label: '清除会话聊天背景',
+                    icon: <IconTrashOutline16 />,
+                    onSelect: () => {
+                      void clearScopedWallpaper('session', session.id)
+                    },
+                  },
+                ]
+              : []),
+            {
               key: 'rename',
               label: t('sessionItemMenuRenameOption'),
               icon: <IconEditOutline16 />,
@@ -145,6 +173,30 @@ export const SessionItem = memo(function SessionItem({
           sessionId={session.id}
           sessionTitle={displayTitle}
           onClose={() => setExportTxtOpen(false)}
+        />
+      ) : null}
+      <input
+        ref={bgInputRef}
+        type="file"
+        accept="image/*"
+        style={HIDDEN_FILE_INPUT_STYLE}
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
+          if (file) {
+            setBgCropFile(file)
+          }
+        }}
+      />
+      {bgCropFile !== null ? (
+        <ImageCropDialog
+          file={bgCropFile}
+          aspect="screen"
+          onCancel={() => setBgCropFile(null)}
+          onConfirm={(blob) => {
+            setBgCropFile(null)
+            void setScopedWallpaperBlob('session', session.id, blob)
+          }}
         />
       ) : null}
     </>

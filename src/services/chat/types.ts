@@ -142,8 +142,22 @@ export type SessionRecord = {
   updatedAt: number
 }
 
+/** 独立资料记忆：整理附件轮次时提炼出的精炼摘要（不存全文，不被常规剧情整理覆盖） */
+export type AttachmentMemory = {
+  id: string
+  /** 附件原文件名 */
+  name: string
+  /** 提炼出的核心资料摘要（约 300~800 字） */
+  summary: string
+  /** 对应本地文件 ID，用于去重避免同一附件反复提炼 */
+  fileId?: string
+  createdAt: number
+}
+
 export type SessionMemory = {
   notes: MemoryNote[]
+  /** 独立资料记忆卡片（不被覆盖式剧情整理冲掉，用户可查看/编辑/删除） */
+  attachments?: AttachmentMemory[]
   /** 已折叠（不再进入请求上下文）的回答消息 id */
   foldedIds: string[]
   /** 已折叠的轮次数，仅用于展示 */

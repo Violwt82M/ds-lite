@@ -50,13 +50,16 @@ import {
   setThinkingEffort,
   setTtsVoice,
   setDocumentBudget,
+  setAutoReadAloud,
   setMemoryKeepTokens,
+  setReplyLength,
   setSendClockTime,
   MEMORY_KEEP_MIN,
   MEMORY_KEEP_SLIDER_MAX,
   MEMORY_KEEP_MAX,
   MEMORY_KEEP_STEP,
   useSettings,
+  type ReplyLength,
   type ThemePreference,
   type ThinkingEffort,
 } from '../../services/settings.js'
@@ -202,8 +205,10 @@ const SettingsContent = () => {
               <ThinkingEffortSetting />
               <LocaleSetting />
               <TtsVoiceSetting />
+              <AutoReadAloudSetting />
               <LocationSetting />
               <SendClockTimeSetting />
+              <ReplyLengthSetting />
             </>
           ) : section === 'persona' ? (
             <PersonaSetting />
@@ -318,12 +323,34 @@ const useHistoryDelete = () => {
   }
 }
 
+const AutoReadAloudSetting = () => {
+  const t = useTranslate()
+  const enabled = useSettings((state) => state.autoReadAloud)
+  return (
+    <SettingCell
+      label={t('settingsAutoReadAloud')}
+      description={t('autoReadAloudHint')}
+      status={null}
+      action={
+        <Button
+          variant={enabled ? 'primary' : 'outlined'}
+          size="m"
+          className={styles.cellButton}
+          onClick={() => setAutoReadAloud(!enabled)}
+        >
+          {t(enabled ? 'bubbleSkinOn' : 'bubbleSkinOff')}
+        </Button>
+      }
+    />
+  )
+}
+
 const SendClockTimeSetting = () => {
   const enabled = useSettings((state) => state.sendClockTime)
   return (
     <SettingCell
       label="向模型提供具体时间"
-      description="默认关闭（仅提供日期）；开启后会附带当前时刻（HH:mm）作为温和环境参考且不伤缓存"
+      description="默认关闭（仅提供日期）；开启后会在末尾附带静默时钟标记作为参考，不伤缓存也不当作指令"
       status={null}
       action={
         <Button
@@ -334,6 +361,37 @@ const SendClockTimeSetting = () => {
         >
           {enabled ? '已开启' : '已关闭'}
         </Button>
+      }
+    />
+  )
+}
+
+const ReplyLengthSetting = () => {
+  const t = useTranslate()
+  const replyLength = useSettings((state) => state.replyLength)
+  const options: { value: ReplyLength; label: string }[] = [
+    { value: 'default', label: t('replyLengthDefault') },
+    { value: 'detailed', label: t('replyLengthDetailed') },
+    { value: 'concise', label: t('replyLengthConcise') },
+  ]
+  return (
+    <SettingCell
+      label={t('settingsReplyLength')}
+      description={t('replyLengthHint')}
+      status={null}
+      action={
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {options.map((opt) => (
+            <Button
+              key={opt.value}
+              variant={replyLength === opt.value ? 'primary' : 'outlined'}
+              size="s"
+              onClick={() => setReplyLength(opt.value)}
+            >
+              {opt.label}
+            </Button>
+          ))}
+        </div>
       }
     />
   )

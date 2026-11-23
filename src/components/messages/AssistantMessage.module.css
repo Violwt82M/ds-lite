@@ -174,17 +174,20 @@
   transform: rotate(45deg);
 }
 
-/* 有背景图时气泡呈现简洁毛玻璃半透明（不透明度由滑杆控制，默认 68%），不加高光描边 */
+/* 有背景图时气泡呈现通透玻璃（不透明度默认 45% + 模糊度默认 6px，均可调） */
 :global(body[data-ai-bubble-on='1'][data-wallpaper]:not([data-wallpaper='none'])) .bubbleBody {
-  --dsl-bubble-fill: rgba(255, 255, 255, var(--ds-bubble-alpha, 0.68));
-  border-color: rgba(0, 0, 0, 0.08);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  backdrop-filter: blur(20px) saturate(160%);
+  --dsl-bubble-fill: rgba(255, 255, 255, var(--ds-bubble-alpha, 0.45));
+  border-color: rgba(255, 255, 255, 0.24);
+  -webkit-backdrop-filter: blur(var(--ds-bubble-blur, 6px)) saturate(135%);
+  backdrop-filter: blur(var(--ds-bubble-blur, 6px)) saturate(135%);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
 }
 
 :global(body[data-ai-bubble-on='1'][data-wallpaper]:not([data-wallpaper='none']).dark) .bubbleBody {
-  --dsl-bubble-fill: rgba(24, 26, 31, var(--ds-bubble-alpha, 0.68));
-  border-color: rgba(255, 255, 255, 0.12);
+  --dsl-bubble-fill: rgba(18, 22, 30, var(--ds-bubble-alpha, 0.45));
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.32);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 /* 自定义 AI 气泡色的壁纸半透明版本和字色规则在 global.css（搜「自定义 AI 气泡色」）：
@@ -251,6 +254,93 @@
   }
 }
 
+/* ===== 编辑回答（保存为新版本）=====
+   气泡开启时气泡是 inline-block，编辑态改成整宽，否则编辑框会被压成窄条 */
+:global(body[data-ai-bubble-on='1']) .bubbleBody.editingBody {
+  display: block;
+  width: 100%;
+}
+
+.editor {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 2px;
+  border: 1px solid var(--dsw-alias-brand-primary);
+  border-radius: 14px;
+  background-color: var(--dsw-alias-bg-base);
+  overflow: hidden;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* 气泡里不再套一层实心底板，保留气泡皮肤和自定义气泡色的半透明质感 */
+:global(body[data-ai-bubble-on='1']) .editor {
+  border-color: var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.16));
+  background-color: transparent;
+}
+
+/* 有背景图时和正文一样用通透玻璃，避免编辑态突然变成一块实心纸 */
+:global(body[data-wallpaper]:not([data-wallpaper='none'])) .editor {
+  border-color: rgba(255, 255, 255, 0.24);
+  background-color: rgba(255, 255, 255, var(--ds-bubble-alpha, 0.45));
+  -webkit-backdrop-filter: blur(var(--ds-bubble-blur, 6px)) saturate(135%);
+  backdrop-filter: blur(var(--ds-bubble-blur, 6px)) saturate(135%);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+:global(body[data-wallpaper]:not([data-wallpaper='none']).dark) .editor {
+  border-color: rgba(255, 255, 255, 0.14);
+  background-color: rgba(18, 22, 30, var(--ds-bubble-alpha, 0.45));
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.32);
+}
+
+/* 气泡本身已经带模糊玻璃，编辑框保持透明让气泡底色透出来 */
+:global(body[data-ai-bubble-on='1'][data-wallpaper]:not([data-wallpaper='none'])) .editor {
+  border-color: rgba(255, 255, 255, 0.24);
+  background-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 72px;
+  max-height: 360px;
+  padding: 10px 14px;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.65;
+  color: inherit;
+  background: transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.editorActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 10px 10px;
+}
+
+/* 手机上按钮和编辑框内边距收紧一点，窄屏也不会挤 */
+@media not all and (min-width: 440px) {
+  .textarea {
+    padding: 10px 12px;
+  }
+
+  .editorActions {
+    gap: 6px;
+  }
+}
+
 .continueButton {
   margin-left: auto;
 }
@@ -302,4 +392,47 @@
   font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-secondary, rgba(96, 96, 96, 0.95));
   white-space: nowrap;
+}
+
+/* 壁纸模式下给气泡下方的操作栏与字数/用量加半透磨砂胶囊底板，防止图标和字融进花壁纸 */
+:global(body[data-wallpaper]:not([data-wallpaper='none'])) .bottom {
+  left: 0;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #1f2329;
+  --dsw-alias-label-primary: #1f2329;
+  --dsw-alias-label-secondary: #374151;
+  --dsw-alias-label-tertiary: #4b5563;
+}
+
+:global(body[data-wallpaper]:not([data-wallpaper='none']).dark) .bottom {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(18, 22, 30, 0.78);
+  color: #f0f4fa;
+  --dsw-alias-label-primary: #f0f4fa;
+  --dsw-alias-label-secondary: rgba(240, 244, 250, 0.86);
+  --dsw-alias-label-tertiary: rgba(240, 244, 250, 0.74);
+}
+
+:global(body[data-wallpaper]:not([data-wallpaper='none'])) .charCount {
+  display: table;
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.74);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #374151;
+}
+
+:global(body[data-wallpaper]:not([data-wallpaper='none']).dark) .charCount {
+  background: rgba(18, 22, 30, 0.74);
+  color: rgba(240, 244, 250, 0.84);
 }

@@ -239,7 +239,15 @@ const shortReason = (error: unknown): string => {
 }
 
 export const describeUploadError = (error: unknown): TranslationMessage => {
-  if (getUploadErrorInfo(error)?.code === 'parseFailed') {
+  const info = getUploadErrorInfo(error)
+  // 配额类 400 以前会落进最后的「上传失败」，用户看不出该删文件还是等配额
+  if (info?.code === 'fileCountLimit') {
+    return { key: 'uploadFileCountLimit', params: { limit: info.limit ?? '' } }
+  }
+  if (info?.code === 'storageLimit') {
+    return { key: 'uploadStorageLimit', params: { limit: info.limit ?? '' } }
+  }
+  if (info?.code === 'parseFailed') {
     return { key: 'uploadParseFailed' }
   }
   const condition = classifyApiError(error)
@@ -265,6 +273,24 @@ export const describeUploadError = (error: unknown): TranslationMessage => {
       : { key: 'uploadServerBusy' }
   }
   return { key: 'uploadFileStatusFailed' }
+}
+
+/**
+ * 不可重试的上传错误：4xx 里除超时(408)/限流(429) 之外的重试通常不会变好，
+ * 尤其是配额（文件数/存储空间）、格式/解析拒绝、鉴权与参数错误。
+ * 供历史附件补传做「一次性跳过/退避」，避免每次发送都重传同一批必然失败的文件。
+ */
+export const isNonRetryableUploadError = (error: unknown): boolean => {
+  if (getUploadErrorInfo(error) !== null) {
+    return true
+  }
+  if (!(error instanceof ApiError) || error.status === undefined) {
+    return false
+  }
+  if (error.status === 408 || error.status === 429) {
+    return false
+  }
+  return error.status >= 400 && error.status < 500
 }
 
 type NoticeListener = (notice: LinkedMessage) => void
@@ -359,14 +385,28 @@ const setTask = (id: string, task: UploadTask | null) =>
 
 const pending = new Map<string, { promise: Promise<string>; controller: AbortController }>()
 
-/** 开始（或复用进行中的）上传，返回服务端 file_id；失败时任务记为 error 并抛出原错误 */
+export type UploadOptions = {
+  /**
+   * 静默补传（用于历史/导入附件）：失败时只清掉「上传中」态，
+   * 不写全局错误任务、不弹配额提示，由调用方自行决定退避或跳过。
+   */
+  silent?: boolean
+}
+
+/**
+ * 开始（或复用进行中的）上传，返回服务端 file_id；失败时抛出原错误。
+ * 默认把结果写进全局任务表（输入框/消息附件据此显示上传中/失败）；
+ * `silent: true` 时失败不污染全局状态，避免历史补传把旧消息标成「上传失败」。
+ */
 export const uploadAttachment = (
   apiKey: string,
   id: string,
   blob: Blob,
   name: string,
-  isImage: boolean
+  isImage: boolean,
+  options: UploadOptions = {}
 ): Promise<string> => {
+  const { silent = false } = options
   const current = pending.get(id)
   if (current) {
     return current.promise
@@ -379,7 +419,7 @@ export const uploadAttachment = (
       return serverId
     })
     .catch((error: unknown) => {
-      if (controller.signal.aborted) {
+      if (controller.signal.aborted || silent) {
         setTask(id, null)
       } else {
         setTask(id, {

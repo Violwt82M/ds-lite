@@ -50,6 +50,11 @@ export const createConfig = ({
     extensions: ['.tsx', '.ts', '.js'],
     // 将 .js 导入路径解析到同名 .ts、.tsx 或 .js 文件
     extensionAlias: { '.js': ['.ts', '.tsx', '.js'] },
+    // 强制 React 单例：避免 Windows 下迁移 pnpm node_modules 产生多份 React 导致 hooks dispatcher 为 null
+    alias: {
+      react: path.resolve(root, 'node_modules/react'),
+      'react-dom': path.resolve(root, 'node_modules/react-dom'),
+    },
   },
   module: {
     // CSS Modules 使用默认导出：`import styles from './x.module.css'`

@@ -27,7 +27,9 @@ import { useDisclaimer } from '../components/about/disclaimerState.js'
 import { Toast } from '../components/base/Toast.js'
 import { showToast } from '../components/base/toastState.js'
 import { onUploadNotice } from '../services/attachments.js'
-import { setupWallpaper } from '../services/wallpaper.js'
+import { setActiveWallpaperContext, setupWallpaper } from '../services/wallpaper.js'
+import { resolveSessionPersona, usePersonaScope } from '../services/persona/scope.js'
+import { usePersona } from '../services/persona/store.js'
 import { setupAppearance } from '../services/appearance.js'
 import { initSharedArchive, useSharedArchive } from '../services/chat/history/sharedArchive.js'
 import { warmSearchIndex } from '../services/chat/searchIndex.js'
@@ -96,6 +98,14 @@ export const App = () => {
 
   // 背景图：预设走 CSS，自定义图从 IndexedDB 读回来
   useEffect(setupWallpaper, [])
+
+  // 三层背景上下文同步：单会话背景 > 角色卡绑定背景 > 全局默认背景
+  const personaMap = usePersonaScope((state) => state.map)
+  const activePersonaId = usePersona((state) => state.activeId)
+  useEffect(() => {
+    const resolved = activeId ? resolveSessionPersona(activeId).entry?.id ?? null : activePersonaId
+    setActiveWallpaperContext(activeId, resolved)
+  }, [activeId, personaMap, activePersonaId])
 
   // 头像和气泡色：读回本机设置，转成 body 上的 data 属性和 CSS 变量
   useEffect(setupAppearance, [])

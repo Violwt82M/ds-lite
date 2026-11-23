@@ -7,7 +7,9 @@ import {
   compactSessionMemory,
   generateMemoryNote,
   getFoldedRounds,
+  removeAttachmentMemory,
   removeMemoryNote,
+  saveAttachmentMemory,
   saveMemoryNote,
   setMemoryInstruction,
   useChatStore,
@@ -47,8 +49,11 @@ const MemoryPanel = ({ session }: { session: Session }) => {
   const hasApiKey = useSettings((state) => Boolean(state.apiKey))
   const memoryMode = useSettings((state) => state.memoryMode)
   const memoryKeepTokens = useSettings((state) => state.memoryKeepTokens)
+  const locale = useSettings((state) => state.locale)
   const streaming = useChatStore((state) => Boolean(state.streaming[session.id]))
   const notes = session.memory?.notes ?? []
+  const attachments = session.memory?.attachments ?? []
+  const zh = locale === 'zh-CN'
   const roundCount = getUnfoldedRounds(session).length
   // 与真正整理共用同一套保留上下文 token 数：说「能整理」就一定整理得出东西
   const foldable = splitFoldableRounds(getUnfoldedRounds(session), memoryKeepTokens).foldable.length
@@ -69,6 +74,10 @@ const MemoryPanel = ({ session }: { session: Session }) => {
     return { totalInput, cacheRead, output }
   }, [session.messages])
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null)
+  const [editingAttachment, setEditingAttachment] = useState<{ id: string; summary: string } | null>(
+    null
+  )
+  const [expandedAttachments, setExpandedAttachments] = useState<Record<string, boolean>>({})
   const [instruction, setInstruction] = useState(session.memory?.instruction ?? '')
   const [summaryInstruction, setSummaryInstruction] = useState('')
   const [notesOpen, setNotesOpen] = useState(true)
@@ -122,6 +131,7 @@ const MemoryPanel = ({ session }: { session: Session }) => {
     clearSessionMemory(session.id)
     setConfirmClear(false)
     setEditing(null)
+    setEditingAttachment(null)
     showToast({ key: 'memoryClearDone' })
   }
 
@@ -133,6 +143,11 @@ const MemoryPanel = ({ session }: { session: Session }) => {
       exportedAt: new Date().toISOString(),
       foldedRounds: session.memory?.foldedRounds ?? 0,
       notes: notes.map((note) => ({ text: note.text, source: note.source, createdAt: note.createdAt })),
+      attachments: attachments.map((item) => ({
+        name: item.name,
+        summary: item.summary,
+        createdAt: item.createdAt,
+      })),
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     try {
@@ -495,6 +510,113 @@ const MemoryPanel = ({ session }: { session: Session }) => {
         )}
         <div className={styles.hint}>{t('memoryCaveat')}</div>
       </div>
+
+      {attachments.length > 0 ? (
+        <div className={styles.section}>
+          <div className={styles.sectionHead}>
+            <span className={styles.sectionTitle}>
+              {zh ? `资料记忆（${attachments.length}）` : `Attachment memory (${attachments.length})`}
+            </span>
+          </div>
+          <div className={styles.hint}>
+            {zh
+              ? '从附件内容提炼的独立资料摘要，不会被常规剧情整理覆盖；可编辑或删除。'
+              : 'Standalone digests distilled from uploaded files. They survive normal compaction and can be edited or deleted.'}
+          </div>
+          <div className={styles.notes}>
+            {attachments.map((item) =>
+              editingAttachment?.id === item.id ? (
+                <div key={item.id} className={styles.noteEdit}>
+                  <div className={styles.attachmentName}>{item.name}</div>
+                  <textarea
+                    className={styles.textarea}
+                    value={editingAttachment.summary}
+                    rows={8}
+                    autoFocus
+                    placeholder={
+                      zh ? '写清这份资料的核心内容与结论…' : 'Summarise the key content and conclusions…'
+                    }
+                    onChange={(event) =>
+                      setEditingAttachment({ id: item.id, summary: event.target.value })
+                    }
+                  />
+                  <div className={styles.noteActions}>
+                    <Button size="s" variant="outlined" onClick={() => setEditingAttachment(null)}>
+                      {t('cancel')}
+                    </Button>
+                    <Button
+                      size="s"
+                      onClick={() => {
+                        saveAttachmentMemory(session.id, item.id, editingAttachment.summary)
+                        setEditingAttachment(null)
+                      }}
+                    >
+                      {t('memorySave')}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div key={item.id} className={styles.note}>
+                  <div className={styles.attachmentBody}>
+                    <div className={styles.attachmentName}>{item.name}</div>
+                    <div
+                      className={
+                        expandedAttachments[item.id]
+                          ? styles.attachmentSummary
+                          : `${styles.attachmentSummary} ${styles.noteTextClamp}`
+                      }
+                    >
+                      {item.summary}
+                    </div>
+                    {item.summary.length > 120 ? (
+                      <button
+                        type="button"
+                        className={styles.noteToggle}
+                        onClick={() =>
+                          setExpandedAttachments((current) => ({
+                            ...current,
+                            [item.id]: !current[item.id],
+                          }))
+                        }
+                      >
+                        {t(expandedAttachments[item.id] ? 'recordsCollapse' : 'recordsExpand')}
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className={styles.noteMeta}>
+                    <button
+                      type="button"
+                      className={styles.iconButton}
+                      aria-label={t('memoryEdit')}
+                      onClick={() => setEditingAttachment({ id: item.id, summary: item.summary })}
+                    >
+                      <IconEditOutline16 />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.iconButton}
+                      aria-label={t('delete')}
+                      onClick={() => {
+                        removeAttachmentMemory(session.id, item.id)
+                        if (editingAttachment?.id === item.id) {
+                          setEditingAttachment(null)
+                        }
+                      }}
+                    >
+                      <IconTrashOutline16 />
+                    </button>
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+          <div className={styles.hint}>
+            {zh
+              ? '资料记忆单独保存，不参与覆盖式整理；删除后可在下次整理附件时重新提炼。'
+              : 'These digests are stored separately and are not overwritten by compaction; deleted ones can be rebuilt the next time the attachment is condensed.'}
+          </div>
+        </div>
+      ) : null}
 
       <div className={styles.section}>
         <div className={styles.sectionHead}>

@@ -2,6 +2,7 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  min-width: 0;
   box-sizing: border-box;
   height: 60px;
   padding: 12px 10px 4px;
@@ -12,8 +13,13 @@
   margin-right: 4px;
 }
 
+/* 右侧核心操作（记录、新建会话等）绝不参与收缩，避免被长角色名挤出屏幕 */
+.action {
+  flex: none;
+}
+
 .title {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
   margin: 0 12px;
   overflow: hidden;

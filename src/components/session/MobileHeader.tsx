@@ -38,6 +38,7 @@ export const MobileHeader = ({ title, session }: { title?: string; session?: Ses
           {session ? <ContextMeter session={session} className={styles.meter} /> : null}
           {session ? (
             <IconButton
+              className={styles.action}
               size="xs"
               tooltip={t('recordsTitle')}
               icon={<IconEditOutline16 />}
@@ -45,6 +46,7 @@ export const MobileHeader = ({ title, session }: { title?: string; session?: Ses
             />
           ) : null}
           <IconButton
+            className={styles.action}
             size="xl"
             tone="primary"
             icon={<IconNewChatOutline20 />}
