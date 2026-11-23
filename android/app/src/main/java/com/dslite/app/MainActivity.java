@@ -30,8 +30,8 @@ public class MainActivity extends BridgeActivity {
                         Insets statusBars = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars());
                         Insets navBars = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars());
                         Insets ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
-                        int bottomPad = Math.max(0, ime.bottom);
-                        v.setPadding(navBars.left, statusBars.top, navBars.right, bottomPad);
+                        // 系统 adjustResize 已将窗口底边顶到软键盘上方，这里不再重复加 ime.bottom，避免双倍键盘黑洞
+                        v.setPadding(navBars.left, statusBars.top, navBars.right, 0);
                         float density = getResources().getDisplayMetrics().density;
                         int navCssPx = ime.bottom > 0 ? 0 : Math.round(navBars.bottom / Math.max(1f, density));
                         WebView webView = getBridge() != null ? getBridge().getWebView() : null;
