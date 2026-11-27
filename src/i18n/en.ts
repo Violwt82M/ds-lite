@@ -399,6 +399,9 @@ export const en = {
   regenerateDefault: 'Regenerate',
   regenerateDetailed: 'More detailed (this turn)',
   regenerateConcise: 'More concise (this turn)',
+  settingsRegenerateOptions: 'Regenerate length options',
+  regenerateOptionsHint:
+    'On by default; shows "More detailed / More concise" choices when tapping Regenerate. Turn off to regenerate immediately.',
   settingsBubbleSkin: 'User message bubbles',
   bubbleSkinHint: 'Your messages are drawn as bubbles by the app (with the little tail). The AI reply bubble is controlled separately under "AI output bubble"; the two are independent.',
   bubbleSkinOn: 'On',

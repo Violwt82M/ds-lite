@@ -53,6 +53,7 @@ import {
   setReadAloudEnabled,
   setAutoReadAloud,
   setMemoryKeepTokens,
+  setRegenerateOptions,
   setReplyLength,
   setSendClockTime,
   MEMORY_KEEP_MIN,
@@ -210,6 +211,7 @@ const SettingsContent = () => {
               <LocationSetting />
               <SendClockTimeSetting />
               <ReplyLengthSetting />
+              <RegenerateOptionsSetting />
             </>
           ) : section === 'persona' ? (
             <PersonaSetting />
@@ -442,6 +444,28 @@ const ReplyLengthSetting = () => {
             </Button>
           ))}
         </div>
+      }
+    />
+  )
+}
+
+const RegenerateOptionsSetting = () => {
+  const t = useTranslate()
+  const enabled = useSettings((state) => state.regenerateOptions)
+  return (
+    <SettingCell
+      label={t('settingsRegenerateOptions')}
+      description={t('regenerateOptionsHint')}
+      status={null}
+      action={
+        <Button
+          variant={enabled ? 'primary' : 'outlined'}
+          size="m"
+          className={styles.cellButton}
+          onClick={() => setRegenerateOptions(!enabled)}
+        >
+          {t(enabled ? 'bubbleSkinOn' : 'bubbleSkinOff')}
+        </Button>
       }
     />
   )

@@ -17,6 +17,7 @@ import {
   setAutoReadAloud,
   setHeaderStatusCollapsed,
   setReadAloudEnabled,
+  setRegenerateOptions,
   setShowBalance,
   shouldAutoReadAloud,
   useSettings,
@@ -27,6 +28,7 @@ describe('0.9.77 新增功能逻辑（朗读总开关 / 顶栏折叠 / 单轮篇
     setReadAloudEnabled(false)
     setAutoReadAloud(false)
     setHeaderStatusCollapsed(false)
+    setRegenerateOptions(true)
     setShowBalance(true)
     clearAllMessageEditing()
   })
@@ -70,6 +72,16 @@ describe('0.9.77 新增功能逻辑（朗读总开关 / 顶栏折叠 / 单轮篇
     assert.equal(useSettings.getState().headerStatusCollapsed, true)
     assert.equal(useSettings.getState().showBalance, false)
     assert.equal(localStorage.getItem('chat-demo:header-status-collapsed'), 'true')
+  })
+
+  it('重新生成额外选项默认开启，关闭后持久化并可恢复', () => {
+    assert.equal(useSettings.getState().regenerateOptions, true)
+    setRegenerateOptions(false)
+    assert.equal(useSettings.getState().regenerateOptions, false)
+    assert.equal(localStorage.getItem('chat-demo:regenerate-options'), 'false')
+    setRegenerateOptions(true)
+    assert.equal(useSettings.getState().regenerateOptions, true)
+    assert.equal(localStorage.getItem('chat-demo:regenerate-options'), 'true')
   })
 
   it('单条回复「这一次」篇幅提示仅附在最后一条 user 消息尾部，不修改原消息', () => {

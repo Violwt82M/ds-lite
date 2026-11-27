@@ -77,6 +77,8 @@ type Settings = {
   autoReadAloud: boolean
   /** 移动端聊天顶栏状态区是否折叠（默认展开，用户可按需折叠以保持界面极简） */
   headerStatusCollapsed: boolean
+  /** 点击「重新生成」时是否弹出额外篇幅选项（默认开启；关闭后点击直接重新生成） */
+  regenerateOptions: boolean
 }
 
 /** 回复篇幅偏好：静态拼进 system，不伤前缀缓存 */
@@ -119,6 +121,7 @@ const KEYS = {
   readAloudEnabled: 'chat-demo:read-aloud-enabled',
   autoReadAloud: 'chat-demo:auto-read-aloud',
   headerStatusCollapsed: 'chat-demo:header-status-collapsed',
+  regenerateOptions: 'chat-demo:regenerate-options',
 } as const
 
 const read = (key: string) => {
@@ -292,6 +295,8 @@ export const useSettings = create<Settings>(() => ({
   autoReadAloud: read(KEYS.autoReadAloud) === 'true',
   // 默认展开：保持既有常态显示，用户按需点折叠按钮让顶栏更简洁
   headerStatusCollapsed: read(KEYS.headerStatusCollapsed) === 'true',
+  // 默认开启：点击重新生成时弹出「重新生成 / 展开详述 / 精简一点」，关闭后直接重新生成
+  regenerateOptions: read(KEYS.regenerateOptions) !== 'false',
 }))
 
 /** 消息气泡开关：模型输出纯文本，气泡由客户端绘制 */
@@ -351,6 +356,12 @@ export const shouldAutoReadAloud = (
 export const setHeaderStatusCollapsed = (headerStatusCollapsed: boolean) => {
   write(KEYS.headerStatusCollapsed, String(headerStatusCollapsed))
   useSettings.setState({ headerStatusCollapsed })
+}
+
+/** 重新生成额外选项开关，默认开启（true） */
+export const setRegenerateOptions = (regenerateOptions: boolean) => {
+  write(KEYS.regenerateOptions, String(regenerateOptions))
+  useSettings.setState({ regenerateOptions })
 }
 
 /** 输出完毕自动朗读开关，默认关 */

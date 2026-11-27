@@ -20,10 +20,9 @@ import { PersonaButton } from './PersonaPicker.js'
 import styles from './MobileHeader.module.css'
 
 /**
- * 移动端顶栏：
- * - 主行保留左侧菜单、宽敞会话标题、状态栏折叠开关与开启新对话；
- * - 会话页默认展开次级状态条（人设、余额、上下文占用、记录），
- *   用户可点击折叠按钮一键收起，获得更简洁的阅读区（且完全尊重设置里的余额开关）。
+ * 移动端顶栏（始终单行，不额外占用第二行高度）：
+ * - 左侧菜单 + 标题 + 可一键折叠的状态项（人设、余额、上下文占用、记录）+ 折叠按钮 + 新建对话；
+ * - 折叠后只保留菜单、标题、展开按钮（高上下文时带提示点）与新建对话，保持极简。
  */
 export const MobileHeader = ({ title, session }: { title?: string; session?: Session }) => {
   const t = useTranslate()
@@ -44,75 +43,69 @@ export const MobileHeader = ({ title, session }: { title?: string; session?: Ses
   const hasHighContext = level === 'high' || level === 'critical'
 
   return (
-    <div className={clsx(styles.wrap, 'ds-top-bar')}>
-      <div className={styles.header}>
-        <IconButton
-          size="xl"
-          tone="primary"
-          icon={<IconMenuOutline20 />}
-          aria-label={t('expandSiderbarButton')}
-          onClick={openMobileSider}
-        />
-        {title === undefined ? (
-          <>
-            {/* 还没发第一句话：只放人设入口，让新对话可以先选人设 */}
-            <div className={styles.title} />
-            <PersonaButton sessionId={null} />
-          </>
-        ) : (
-          <>
-            <div className={styles.title}>{title}</div>
-            {session ? (
-              <button
-                type="button"
-                className={clsx(styles.toggle, !collapsed && styles.toggleExpanded)}
-                aria-label={t(collapsed ? 'headerExpandStatus' : 'headerCollapseStatus')}
-                aria-expanded={!collapsed}
-                onClick={() => setHeaderStatusCollapsed(!collapsed)}
-              >
-                <span className={styles.toggleIcon}>
-                  <IconChevronDownOutline14 />
-                </span>
-                {collapsed && hasHighContext ? (
-                  <span
-                    className={clsx(
-                      styles.alertDot,
-                      level === 'critical' && styles.alertDotCritical
-                    )}
-                    aria-hidden
-                  />
-                ) : null}
-              </button>
-            ) : null}
-            <IconButton
-              className={styles.action}
-              size="xl"
-              tone="primary"
-              icon={<IconNewChatOutline20 />}
-              aria-label={t('newChat')}
-              onClick={newChat}
-            />
-          </>
-        )}
-      </div>
-      {title !== undefined && session && !collapsed ? (
-        <div className={styles.statusBar}>
-          <div className={styles.statusLeft}>
-            <PersonaButton sessionId={session.id} />
-          </div>
-          <div className={styles.statusRight}>
-            <BalanceChip className={styles.meter} />
-            <ContextMeter session={session} className={styles.meter} />
-            <IconButton
-              className={styles.action}
-              size="xs"
-              tooltip={t('recordsTitle')}
-              icon={<IconEditOutline16 />}
-              onClick={openRecordsPanel}
-            />
-          </div>
-        </div>
-      ) : null}
+    <div className={clsx(styles.header, 'ds-top-bar')}>
+      <IconButton
+        size="xl"
+        tone="primary"
+        icon={<IconMenuOutline20 />}
+        aria-label={t('expandSiderbarButton')}
+        onClick={openMobileSider}
+      />
+      {title === undefined ? (
+        <>
+          {/* 还没发第一句话：只放人设入口，让新对话可以先选人设 */}
+          <div className={styles.title} />
+          <PersonaButton sessionId={null} />
+        </>
+      ) : (
+        <>
+          <div className={styles.title}>{title}</div>
+          {session && !collapsed ? (
+            <>
+              <PersonaButton sessionId={session.id} />
+              <BalanceChip className={styles.meter} />
+              <ContextMeter session={session} className={styles.meter} />
+              <IconButton
+                className={styles.action}
+                size="xs"
+                tooltip={t('recordsTitle')}
+                icon={<IconEditOutline16 />}
+                onClick={openRecordsPanel}
+              />
+            </>
+          ) : null}
+          {session ? (
+            <button
+              type="button"
+              className={clsx(styles.toggle, !collapsed && styles.toggleExpanded)}
+              aria-label={t(collapsed ? 'headerExpandStatus' : 'headerCollapseStatus')}
+              aria-expanded={!collapsed}
+              onClick={() => setHeaderStatusCollapsed(!collapsed)}
+            >
+              <span className={styles.toggleIcon}>
+                <IconChevronDownOutline14 />
+              </span>
+              {collapsed && hasHighContext ? (
+                <span
+                  className={clsx(
+                    styles.alertDot,
+                    level === 'critical' && styles.alertDotCritical
+                  )}
+                  aria-hidden
+                />
+              ) : null}
+            </button>
+          ) : null}
+          <IconButton
+            className={styles.action}
+            size="xl"
+            tone="primary"
+            icon={<IconNewChatOutline20 />}
+            aria-label={t('newChat')}
+            onClick={newChat}
+          />
+        </>
+      )}
     </div>
   )
 }

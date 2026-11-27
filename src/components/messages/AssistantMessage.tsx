@@ -68,6 +68,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   const showReadMark = useSettings((state) => state.showReadMark)
   const showTokenUsage = useSettings((state) => state.showTokenUsage)
   const readAloudEnabled = useSettings((state) => state.readAloudEnabled)
+  const regenerateOptions = useSettings((state) => state.regenerateOptions)
   const showBubble = aiBubble
   const view = useReplyView(message, streaming)
   const panelEntry = useSearchPanel((state) => state.entry)
@@ -326,47 +327,60 @@ export const AssistantMessage = memo(function AssistantMessage({
                 onClick={startEditing}
               />
             ) : null}
-            <Menu
-              options={[
-                {
-                  key: 'default',
-                  label: t('regenerateDefault'),
-                  icon: <IconRefreshOutline16 />,
-                  onSelect: () => {
-                    stopReadAloud()
-                    regenerateReply(sessionId, message.id)
+            {regenerateOptions ? (
+              <Menu
+                options={[
+                  {
+                    key: 'default',
+                    label: t('regenerateDefault'),
+                    icon: <IconRefreshOutline16 />,
+                    onSelect: () => {
+                      stopReadAloud()
+                      regenerateReply(sessionId, message.id)
+                    },
                   },
-                },
-                {
-                  key: 'detailed',
-                  label: t('regenerateDetailed'),
-                  icon: <IconRefreshOutline16 />,
-                  onSelect: () => {
-                    stopReadAloud()
-                    regenerateReply(sessionId, message.id, { lengthOverride: 'detailed' })
+                  {
+                    key: 'detailed',
+                    label: t('regenerateDetailed'),
+                    icon: <IconRefreshOutline16 />,
+                    onSelect: () => {
+                      stopReadAloud()
+                      regenerateReply(sessionId, message.id, { lengthOverride: 'detailed' })
+                    },
                   },
-                },
-                {
-                  key: 'concise',
-                  label: t('regenerateConcise'),
-                  icon: <IconRefreshOutline16 />,
-                  onSelect: () => {
-                    stopReadAloud()
-                    regenerateReply(sessionId, message.id, { lengthOverride: 'concise' })
+                  {
+                    key: 'concise',
+                    label: t('regenerateConcise'),
+                    icon: <IconRefreshOutline16 />,
+                    onSelect: () => {
+                      stopReadAloud()
+                      regenerateReply(sessionId, message.id, { lengthOverride: 'concise' })
+                    },
                   },
-                },
-              ]}
-            >
-              {({ toggle }) => (
-                <IconButton
-                  icon={<IconRefreshOutline16 />}
-                  tooltip={t('regenerate')}
-                  tooltipPlacement="bottom"
-                  disabled={busy || refused}
-                  onClick={toggle}
-                />
-              )}
-            </Menu>
+                ]}
+              >
+                {({ toggle }) => (
+                  <IconButton
+                    icon={<IconRefreshOutline16 />}
+                    tooltip={t('regenerate')}
+                    tooltipPlacement="bottom"
+                    disabled={busy || refused}
+                    onClick={toggle}
+                  />
+                )}
+              </Menu>
+            ) : (
+              <IconButton
+                icon={<IconRefreshOutline16 />}
+                tooltip={t('regenerate')}
+                tooltipPlacement="bottom"
+                disabled={busy || refused}
+                onClick={() => {
+                  stopReadAloud()
+                  regenerateReply(sessionId, message.id)
+                }}
+              />
+            )}
           </div>
           {isLast && canContinueReply(message) ? (
             <Button

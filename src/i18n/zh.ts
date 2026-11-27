@@ -385,6 +385,9 @@ export const zh = {
   regenerateDefault: '重新生成',
   regenerateDetailed: '展开详述（仅此轮）',
   regenerateConcise: '精简一点（仅此轮）',
+  settingsRegenerateOptions: '重新生成额外选项',
+  regenerateOptionsHint:
+    '默认开启；点击重新生成时弹出「展开详述 / 精简一点」菜单，关闭后点击直接重新生成',
   settingsBubbleSkin: '用户消息气泡',
   bubbleSkinHint: '你的消息由客户端画成气泡（带小尾巴）；AI 回答的气泡在「AI 输出气泡」里单独控制，两者互不影响',
   bubbleSkinOn: '已开启',
