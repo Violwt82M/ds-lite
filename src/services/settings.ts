@@ -71,8 +71,12 @@ type Settings = {
   sendClockTime: boolean
   /** 回复篇幅偏好：default 不干预 / detailed 偏详尽 / concise 偏精简 */
   replyLength: ReplyLength
-  /** AI 回复输出完毕后自动开始朗读（默认关闭） */
+  /** 消息朗读总开关（默认关闭；关闭时隐藏朗读按钮并禁用自动朗读，避免误触产生 TTS 费用） */
+  readAloudEnabled: boolean
+  /** AI 回复输出完毕后自动开始朗读（默认关闭；需同时开启「消息朗读」才生效） */
   autoReadAloud: boolean
+  /** 移动端聊天顶栏状态区是否折叠（默认展开，用户可按需折叠以保持界面极简） */
+  headerStatusCollapsed: boolean
 }
 
 /** 回复篇幅偏好：静态拼进 system，不伤前缀缓存 */
@@ -112,7 +116,9 @@ const KEYS = {
   personalityTemperature: 'chat-demo:personality-temperature',
   sendClockTime: 'chat-demo:send-clock-time',
   replyLength: 'chat-demo:reply-length',
+  readAloudEnabled: 'chat-demo:read-aloud-enabled',
   autoReadAloud: 'chat-demo:auto-read-aloud',
+  headerStatusCollapsed: 'chat-demo:header-status-collapsed',
 } as const
 
 const read = (key: string) => {
@@ -280,8 +286,12 @@ export const useSettings = create<Settings>(() => ({
     const saved = read(KEYS.replyLength)
     return saved === 'detailed' || saved === 'concise' ? saved : 'default'
   })(),
-  // 默认关闭：开启后每次 AI 回复完成且停留在当前会话时自动朗读
+  // 默认关闭：开启后才在 AI 回复下显示朗读按钮并允许自动朗读（TTS 会产生少量费用）
+  readAloudEnabled: read(KEYS.readAloudEnabled) === 'true',
+  // 默认关闭：需同时开启「消息朗读」才会自动朗读
   autoReadAloud: read(KEYS.autoReadAloud) === 'true',
+  // 默认展开：保持既有常态显示，用户按需点折叠按钮让顶栏更简洁
+  headerStatusCollapsed: read(KEYS.headerStatusCollapsed) === 'true',
 }))
 
 /** 消息气泡开关：模型输出纯文本，气泡由客户端绘制 */
@@ -324,6 +334,23 @@ export const setSendClockTime = (sendClockTime: boolean) => {
 export const setReplyLength = (replyLength: ReplyLength) => {
   write(KEYS.replyLength, replyLength)
   useSettings.setState({ replyLength })
+}
+
+/** 消息朗读总开关，默认关 */
+export const setReadAloudEnabled = (readAloudEnabled: boolean) => {
+  write(KEYS.readAloudEnabled, String(readAloudEnabled))
+  useSettings.setState({ readAloudEnabled })
+}
+
+/** 自动朗读仅在「消息朗读总开关」与「回复完毕自动朗读」同时开启时生效 */
+export const shouldAutoReadAloud = (
+  state: Pick<Settings, 'readAloudEnabled' | 'autoReadAloud'>
+): boolean => state.readAloudEnabled && state.autoReadAloud
+
+/** 移动端顶栏状态区折叠开关，默认展开（false） */
+export const setHeaderStatusCollapsed = (headerStatusCollapsed: boolean) => {
+  write(KEYS.headerStatusCollapsed, String(headerStatusCollapsed))
+  useSettings.setState({ headerStatusCollapsed })
 }
 
 /** 输出完毕自动朗读开关，默认关 */

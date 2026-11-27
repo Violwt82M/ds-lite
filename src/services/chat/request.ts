@@ -2,6 +2,7 @@ import type { ChatModel, CreateMessageRequest, MessageParam } from '../api/types
 import { sanitizeSurrogates } from '../../utils/safeText.js'
 import { stripSpecialTokens } from '../../utils/specialTokens.js'
 import { getCustomModel, usesOpenAiProtocol } from '../api/protocol.js'
+import { normalizeLatestReminder } from './latestReminder.js'
 
 /**
  * 服务端「扩展模式」的输入上限：32768 token（约 5 万字）。
@@ -101,10 +102,11 @@ const cleanSurrogates = (text: string) => sanitizeSurrogates(text)
 const cleanOutputText = (text: string) => stripSpecialTokens(sanitizeSurrogates(text))
 
 const cleanMessages = (messages: MessageParam[]): MessageParam[] =>
-  messages.map((message) => {
-    // latest_reminder 的 content 一定是字符串，单独处理保持联合类型收窄
+  messages.flatMap((message): MessageParam[] => {
+    // latest_reminder 的 content 一定是五段逗号格式，不合规的旧快照静默丢弃，防服务端 400
     if (message.role === 'latest_reminder') {
-      return { role: 'latest_reminder' as const, content: cleanOutputText(message.content) }
+      const normalized = normalizeLatestReminder(cleanOutputText(message.content))
+      return normalized ? [{ role: 'latest_reminder' as const, content: normalized }] : []
     }
     const { content } = message
     const cleanText = message.role === 'assistant' ? cleanOutputText : cleanSurrogates
@@ -114,7 +116,7 @@ const cleanMessages = (messages: MessageParam[]): MessageParam[] =>
         : content.map((block) =>
             block.type === 'text' ? { ...block, text: cleanText(block.text) } : block
           )
-    return { ...message, content: cleaned } as MessageParam
+    return [{ ...message, content: cleaned } as MessageParam]
   })
 
 /**

@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { create } from 'zustand'
+import { platform } from '../../platform.js'
 
 /**
  * 接收系统分享 / 打开方式传进来的归档文件。
@@ -45,7 +46,7 @@ const accept = async (payload: SharedPayload) => {
 
 /** 启动时调用一次：接住冷启动时的分享，以及运行中的新分享 */
 export const initSharedArchive = async (): Promise<void> => {
-  if (!Capacitor.isNativePlatform()) {
+  if (!platform.canReceiveSharedArchive()) {
     return
   }
   try {

@@ -5,6 +5,9 @@
   padding-bottom: 16px;
   user-select: none;
   -webkit-user-select: none;
+  /* 屏幕外消息跳过布局与绘制，仍保留浏览器 Ctrl+F 查找与已测高度记忆 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
 
   &.isFirst {
     padding-top: 34px;

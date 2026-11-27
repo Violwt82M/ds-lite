@@ -1,6 +1,6 @@
-import { Capacitor } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
+import { platform } from '../platform.js'
 
 /** 浏览器里的普通下载；桌面网页版和 CI 预览都走这条 */
 const downloadInBrowser = (blob: Blob, fileName: string) => {
@@ -147,7 +147,7 @@ export const saveFile = async (blob: Blob, fileName: string): Promise<void> => {
     await saveInHarmonyOS(blob, fileName, harmony)
     return
   }
-  if (!Capacitor.isNativePlatform()) {
+  if (!platform.canShareFiles()) {
     downloadInBrowser(blob, fileName)
     return
   }

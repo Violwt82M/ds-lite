@@ -19,7 +19,9 @@ import { SettingsDialog } from '../components/settings/SettingsDialog.js'
 import { DisclaimerDialog } from '../components/about/DisclaimerDialog.js'
 import { WebPwaGuideDialog } from '../components/about/WebPwaGuideDialog.js'
 import { ChangelogDialog } from '../components/about/ChangelogDialog.js'
-import { checkForUpdate, isNativePlatform } from '../services/updateCheck.js'
+import { platform } from '../services/platform.js'
+import { initPersonaStore } from '../services/persona/store.js'
+import { checkForUpdate } from '../services/updateCheck.js'
 import { applyWebUpdate, useWebUpdate } from '../services/webUpdate.js'
 import { SponsorDialog } from '../components/about/SponsorDialog.js'
 import { ContextGuideDialog } from '../components/memory/ContextGuideDialog.js'
@@ -127,12 +129,13 @@ export const App = () => {
 
   // APK 启动后台查一次新版（24 小时内不重复、失败静默）；网页版靠 SW 自己提示
   useEffect(() => {
-    if (isNativePlatform()) {
+    if (platform.canInstallApk()) {
       void checkForUpdate()
     }
   }, [])
 
   useEffect(() => {
+    void initPersonaStore()
     void initChat()
     // 首次打开先让用户看完免责声明，确认后再引导填 API Key，避免两个弹窗叠在一起
     if (useDisclaimer.getState().accepted) {
@@ -170,7 +173,7 @@ export const App = () => {
         <main className={styles.main}>
           <SaveErrorBanner />
           <div className={styles.content}>
-            {siderCollapsed ? <CollapsedSider /> : null}
+            {!isMobile && siderCollapsed ? <CollapsedSider /> : null}
             {!ready || (activeId !== null && !session) ? (
               <div className={styles.loadingView}>
                 {isMobile ? <MobileHeader /> : null}

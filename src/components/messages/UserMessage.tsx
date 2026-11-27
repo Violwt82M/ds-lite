@@ -1,6 +1,7 @@
 import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
-import { memo, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { startMessageEditing, stopMessageEditing } from './editingState.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { IconEditOutline16 } from '../base/icons.js'
 import { editMessage, retryUpload } from '../../services/chat/store.js'
@@ -54,11 +55,20 @@ export const UserMessage = memo(function UserMessage({
   const showReadMark = useSettings((state) => state.showReadMark)
   const canSend = !busy && (draft.trim() !== '' || message.files.length > 0)
 
+  useEffect(() => {
+    if (editing) {
+      startMessageEditing(message.id)
+      return () => stopMessageEditing(message.id)
+    }
+    stopMessageEditing(message.id)
+    return undefined
+  }, [editing, message.id])
+
   useLayoutEffect(() => {
     const textarea = textareaRef.current
     if (editing && textarea) {
       textarea.style.height = 'auto'
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 202)}px`
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 320)}px`
     }
   }, [editing, draft])
 

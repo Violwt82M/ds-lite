@@ -1,4 +1,5 @@
 import { filterStreamChunk, flushStreamPending } from '../../utils/specialTokens.js'
+import { normalizeLatestReminder } from './latestReminder.js'
 import type {
   AssistantBlockParam,
   FileBlockParam,
@@ -349,6 +350,13 @@ export const getContextRounds = (history: Message[]): [UserMessage, AssistantMes
 }
 
 /**
+ * 单次请求中携带的历史图片总大小安全上限（200MB）。
+ * 从最新轮次往前累计，超出上限的较早历史图片在本次请求中自动略去（绝不删除本地原图），
+ * 避免老会话里累积过多未压缩大图导致服务端报 400 total size of image。
+ */
+export const MAX_REQUEST_IMAGE_BYTES = 200 * 1024 * 1024
+
+/**
  * 把会话转成请求的 messages：只保留「提问 + 有回答的回复」成对的轮次，最后接上本轮提问。
  * 失败或没有回答的轮次不进上下文。续写时末尾再带上本轮 assistant。
  */
@@ -363,23 +371,64 @@ export const toRequestMessages = (
   /** 只发文字附件（v4 pro 不支持图片） */
   textOnly = false,
   /** v4 pro 不支持 latest_reminder：跳过所有提醒消息（时间信息改由 system 携带） */
-  dropReminder = false
+  dropReminder = false,
+  /** 单次请求允许携带的图片总字节预算（默认 200MB；0 表示仅保留本轮提问图片、略去所有历史老图） */
+  maxImageBytes: number = MAX_REQUEST_IMAGE_BYTES
 ): MessageParam[] => {
+  const rounds = getContextRounds(history)
+  // 从最新到最旧计算允许带入本次请求的历史图片 id：本轮 question 的图片永远优先计入
+  const allowedHistoryImages = new Set<string>()
+  if (!textOnly && maxImageBytes > 0) {
+    let usedImageBytes = 0
+    for (const file of question.files) {
+      if (file.isImage && file.serverId) {
+        usedImageBytes += Math.max(0, file.size)
+      }
+    }
+    for (let i = rounds.length - 1; i >= 0; i -= 1) {
+      const [user, reply] = rounds[i]
+      if (folded?.has(reply.id)) {
+        continue
+      }
+      for (let j = user.files.length - 1; j >= 0; j -= 1) {
+        const file = user.files[j]
+        if (!file.isImage || !file.serverId) {
+          continue
+        }
+        const size = Math.max(0, file.size)
+        if (usedImageBytes + size <= maxImageBytes) {
+          usedImageBytes += size
+          allowedHistoryImages.add(file.id)
+        }
+      }
+    }
+  }
+  const filterHistoryUser = (user: UserMessage): UserMessage => {
+    if (textOnly || user.files.every((f) => !f.isImage || allowedHistoryImages.has(f.id))) {
+      return user
+    }
+    return {
+      ...user,
+      files: user.files.filter((f) => !f.isImage || allowedHistoryImages.has(f.id)),
+    }
+  }
   const messages: MessageParam[] = []
   let previousReminder: string | undefined
   const appendReminder = (reminder: string | undefined) => {
-    // 仅在当前分支首次出现或内容变化时插入快照；缺少快照的消息保持原有内容。
-    if (dropReminder || !reminder || reminder === previousReminder) {
+    // 仅在当前分支首次出现或内容变化时插入快照；格式不合规的历史坏快照静默丢弃，避免触发 400。
+    const normalized = normalizeLatestReminder(reminder)
+    if (dropReminder || !normalized || normalized === previousReminder) {
       return
     }
-    messages.push({ role: 'latest_reminder', content: reminder })
-    previousReminder = reminder
+    messages.push({ role: 'latest_reminder', content: normalized })
+    previousReminder = normalized
   }
-  for (const [user, reply] of getContextRounds(history)) {
+  for (const [rawUser, reply] of rounds) {
     if (folded?.has(reply.id)) {
       continue
     }
-    // 历史提问没有文字、附件也都没有 serverId 时，提问为空，连同回答一起省略。
+    const user = filterHistoryUser(rawUser)
+    // 历史提问没有文字、附件也都没有 serverId（或图片被预算略去）时，提问为空，连同回答一起省略。
     if (!user.content && toFileBlocks(textOnly ? user.files.filter((f) => !f.isImage) : user.files).length === 0) {
       continue
     }
@@ -407,3 +456,49 @@ export const toRequestMessages = (
 /** 思考用时（秒），至少 1 秒 */
 export const getThinkingSeconds = (startedAt: number, endedAt: number) =>
   Math.max(1, Math.round((endedAt - startedAt) / 1000))
+
+/** 单条回复重新生成时的「这一次」篇幅提示（附在最后一条 user 消息尾部，不改 system 以保前缀缓存） */
+export const formatTurnLengthHint = (
+  override: 'detailed' | 'concise',
+  locale: 'zh-CN' | 'en-US'
+): string => {
+  if (override === 'detailed') {
+    return locale === 'en-US'
+      ? '[One-turn length hint: Please elaborate in noticeably greater detail and depth for this reply only.]'
+      : '[本轮篇幅提示: 仅针对这一次回复，请展开得更详尽充分、多保留细节与铺陈。]'
+  }
+  return locale === 'en-US'
+    ? '[One-turn length hint: Please keep this reply noticeably more concise and direct for this turn only.]'
+    : '[本轮篇幅提示: 仅针对这一次回复，请更精简凝练、直奔重点。]'
+}
+
+/**
+ * 将本轮临时尾部附注（如静默时钟标记、单次篇幅覆盖提示）追加到最后一条 user 消息末尾；
+ * 返回新数组，不修改原消息对象与 system 提示词，保证前缀缓存不受影响。
+ */
+export const appendUserTailNotes = (
+  messages: MessageParam[],
+  notes: readonly string[]
+): MessageParam[] => {
+  const valid = notes.map((item) => item.trim()).filter(Boolean)
+  if (valid.length === 0) {
+    return messages
+  }
+  const suffix = `\n\n${valid.join('\n')}`
+  const next = [...messages]
+  for (let idx = next.length - 1; idx >= 0; idx -= 1) {
+    const msg = next[idx]
+    if (msg.role === 'user') {
+      if (typeof msg.content === 'string') {
+        next[idx] = { ...msg, content: `${msg.content}${suffix}` }
+      } else {
+        next[idx] = {
+          ...msg,
+          content: [...msg.content, { type: 'text', text: suffix }],
+        }
+      }
+      break
+    }
+  }
+  return next
+}

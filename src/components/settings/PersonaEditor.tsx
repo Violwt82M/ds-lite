@@ -1,5 +1,5 @@
 import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { cardToJsonText, emptyCard, type PersonaCard } from '../../services/persona/card.js'
 import { saveFile } from '../../services/export/saveFile.js'
@@ -36,7 +36,123 @@ const isTouchInput = () =>
   navigator.maxTouchPoints > 0 ||
   window.matchMedia('not all and (min-width: 768px)').matches
 
-/** 角色卡编辑器：本地新建或编辑，保存后写入本机 localStorage */
+/** 角色名称也改用自动换行的自适应 textarea（禁回车），长名字不用左右拖动查看 */
+const NameTextarea = ({
+  value,
+  placeholder,
+  onChange,
+}: {
+  value: string
+  placeholder: string
+  onChange: (next: string) => void
+}) => {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) {
+      return
+    }
+    el.style.height = 'auto'
+    el.style.height = `${Math.max(40, el.scrollHeight)}px`
+  }, [value])
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      wrap="soft"
+      className={styles.nameTextarea}
+      value={value}
+      placeholder={placeholder}
+      onChange={(event) => onChange(event.target.value.replace(/\r?\n/g, ' '))}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+        }
+      }}
+    />
+  )
+}
+
+/** 可自动换行、自适应增高、并支持一键「展开全文 / 收起」的角色卡字段编辑框 */
+const ExpandableField = ({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string
+  value: string
+  placeholder: string
+  onChange: (next: string) => void
+}) => {
+  const [expanded, setExpanded] = useState(false)
+  const [overflows, setOverflows] = useState(false)
+  const ref = useRef<HTMLTextAreaElement>(null)
+  const COMPACT_MAX = 180
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) {
+      return
+    }
+    el.style.height = 'auto'
+    const full = Math.max(76, el.scrollHeight)
+    setOverflows(full > COMPACT_MAX)
+    el.style.height = `${expanded ? full : Math.min(full, COMPACT_MAX)}px`
+  }, [value, expanded])
+
+  return (
+    <div className={styles.field}>
+      <div className={styles.labelRow}>
+        <div className={styles.label}>{label}</div>
+        <div className={styles.fieldMeta}>
+          {value.length > 0 ? <span className={styles.charCount}>{value.length} 字</span> : null}
+          {overflows || expanded ? (
+            <button
+              type="button"
+              className={styles.expandToggle}
+              onClick={() => setExpanded((prev) => !prev)}
+            >
+              {expanded ? '收起' : '展开全部'}
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <textarea
+        ref={ref}
+        wrap="soft"
+        className={expanded ? styles.textareaExpanded : styles.textarea}
+        value={value}
+        placeholder={placeholder}
+        enterKeyHint="enter"
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          // 回车只用于换行：别让外层的弹窗 / 快捷键把它吃掉
+          if (event.key === 'Enter') {
+            event.stopPropagation()
+            return
+          }
+          // 部分安卓输入法把软键盘上的「下一项」实现成 Tab，会把焦点跳到下一个字段；
+          // 触屏设备上按换行处理，桌面键盘的 Tab 仍然正常切换焦点。
+          if (event.key !== 'Tab' || !isTouchInput() || event.shiftKey) {
+            return
+          }
+          event.preventDefault()
+          const element = event.currentTarget
+          const { selectionStart: start, selectionEnd: end } = element
+          onChange(`${element.value.slice(0, start)}\n${element.value.slice(end)}`)
+          requestAnimationFrame(() => {
+            element.focus({ preventScroll: true })
+            element.setSelectionRange(start + 1, start + 1)
+          })
+        }}
+      />
+    </div>
+  )
+}
+
+/** 角色卡编辑器：本地新建或编辑，保存后写入持久角色库 */
 export const PersonaEditor = ({
   id,
   initial,
@@ -240,45 +356,21 @@ export const PersonaEditor = ({
           {t('personaName')}
           <span className={styles.required}>*</span>
         </div>
-        <input
-          className={styles.input}
+        <NameTextarea
           value={draft.name}
           placeholder={t('personaNamePlaceholder')}
-          onChange={(event) => set({ name: event.target.value })}
+          onChange={(name) => set({ name })}
         />
       </div>
 
       {fields.map((field) => (
-        <div key={field.key} className={styles.field}>
-          <div className={styles.label}>{field.label}</div>
-          <textarea
-            className={styles.textarea}
-            value={draft[field.key]}
-            placeholder={field.hint}
-            enterKeyHint="enter"
-            onChange={(event) => set({ [field.key]: event.target.value } as Partial<PersonaCard>)}
-            onKeyDown={(event) => {
-              // 回车只用于换行：别让外层的弹窗 / 快捷键把它吃掉
-              if (event.key === 'Enter') {
-                event.stopPropagation()
-                return
-              }
-              // 部分安卓输入法把软键盘上的「下一项」实现成 Tab，会把焦点跳到下一个字段；
-              // 触屏设备上按换行处理，桌面键盘的 Tab 仍然正常切换焦点。
-              if (event.key !== 'Tab' || !isTouchInput() || event.shiftKey) {
-                return
-              }
-              event.preventDefault()
-              const element = event.currentTarget
-              const { selectionStart: start, selectionEnd: end } = element
-              set({ [field.key]: `${element.value.slice(0, start)}\n${element.value.slice(end)}` } as Partial<PersonaCard>)
-              requestAnimationFrame(() => {
-                element.focus({ preventScroll: true })
-                element.setSelectionRange(start + 1, start + 1)
-              })
-            }}
-          />
-        </div>
+        <ExpandableField
+          key={field.key}
+          label={field.label}
+          value={draft[field.key]}
+          placeholder={field.hint}
+          onChange={(value) => set({ [field.key]: value } as Partial<PersonaCard>)}
+        />
       ))}
     </Modal>
   )

@@ -1,5 +1,6 @@
 import { sanitizeSurrogates } from '../../utils/safeText.js'
 import { stripSpecialTokens } from '../../utils/specialTokens.js'
+import { normalizeLatestReminder } from './latestReminder.js'
 import type { Message, ReplyBlock, Session } from './types.js'
 
 /**
@@ -46,7 +47,9 @@ const cleanMessage = (message: Message): Message => {
     return cleaned
   })
   const latestReminder =
-    message.latestReminder === undefined ? undefined : cleanText(message.latestReminder)
+    message.latestReminder === undefined
+      ? undefined
+      : normalizeLatestReminder(cleanText(message.latestReminder))
   if (latestReminder !== message.latestReminder) {
     changed = true
   }

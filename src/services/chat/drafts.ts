@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { TranslationMessage } from '../../i18n/index.js'
 import { createId } from '../../utils/id.js'
+import { compressChatImage } from '../../utils/image.js'
 import {
   cancelUpload,
   isImage,
@@ -83,9 +84,18 @@ export const addDraftFiles = async (
   if (error) {
     return error
   }
-  // 纯文本类超过单份文档预算时本地截断：服务端不会替你截，超了直接 400
+  // 纯文本类超过单份文档预算时本地截断；图片自动高清压缩（长边 ≤ 1920px），避免撞服务端 total size of image 上限
   const budget = useSettings.getState().documentBudget
-  const prepared = await Promise.all(files.map((file) => truncateTextFile(file, budget)))
+  const prepared = await Promise.all(
+    files.map(async (rawFile) => {
+      const mime = resolveMimeType(rawFile)
+      if (isImage(mime)) {
+        const compressed = await compressChatImage(rawFile)
+        return { file: compressed }
+      }
+      return truncateTextFile(rawFile, budget)
+    })
+  )
   const added = prepared.map(
     ({ file, truncated, tokens, originalSize, extracted, displayName }): DraftAttachment => {
       const image = isImage(resolveMimeType(file))

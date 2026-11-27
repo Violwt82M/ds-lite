@@ -1,6 +1,7 @@
 import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
-import { memo, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { startMessageEditing, stopMessageEditing } from './editingState.js'
 import {
   IconEditOutline16,
   IconForkOutline16,
@@ -25,6 +26,7 @@ import type { AssistantMessage as AssistantMessageType } from '../../services/ch
 import { openSettings } from '../settings/settingsDialogState.js'
 import { IconButton } from '../base/IconButton.js'
 import { Button } from '../base/Button.js'
+import { Menu } from '../base/Menu.js'
 import { Markdown } from '../markdown/Markdown.js'
 import { SiteThumbnails } from '../search/SiteLogo.js'
 import { toggleSearchPanel, useSearchPanel } from '../search/searchPanelState.js'
@@ -65,6 +67,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   const aiBubble = useSettings((state) => state.aiBubble)
   const showReadMark = useSettings((state) => state.showReadMark)
   const showTokenUsage = useSettings((state) => state.showTokenUsage)
+  const readAloudEnabled = useSettings((state) => state.readAloudEnabled)
   const showBubble = aiBubble
   const view = useReplyView(message, streaming)
   const panelEntry = useSearchPanel((state) => state.entry)
@@ -88,6 +91,15 @@ export const AssistantMessage = memo(function AssistantMessage({
   // 只有已完成、不在流式输出、且有正文的回答可以编辑（拒答模板不参与）
   const canEdit = !streaming && message.status === 'done' && !!answer?.text && !refused
   const canSave = draft.trim() !== '' && !busy
+
+  useEffect(() => {
+    if (editing) {
+      startMessageEditing(message.id)
+      return () => stopMessageEditing(message.id)
+    }
+    stopMessageEditing(message.id)
+    return undefined
+  }, [editing, message.id])
 
   // 编辑框随内容高度自适应，超过上限后内部滚动（手机上不会撑破气泡）
   useLayoutEffect(() => {
@@ -302,7 +314,7 @@ export const AssistantMessage = memo(function AssistantMessage({
               }}
             />
             {copyText ? <CopyButton text={copyText} /> : null}
-            {responseText && !refused ? (
+            {readAloudEnabled && responseText && !refused ? (
               <ReadAloudButton messageId={message.id} text={responseText} />
             ) : null}
             {canEdit ? (
@@ -314,16 +326,47 @@ export const AssistantMessage = memo(function AssistantMessage({
                 onClick={startEditing}
               />
             ) : null}
-            <IconButton
-              icon={<IconRefreshOutline16 />}
-              tooltip={t('regenerate')}
-              tooltipPlacement="bottom"
-              disabled={busy || refused}
-              onClick={() => {
-                stopReadAloud()
-                regenerateReply(sessionId, message.id)
-              }}
-            />
+            <Menu
+              options={[
+                {
+                  key: 'default',
+                  label: t('regenerateDefault'),
+                  icon: <IconRefreshOutline16 />,
+                  onSelect: () => {
+                    stopReadAloud()
+                    regenerateReply(sessionId, message.id)
+                  },
+                },
+                {
+                  key: 'detailed',
+                  label: t('regenerateDetailed'),
+                  icon: <IconRefreshOutline16 />,
+                  onSelect: () => {
+                    stopReadAloud()
+                    regenerateReply(sessionId, message.id, { lengthOverride: 'detailed' })
+                  },
+                },
+                {
+                  key: 'concise',
+                  label: t('regenerateConcise'),
+                  icon: <IconRefreshOutline16 />,
+                  onSelect: () => {
+                    stopReadAloud()
+                    regenerateReply(sessionId, message.id, { lengthOverride: 'concise' })
+                  },
+                },
+              ]}
+            >
+              {({ toggle }) => (
+                <IconButton
+                  icon={<IconRefreshOutline16 />}
+                  tooltip={t('regenerate')}
+                  tooltipPlacement="bottom"
+                  disabled={busy || refused}
+                  onClick={toggle}
+                />
+              )}
+            </Menu>
           </div>
           {isLast && canContinueReply(message) ? (
             <Button

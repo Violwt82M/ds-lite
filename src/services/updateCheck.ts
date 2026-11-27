@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { Capacitor } from '@capacitor/core'
 import { APP_VERSION } from '../version.js'
+import { platform } from './platform.js'
 
 /**
  * APK 更新检测（0.9.34）。
@@ -34,7 +34,7 @@ export const useUpdate = create<UpdateState>(() => ({
   assetUrl: null,
 }))
 
-export const isNativePlatform = () => Capacitor.isNativePlatform()
+export const isNativePlatform = () => platform.canInstallApk()
 
 const parseVersion = (value: string) =>
   value

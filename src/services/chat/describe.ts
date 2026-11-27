@@ -70,6 +70,33 @@ export const describeReply = (reply: AssistantMessage): Notice | null => {
     if (status === 400 && /unavailable for model deepseek-v4-pro/i.test(reply.error.message)) {
       return { text: translate('replyProCapsUnavailable'), detail }
     }
+    // 400 细分：区分图片总大小超限、附件失效、请求格式/历史元数据异常、内容检查拦截
+    if (status === 400) {
+      if (/total\s+size\s+of\s+image/i.test(reply.error.message)) {
+        return { text: translate('replyImageTotalTooLarge'), detail }
+      }
+      if (
+        /file_ids? do not exist|file data not found|invalid file_id|unsupported.*(file|image|document)|attachment/i.test(
+          reply.error.message
+        )
+      ) {
+        return { text: translate('replyBadRequestAttachment'), detail }
+      }
+      if (
+        /invalid\s+['"`]?messages|invalid\s+date|invalid\s+parameter|missing\s+required|unexpected\s+field|malformed|json/i.test(
+          reply.error.message
+        )
+      ) {
+        return { text: translate('replyBadRequestFormat'), detail }
+      }
+      if (
+        /content\s*(policy|filter|risk|moderation|safety)|inappropriate|sensitive|violat/i.test(
+          reply.error.message
+        )
+      ) {
+        return { text: translate('replyBadRequestContent'), detail }
+      }
+    }
     switch (classifyStatus(status)) {
       case 'unauthorized':
         return { text: translate('replyInvalidApiKey'), action: 'apiKey', detail }

@@ -2,6 +2,9 @@
   position: relative;
   user-select: none;
   -webkit-user-select: none;
+  /* 屏幕外消息跳过布局与毛玻璃绘制，滚动与流式输出更流畅，同时保留 Ctrl+F 查找 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
 
   &:hover .actions,
   &:focus-within .actions {

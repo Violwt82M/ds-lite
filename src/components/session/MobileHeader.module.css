@@ -1,19 +1,25 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
 .header {
   display: flex;
   align-items: center;
   flex-shrink: 0;
   min-width: 0;
   box-sizing: border-box;
-  height: 60px;
-  padding: 12px 10px 4px;
+  height: 54px;
+  padding: 10px 10px 4px;
 }
 
 .meter {
   flex: none;
-  margin-right: 4px;
 }
 
-/* 右侧核心操作（记录、新建会话等）绝不参与收缩，避免被长角色名挤出屏幕 */
+/* 右侧核心操作（折叠、记录、新建会话等）绝不参与收缩，避免被长角色名挤出屏幕 */
 .action {
   flex: none;
 }
@@ -21,10 +27,83 @@
 .title {
   flex: 1 1 0;
   min-width: 0;
-  margin: 0 12px;
+  margin: 0 10px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   font: var(--dsw-font-s-strong-14);
   color: var(--dsw-alias-label-primary);
+}
+
+.toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  margin-right: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.toggle:hover,
+.toggle:active {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.toggleIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.18s ease;
+}
+
+.toggleExpanded .toggleIcon {
+  transform: rotate(180deg);
+}
+
+.alertDot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e67e22;
+}
+
+.alertDotCritical {
+  background: #e5484d;
+}
+
+.statusBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 12px 8px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.12));
+}
+
+.statusLeft {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.statusRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
 }

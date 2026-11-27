@@ -1,5 +1,5 @@
 import { HIDDEN_FILE_INPUT_STYLE } from '../../utils/hiddenFileInput.js'
-import { Capacitor } from '@capacitor/core'
+import { platform } from '../../services/platform.js'
 import clsx from 'clsx'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
@@ -50,6 +50,7 @@ import {
   setThinkingEffort,
   setTtsVoice,
   setDocumentBudget,
+  setReadAloudEnabled,
   setAutoReadAloud,
   setMemoryKeepTokens,
   setReplyLength,
@@ -70,6 +71,7 @@ import { ScrollPane } from '../base/ScrollPane.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
+import { stopReadAloud } from '../../services/speech/readAloud.js'
 import { ApiOriginField } from './ApiOriginField.js'
 import { BalanceField, ShowBalanceField } from './BalanceField.js'
 import { PersonaSetting } from './PersonaSetting.js'
@@ -204,8 +206,7 @@ const SettingsContent = () => {
               <RecordModelSetting />
               <ThinkingEffortSetting />
               <LocaleSetting />
-              <TtsVoiceSetting />
-              <AutoReadAloudSetting />
+              <ReadAloudFoldSection />
               <LocationSetting />
               <SendClockTimeSetting />
               <ReplyLengthSetting />
@@ -321,6 +322,55 @@ const useHistoryDelete = () => {
     },
     confirm,
   }
+}
+
+const ReadAloudFoldSection = () => {
+  const t = useTranslate()
+  const enabled = useSettings((state) => state.readAloudEnabled)
+  return (
+    <details className={styles.foldGroup}>
+      <summary className={styles.foldSummary}>
+        <div className={styles.text}>
+          <div className={styles.label}>{t('settingsReadAloudSection')}</div>
+          <div className={styles.description}>{t('settingsReadAloudSectionHint')}</div>
+        </div>
+        <span className={styles.foldBadge} aria-hidden>
+          <span className={styles.foldLabelClosed}>{t('foldExpand')}</span>
+          <span className={styles.foldLabelOpen}>{t('foldCollapse')}</span>
+          <span className={styles.foldArrow}>▾</span>
+        </span>
+      </summary>
+      <div className={styles.foldBody}>
+        <SettingCell
+          label={t('settingsReadAloudEnabled')}
+          description={t('readAloudEnabledHint')}
+          status={null}
+          action={
+            <Button
+              variant={enabled ? 'primary' : 'outlined'}
+              size="m"
+              className={styles.cellButton}
+              onClick={() => {
+                const next = !enabled
+                setReadAloudEnabled(next)
+                if (!next) {
+                  stopReadAloud()
+                }
+              }}
+            >
+              {t(enabled ? 'bubbleSkinOn' : 'bubbleSkinOff')}
+            </Button>
+          }
+        />
+        {enabled ? (
+          <>
+            <TtsVoiceSetting />
+            <AutoReadAloudSetting />
+          </>
+        ) : null}
+      </div>
+    </details>
+  )
 }
 
 const AutoReadAloudSetting = () => {
@@ -1332,7 +1382,7 @@ const ImportHistory = ({
   const inputRef = useRef<HTMLInputElement>(null)
   const [guideOpen, setGuideOpen] = useState(false)
   const [urlModalOpen, setUrlModalOpen] = useState(false)
-  const isNative = Capacitor.isNativePlatform()
+  const canDownloadByUrl = platform.canDownloadArchiveByUrl()
 
   return (
     <>
@@ -1349,7 +1399,7 @@ const ImportHistory = ({
             >
               {t('historyImportGuideLink')}
             </button>
-            {isNative ? (
+            {canDownloadByUrl ? (
               <Button
                 variant="outlined"
                 size="m"

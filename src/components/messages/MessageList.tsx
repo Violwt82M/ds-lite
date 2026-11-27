@@ -36,8 +36,8 @@ const getUploadRetryId = (messages: Message[], streaming: boolean) => {
 
 /** 距底部小于该值时视为在底部，流式内容增长时跟随 */
 const STICKY_THRESHOLD = 40
-/** 一次渲染的消息条数上限；导入的长会话可能有几千条，全渲染会卡死 */
-const RENDER_PAGE = 200
+/** 一次渲染的消息条数上限；长会话可能有几千条，收窄至 40 条既保证首屏秒开与滚动流畅，又不影响内存搜索跳转 */
+const RENDER_PAGE = 40
 /**
  * 从搜索结果跳进来时只渲染目标前后各这么多条。
  * 旧实现为了跳一条消息把「从这条到最新」全部渲染出来，4000 条的会话要渲染 4000 个
@@ -79,7 +79,7 @@ export const MessageList = ({
   const scrollTopRef = useRef(0)
   const restoreScrollRef = useRef<{ messageId: string; top: number } | null>(null)
   const t = useTranslate()
-  const messages = getVisibleMessages(session)
+  const messages = useMemo(() => getVisibleMessages(session), [session])
   // 从搜索结果点进来时，首帧就直接渲染目标附近：先渲染 200 条再改窗口是白费一次重排
   const [windowState, setWindowState] = useState<WindowState>(() => {
     const target = useJumpTarget.getState().target
@@ -139,16 +139,25 @@ export const MessageList = ({
       }
     }
   }, [start, tail])
-  const [previousVersions, setPreviousVersions] = useState(() =>
-    buildMessageVersions(session, new Map())
-  )
-  const versions = useMemo(
-    () => buildMessageVersions(session, previousVersions),
-    [session, previousVersions]
-  )
-  if (versions !== previousVersions) {
-    setPreviousVersions(versions)
-  }
+  const versionsRef = useRef<{
+    sessionId: string
+    count: number
+    map: ReadonlyMap<string, MessageVersions>
+  }>({
+    sessionId: session.id,
+    count: session.messages.length,
+    map: buildMessageVersions(session, new Map()),
+  })
+  // 流式吐字只会改最后一条消息的正文块，不会增删或切换分支；流式期间且条数不变时直接复用，避免每帧重扫几千条树
+  const versions = useMemo(() => {
+    const prev = versionsRef.current
+    if (streaming && prev.sessionId === session.id && prev.count === session.messages.length) {
+      return prev.map
+    }
+    const next = buildMessageVersions(session, prev.sessionId === session.id ? prev.map : new Map())
+    versionsRef.current = { sessionId: session.id, count: session.messages.length, map: next }
+    return next
+  }, [session, streaming])
   const lastMessageId = messages.at(-1)?.id
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current

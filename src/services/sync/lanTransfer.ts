@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
+import { platform } from '../platform.js'
 
 export type LanServerInfo = {
   ip: string
@@ -68,7 +69,7 @@ const readNativeFileAsFile = async (absolutePath: string, name: string): Promise
   return new File([blob], name || 'deepseek_data-lan.zip', { type: 'application/zip' })
 }
 
-export const isLanServerSupported = (): boolean => Capacitor.isNativePlatform()
+export const isLanServerSupported = (): boolean => platform.canHostLanTransfer()
 
 /** 在安卓端写入待共享 ZIP 并开启局域网临时网页服务 */
 export const startLanTransferServer = async (

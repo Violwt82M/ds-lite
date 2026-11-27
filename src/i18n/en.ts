@@ -119,7 +119,15 @@ export const en = {
   replyPayloadTooLarge:
     'This content is too large and the server rejected it (413). Remove a few paragraphs or attachments and send again.',
   replyBadRequest:
-    'The server rejected this request (400). Usually content or attachment rules — adjust and retry. See details below.',
+    'The server rejected this request (400). It may be a request parameter, history metadata, or content rule issue — expand Details below for the exact reason.',
+  replyBadRequestFormat:
+    'Invalid request format or history metadata (400) — this is not caused by your writing. Try compacting memory or starting a new chat, and share the technical details below with the developer.',
+  replyBadRequestAttachment:
+    'An attachment expired or is not supported by the server (400). Remove and re-attach the file, then send again. See details below.',
+  replyImageTotalTooLarge:
+    'Total image size in this request exceeds the server limit (400). Send fewer images at once or compact earlier image turns in Memory first.',
+  replyBadRequestContent:
+    'Blocked by the server content check (400). Try rephrasing or toning down the wording and send again. See details below.',
   replyForbidden:
     'Access denied (403). Usually account permissions or region limits; check your account status on the platform.',
   replyNotFound:
@@ -380,8 +388,17 @@ export const en = {
   replyLengthDefault: 'Default',
   replyLengthDetailed: 'Detailed',
   replyLengthConcise: 'Concise',
+  settingsReadAloudSection: 'Read aloud',
+  settingsReadAloudSectionHint: 'Toggle read aloud, voice and auto-play (off by default to avoid TTS fees)',
+  settingsReadAloudEnabled: 'Enable read aloud',
+  readAloudEnabledHint: 'Off by default; hides the read-aloud button and disables auto-play (TTS incurs small API fees)',
   settingsAutoReadAloud: 'Auto read aloud',
-  autoReadAloudHint: 'Off by default; automatically reads each AI reply aloud once generation finishes',
+  autoReadAloudHint: 'Off by default; automatically reads each AI reply aloud once generation finishes (requires Enable read aloud)',
+  headerCollapseStatus: 'Collapse status bar',
+  headerExpandStatus: 'Expand status bar',
+  regenerateDefault: 'Regenerate',
+  regenerateDetailed: 'More detailed (this turn)',
+  regenerateConcise: 'More concise (this turn)',
   settingsBubbleSkin: 'User message bubbles',
   bubbleSkinHint: 'Your messages are drawn as bubbles by the app (with the little tail). The AI reply bubble is controlled separately under "AI output bubble"; the two are independent.',
   bubbleSkinOn: 'On',
@@ -584,7 +601,7 @@ export const en = {
   tutorialMemoryBody:
     '· The percentage in the header shows how heavy this conversation is. Blue or orange is fine; red means it is nearly full.\n· When it overflows, the server refuses the request or the app compacts automatically before sending.\n· "Compact now" folds earlier turns into a note so the rest of the chat has room.\n· Memory has two layers: **[Long-term overview]** keeps only the main line of very old events and gets shorter as it ages; recent content keeps detail (character state, relationships, plot, todos). Each compaction re-condenses the old overview too, the way people recall the past.\n· **Memory mode** has three settings: Auto (the model decides whether this is roleplay or ordinary use), Roleplay (always quotes a few lines verbatim into [Voice samples] to anchor the voice) and Plain (never quotes).\n· For roleplay, pick a character card for the conversation: with a card bound the app always treats it as roleplay, no guessing.\n· Note length follows the amount of content: about 1000 characters for everyday Q and A, up to 6500 for long roleplay archives.\n· **Very long conversations are split automatically**: sending too much in one request gets rejected, so the app halves the segment and retries, invisibly; a million characters may take a few minutes and can be cancelled midway.\n· "Generate memory note" is the manual version: its length follows whatever you type in the box, and **it counts toward context**.\n· Compression is lossy: the harder it compresses, the blurrier old details get. Write down the settings and agreements that matter most, and edit or delete notes anytime.\n· The note editor can be stretched, so long notes do not need to be scrolled line by line.',
   tutorialRecordsTitle: 'Records: notes for you only',
-  tutorialRecordsBody: '· Open it from the chat header; it works in any conversation and ignores the persona.\n· Write an instruction (e.g. write today as a first-person diary) and generate.\n· **Records never enter the context**: the AI cannot read them and they are not exported.\n· Titles and text are editable; collapsed by default, tap the row to expand.\n· The default instruction follows the persona; change it freely.',
+  tutorialRecordsBody: '· Open it from the chat header; it works in any conversation and ignores the persona.\n· Write an instruction (e.g. write today as a first-person diary) and generate.\n· **Records never enter the context**: the AI cannot read them; they are backed up when you export a ZIP with DS Lite extras enabled.\n· Titles and text are editable; collapsed by default, tap the row to expand.\n· The default instruction follows the persona; change it freely.',
   tutorialModelTitle: 'Choosing a model',
   tutorialModelBody: '· Flash: cheap, fast, **accepts images** - fine for daily chat.\n· Pro: stronger, pricier, **no images** (images are dropped when Pro is selected).\n· With a custom API address only Flash is offered.\n· Memory condensing always uses Flash.',
   tutorialLookTitle: 'Background, font size, cropping',
@@ -747,7 +764,7 @@ export const en = {
   memorySummaryButton: 'Generate',
   memorySummaryBusy: 'Generating…',
   memorySummaryFailed: 'Generation failed: {message}',
-  recordsNotInContext: 'These records are for you only: they never enter the context, the AI cannot read them, and they are not included in backups',
+  recordsNotInContext: 'These records are for you only: they never enter the context, the AI cannot read them, and they are included when exporting backups with DS Lite extras',
   cropTitle: 'Adjust framing',
   cropHint: 'Drag to move, use the slider to zoom. What you see in the box is the result.',
   cropConfirm: 'Use this',
@@ -758,7 +775,7 @@ export const en = {
   recordsGenerating: 'Generating…',
   recordsInstructionPlaceholder: 'How should it be written? e.g. a relaxed recap of today / her diary entry / technical parts only',
   recordsPersonaDefault: "Write today's diary in first person as {name}: the feelings, the small details, and what was left unsaid. No dry recaps.",
-  recordsHint: 'Records stay on this device, never enter the context, and are not included in backups',
+  recordsHint: 'Records stay on this device and never enter the context; included when exporting ZIP with DS Lite extras',
   recordsFooterHint: 'You can edit both title and body any time - leaving the field saves it',
   recordsEmpty: 'No records yet. Write an instruction and let the AI turn this conversation into one.',
   recordsListTitle: 'Records ({count})',

@@ -1,9 +1,23 @@
 import { execFileSync } from 'node:child_process';
-import { rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+
+// 断言三处版本号一致，防止发版漏改（package.json / src/version.ts / android/app/build.gradle）
+const pkgVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+const tsVersion = /export const APP_VERSION\s*=\s*['"]([^'"]+)['"]/.exec(
+  readFileSync(join(root, 'src/version.ts'), 'utf8')
+)?.[1];
+const gradleVersion = /versionName\s+["']([^"']+)["']/.exec(
+  readFileSync(join(root, 'android/app/build.gradle'), 'utf8')
+)?.[1];
+if (!pkgVersion || pkgVersion !== tsVersion || pkgVersion !== gradleVersion) {
+  throw new Error(
+    `版本号不一致：package.json=${pkgVersion}，src/version.ts=${tsVersion}，android/app/build.gradle=${gradleVersion}`
+  );
+}
 
 rmSync(join(root, 'dist'), { recursive: true, force: true });
 

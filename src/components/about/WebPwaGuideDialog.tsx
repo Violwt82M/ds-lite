@@ -1,5 +1,5 @@
-import { Capacitor } from '@capacitor/core'
 import { useState } from 'react'
+import { platform } from '../../services/platform.js'
 import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
 import { useDisclaimer } from './disclaimerState.js'
@@ -11,7 +11,7 @@ const isStandaloneApp = (): boolean => {
   if (typeof window === 'undefined') {
     return true
   }
-  if (Capacitor.isNativePlatform() || window.__DS_LITE_PLATFORM__ === 'harmonyos') {
+  if (platform.isShellApp()) {
     return true
   }
   const nav = window.navigator as Navigator & { standalone?: boolean }

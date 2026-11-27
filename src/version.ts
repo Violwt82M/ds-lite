@@ -5,9 +5,9 @@
  * 关于页的 APP_VERSION 0.9.30、android/app/build.gradle 的 0.9.29。
  * 「自动检测更新」要拿当前版本去和 GitHub Release 比，基准错了就永远显示「已是最新」。
  *
- * 以后要改版本，只改这里 + android/app/build.gradle（Gradle 读不到 TS，必须手动同步）。
+ * 以后要改版本，同步改这里 + package.json + android/app/build.gradle（构建脚本会断言三处一致）。
  */
-export const APP_VERSION = '0.9.76'
+export const APP_VERSION = '0.9.77'
 
 /**
  * 发布渠道：beta = 公开测试版（关于页/更新内容弹窗带标记，提示可能有问题、请走反馈），

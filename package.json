@@ -1,6 +1,6 @@
 {
   "name": "chat-demo",
-  "version": "0.1.1",
+  "version": "0.9.77",
   "description": "基于 DeepSeek API 的静态聊天示例。",
   "license": "MIT",
   "private": true,
@@ -11,6 +11,7 @@
     "build:harmonyos": "node scripts/build.mjs && node scripts/sync-harmonyos-web.mjs",
     "type": "tsc -p tsconfig.json",
     "lint": "oxlint src rspack.config.ts",
+    "test": "node --test --experimental-transform-types --import ./scripts/test-loader.mjs tests/*.test.ts",
     "format": "oxfmt --write ."
   },
   "dependencies": {

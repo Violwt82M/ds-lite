@@ -1,6 +1,11 @@
-import { Capacitor } from '@capacitor/core'
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import { platform } from '../platform.js'
 import { cleanSessionText } from './clean.js'
+import {
+  getCustomStoragePort,
+  verifySavedSessionHeader,
+} from './storagePort.js'
+export type { StoragePort } from './storagePort.js'
 import {
   nativeAddStagingSession,
   nativeClearStaging,
@@ -21,7 +26,7 @@ import {
 } from './nativeDb.js'
 import { toSessionSummary, type Session, type SessionSummary } from './types.js'
 
-const isNative = () => Capacitor.isNativePlatform()
+const isNative = () => platform.hasNativeFs()
 
 /**
  * IndexedDB 存储结构版本；新增或调整存储、索引时递增。
@@ -238,11 +243,21 @@ const idbSource: IdbMigrationSource = {
   loadAllSearchDocs: idbLoadAllSearchDocs,
 }
 
-export const loadSessionSummaries = async (): Promise<SessionSummary[]> =>
-  isNative() ? nativeLoadSessionSummaries(idbSource) : idbLoadSessionSummaries()
+export const loadSessionSummaries = async (): Promise<SessionSummary[]> => {
+  const custom = getCustomStoragePort()
+  if (custom) {
+    return custom.loadSessionSummaries()
+  }
+  return isNative() ? nativeLoadSessionSummaries(idbSource) : idbLoadSessionSummaries()
+}
 
-export const loadSession = async (id: string): Promise<Session | undefined> =>
-  isNative() ? nativeLoadSession(id, idbSource) : idbLoadSession(id)
+export const loadSession = async (id: string): Promise<Session | undefined> => {
+  const custom = getCustomStoragePort()
+  if (custom) {
+    return custom.loadSession(id)
+  }
+  return isNative() ? nativeLoadSession(id, idbSource) : idbLoadSession(id)
+}
 
 /**
  * 幂等补迁：只补「原生磁盘里没有、且不在墓碑里」的旧 IndexedDB 会话（连同附件）。
@@ -279,12 +294,19 @@ const writeSessionRecord = async (session: Session, summary: StoredSessionSummar
 }
 
 export const saveSessionRecord = async (session: Session): Promise<void> => {
-  if (isNative()) {
-    await nativeSaveSessionRecord(session, idbSource)
-    return
-  }
   // 写库前清洗异常字符与漏进来的协议标记；没有改动时返回原对象，不影响流式期间的引用比较
   session = cleanSessionText(session)
+  const custom = getCustomStoragePort()
+  if (custom) {
+    await custom.saveSessionRecord(session)
+    await verifySavedSessionHeader((id) => custom.loadSession(id), session)
+    return
+  }
+  if (isNative()) {
+    await nativeSaveSessionRecord(session, idbSource)
+    await verifySavedSessionHeader((id) => nativeLoadSession(id, idbSource), session)
+    return
+  }
   const summary = storedSummary(session)
   try {
     await writeSessionRecord(session, summary)
@@ -295,15 +317,28 @@ export const saveSessionRecord = async (session: Session): Promise<void> => {
     // 兜底：若消息对象意外混入不可克隆字段，用 JSON 清洗一次再写，避免整条会话永久卡死
     const sanitized = JSON.parse(JSON.stringify(session)) as Session
     await writeSessionRecord(sanitized, storedSummary(sanitized))
+    await verifySavedSessionHeader(idbLoadSession, sanitized)
+    return
   }
+  await verifySavedSessionHeader(idbLoadSession, session)
 }
 
 /** 读取整库正文索引；搜索时一次性读进内存，之后不再碰 IndexedDB。 */
-export const loadAllSearchDocs = async (): Promise<SessionSearchDocs[]> =>
-  isNative() ? nativeLoadAllSearchDocs(idbSource) : idbLoadAllSearchDocs()
+export const loadAllSearchDocs = async (): Promise<SessionSearchDocs[]> => {
+  const custom = getCustomStoragePort()
+  if (custom) {
+    return custom.loadAllSearchDocs()
+  }
+  return isNative() ? nativeLoadAllSearchDocs(idbSource) : idbLoadAllSearchDocs()
+}
 
 /** 写入一个会话的正文索引（整条覆盖）。 */
 export const saveSearchDocs = async (docs: SessionSearchDocs): Promise<void> => {
+  const custom = getCustomStoragePort()
+  if (custom) {
+    await custom.saveSearchDocs(docs)
+    return
+  }
   if (isNative()) {
     await nativeSaveSearchDocs(docs, idbSource)
     return
@@ -313,6 +348,11 @@ export const saveSearchDocs = async (docs: SessionSearchDocs): Promise<void> => 
 
 /** 未打开的会话也可重命名，只读取该会话，原子更新详情和列表。 */
 export const renameSession = async (id: string, title: string): Promise<void> => {
+  const custom = getCustomStoragePort()
+  if (custom) {
+    await custom.renameSession(id, title)
+    return
+  }
   if (isNative()) {
     await nativeRenameSession(id, title, idbSource)
     return
@@ -339,6 +379,11 @@ export const renameSession = async (id: string, title: string): Promise<void> =>
 
 /** 删除会话，仅清理已无会话引用的本地原件；远端文件不删。 */
 export const deleteSession = async (sessionId: string): Promise<void> => {
+  const custom = getCustomStoragePort()
+  if (custom) {
+    await custom.deleteSession(sessionId)
+    return
+  }
   if (isNative()) {
     await nativeDeleteSession(sessionId, idbSource)
     return
@@ -377,11 +422,21 @@ const putFiles = async (store: 'files' | 'filesStaging', files: StoredFile[]) =>
 }
 
 /** 附件原件单独写：失败只影响缩略图/补传，正文已经在上一步落地 */
-export const saveSessionFiles = (files: StoredFile[]): Promise<void> =>
-  isNative() ? nativeSaveSessionFiles(files, idbSource) : putFiles('files', files)
+export const saveSessionFiles = (files: StoredFile[]): Promise<void> => {
+  const custom = getCustomStoragePort()
+  if (custom) {
+    return custom.saveSessionFiles(files)
+  }
+  return isNative() ? nativeSaveSessionFiles(files, idbSource) : putFiles('files', files)
+}
 
-export const loadFile = async (id: string): Promise<Blob | undefined> =>
-  isNative() ? nativeLoadFile(id, idbSource) : idbLoadFile(id)
+export const loadFile = async (id: string): Promise<Blob | undefined> => {
+  const custom = getCustomStoragePort()
+  if (custom) {
+    return custom.loadFile(id)
+  }
+  return isNative() ? nativeLoadFile(id, idbSource) : idbLoadFile(id)
+}
 
 /** 清空导入暂存：开始导入前清除上次中断（如关闭页面）遗留的数据，导入失败后清除本次写入。 */
 export const clearStaging = async (): Promise<void> => {

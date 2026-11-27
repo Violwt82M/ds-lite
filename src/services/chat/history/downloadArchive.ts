@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
+import { platform } from '../../platform.js'
 
 const inferFileName = (url: URL): string => {
   const segment = url.pathname.split('/').filter(Boolean).at(-1) ?? ''
@@ -45,7 +46,7 @@ export const downloadArchiveFromUrl = async (rawUrl: string): Promise<File> => {
   const fileName = inferFileName(parsed)
   const tempPath = `imports/url-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.zip`
 
-  if (!Capacitor.isNativePlatform()) {
+  if (!platform.canDownloadArchiveByUrl()) {
     throw new Error('链接直接导入仅支持安卓客户端使用，网页端请先下载 ZIP 到本地再上传')
   }
 

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
 import { getBuiltinHelperEntry, isBuiltinPersona } from './builtin.js'
 import type { PersonaCard } from './card.js'
+import { loadPersistedPersonaCards, savePersistedPersonaCards } from './storage.js'
 
 /** 角色库条目：id 只用于本地标识，卡片内容随条目一起保存；avatar 是本机设置的头像（data URL）；builtin 为官方内置只读卡 */
 export type PersonaEntry = { id: string; card: PersonaCard; avatar?: string; builtin?: boolean }
@@ -11,7 +12,10 @@ const withBuiltins = (cards: PersonaEntry[]): PersonaEntry[] => [
   ...cards.filter((entry) => !entry.builtin && !isBuiltinPersona(entry.id)),
 ]
 
-/** 本机角色扮演设置，存 localStorage；不涉及任何服务端 */
+const stripBuiltins = (cards: PersonaEntry[]): PersonaEntry[] =>
+  cards.filter((entry) => !entry.builtin && !isBuiltinPersona(entry.id))
+
+/** 本机角色扮演状态：轻量偏好存 localStorage，角色卡与头像存 IndexedDB / 安卓私有目录 */
 export type PersonaState = {
   /** 是否把当前角色的设定注入系统提示词 */
   enabled: boolean
@@ -23,15 +27,11 @@ export type PersonaState = {
   showAvatar: boolean
 }
 
-const STORAGE_KEY = 'ds-lite:persona'
+/** 轻量偏好（不含大体积角色卡与头像，避免挤爆 localStorage 5MB 上限） */
+type PersonaPrefs = Pick<PersonaState, 'enabled' | 'userName' | 'activeId' | 'showAvatar'>
 
-const emptyState = (): PersonaState => ({
-  enabled: false,
-  userName: '',
-  cards: withBuiltins([]),
-  activeId: null,
-  showAvatar: false,
-})
+const LEGACY_STORAGE_KEY = 'ds-lite:persona'
+const PREFS_STORAGE_KEY = 'ds-lite:persona-prefs'
 
 const isEntry = (value: unknown): value is PersonaEntry => {
   if (typeof value !== 'object' || value === null) {
@@ -47,43 +47,191 @@ const isEntry = (value: unknown): value is PersonaEntry => {
   )
 }
 
-/** 读取失败或数据损坏时退回空状态，不影响应用启动 */
-const readState = (): PersonaState => {
+const readLegacyPayload = (): { prefs: Partial<PersonaPrefs>; cards: PersonaEntry[] } | null => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY)
     if (!raw) {
-      return emptyState()
+      return null
     }
     const parsed = JSON.parse(raw) as Partial<PersonaState>
     const userCards = Array.isArray(parsed.cards) ? parsed.cards.filter(isEntry) : []
-    const cards = withBuiltins(userCards)
-    const activeId = cards.some((entry) => entry.id === parsed.activeId) ? (parsed.activeId ?? null) : null
     return {
-      enabled: parsed.enabled === true && activeId !== null,
-      userName: typeof parsed.userName === 'string' ? parsed.userName : '',
-      cards,
-      activeId,
-      showAvatar: parsed.showAvatar === true,
+      prefs: {
+        enabled: parsed.enabled === true,
+        userName: typeof parsed.userName === 'string' ? parsed.userName : '',
+        activeId: typeof parsed.activeId === 'string' ? parsed.activeId : null,
+        showAvatar: parsed.showAvatar === true,
+      },
+      cards: stripBuiltins(userCards),
     }
   } catch {
-    return emptyState()
+    return null
   }
 }
 
-export const usePersona = create<PersonaState>(() => readState())
-
-/** 写入失败只在内存中生效，与 settings.ts 的处理保持一致；内置角色卡不落盘，随版本自动更新 */
-const commit = (patch: Partial<PersonaState>) => {
-  const next = { ...usePersona.getState(), ...patch }
-  usePersona.setState(patch)
+const readPrefs = (): Partial<PersonaPrefs> => {
   try {
-    const persisted: PersonaState = {
-      ...next,
-      cards: next.cards.filter((entry) => !entry.builtin && !isBuiltinPersona(entry.id)),
+    const raw = localStorage.getItem(PREFS_STORAGE_KEY)
+    if (!raw) {
+      return {}
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted))
+    const parsed = JSON.parse(raw) as Partial<PersonaPrefs>
+    return {
+      enabled: parsed.enabled === true,
+      userName: typeof parsed.userName === 'string' ? parsed.userName : '',
+      activeId: typeof parsed.activeId === 'string' ? parsed.activeId : null,
+      showAvatar: parsed.showAvatar === true,
+    }
+  } catch {
+    return {}
+  }
+}
+
+const writePrefs = (state: PersonaState): void => {
+  try {
+    const prefs: PersonaPrefs = {
+      enabled: state.enabled,
+      userName: state.userName,
+      activeId: state.activeId,
+      showAvatar: state.showAvatar,
+    }
+    localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(prefs))
   } catch {
     // 存储不可用时不阻断使用
+  }
+}
+
+/** 同步读取首帧状态：优先读轻量偏好，若尚有旧版 localStorage 角色卡则先兜底展示，随后异步迁入大仓库 */
+const readInitialState = (): PersonaState => {
+  const legacy = readLegacyPayload()
+  const prefs = readPrefs()
+  const hasNewPrefs = localStorage.getItem(PREFS_STORAGE_KEY) !== null
+  const sourcePrefs = hasNewPrefs ? prefs : (legacy?.prefs ?? prefs)
+  const cards = withBuiltins(legacy?.cards ?? [])
+  const preferredActiveId = sourcePrefs.activeId ?? null
+  const activeId =
+    preferredActiveId && cards.some((entry) => entry.id === preferredActiveId)
+      ? preferredActiveId
+      : preferredActiveId
+  return {
+    enabled: sourcePrefs.enabled === true && activeId !== null,
+    userName: typeof sourcePrefs.userName === 'string' ? sourcePrefs.userName : '',
+    cards,
+    activeId,
+    showAvatar: sourcePrefs.showAvatar === true,
+  }
+}
+
+export const usePersona = create<PersonaState>(() => readInitialState())
+
+let writeChain: Promise<void> = Promise.resolve()
+let localMutated = false
+let hydrationPromise: Promise<void> | null = null
+
+const enqueueCardsSave = (cards: PersonaEntry[]): Promise<void> => {
+  const clean = stripBuiltins(cards)
+  writeChain = writeChain
+    .catch(() => {})
+    .then(() => savePersistedPersonaCards(clean))
+    .catch(() => {
+      // 持久层暂不可用时不阻断内存交互
+    })
+  return writeChain
+}
+
+/**
+ * 异步从 IndexedDB / 安卓私有目录加载角色库，并幂等迁移旧 localStorage 数据：
+ * - 若大仓库已有数据：合并回内存并清理旧 localStorage 大对象，彻底释放 5MB 配额；
+ * - 若大仓库为空且旧 localStorage 有角色卡：迁入大仓库并瘦身旧 key。
+ */
+export const initPersonaStore = (): Promise<void> => {
+  if (hydrationPromise) {
+    return hydrationPromise
+  }
+  hydrationPromise = (async () => {
+    const persisted = await loadPersistedPersonaCards()
+    const legacy = readLegacyPayload()
+    const persistedValid = Array.isArray(persisted) ? stripBuiltins(persisted.filter(isEntry)) : null
+
+    if (persistedValid !== null) {
+      // 若加载期间用户已新增/修改过卡片，以内存为准合并，绝不回滚用户刚做的修改
+      const current = usePersona.getState()
+      const mergedUserCards = localMutated
+        ? [
+            ...stripBuiltins(current.cards),
+            ...persistedValid.filter((p) => !current.cards.some((c) => c.id === p.id)),
+          ]
+        : persistedValid
+      const cards = withBuiltins(mergedUserCards)
+      const activeId = cards.some((entry) => entry.id === current.activeId) ? current.activeId : null
+      const next: PersonaState = {
+        ...current,
+        cards,
+        activeId,
+        enabled: current.enabled && activeId !== null,
+      }
+      usePersona.setState(next)
+      writePrefs(next)
+      if (localMutated) {
+        await enqueueCardsSave(next.cards)
+      }
+      // 迁移完成后移除旧大体积 key，释放 localStorage 配额
+      if (legacy) {
+        try {
+          localStorage.removeItem(LEGACY_STORAGE_KEY)
+        } catch {
+          // 忽略清理异常
+        }
+      }
+      return
+    }
+
+    // 大仓库尚无数据：若旧 localStorage 有自定义角色卡，自动迁移落盘
+    if (legacy && legacy.cards.length > 0) {
+      const current = usePersona.getState()
+      const cardsToSave = localMutated ? current.cards : withBuiltins(legacy.cards)
+      await savePersistedPersonaCards(stripBuiltins(cardsToSave))
+      writePrefs(current)
+      try {
+        localStorage.removeItem(LEGACY_STORAGE_KEY)
+      } catch {
+        // 忽略清理异常
+      }
+    } else {
+      // 校准初始 activeId（防止指向已删除卡片）
+      const current = usePersona.getState()
+      const activeId = current.cards.some((entry) => entry.id === current.activeId)
+        ? current.activeId
+        : null
+      if (activeId !== current.activeId) {
+        const next = { ...current, activeId, enabled: current.enabled && activeId !== null }
+        usePersona.setState(next)
+        writePrefs(next)
+      }
+    }
+  })()
+  return hydrationPromise
+}
+
+/** 仅供测试重置内部状态 */
+export const resetPersonaStoreForTest = (): void => {
+  hydrationPromise = null
+  localMutated = false
+  writeChain = Promise.resolve()
+  usePersona.setState(readInitialState())
+}
+
+/** 等待当前挂起的角色库异步写盘完成（供测试与退出前收口） */
+export const flushPersonaWrites = (): Promise<void> => writeChain
+
+/** 写入偏好到 localStorage，角色卡数组异步串行写入 IndexedDB / 安卓私有目录 */
+const commit = (patch: Partial<PersonaState>) => {
+  localMutated = true
+  const next = { ...usePersona.getState(), ...patch }
+  usePersona.setState(patch)
+  writePrefs(next)
+  if ('cards' in patch) {
+    void enqueueCardsSave(next.cards)
   }
 }
 
@@ -122,8 +270,8 @@ export const setActivePersona = (id: string) => {
 
 /** 新建（id 为 null）或覆盖保存一张卡；新建的卡自动成为当前角色并启用 */
 export const savePersonaCard = (id: string | null, card: PersonaCard): string => {
-  if (isBuiltinPersona(id)) {
-    return id!
+  if (id !== null && isBuiltinPersona(id)) {
+    return id
   }
   const state = usePersona.getState()
   if (id === null) {

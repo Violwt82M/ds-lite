@@ -16,7 +16,7 @@ import {
   uploadAttachment,
   useUploads,
 } from '../attachments.js'
-import { useSettings, requestTemperature } from '../settings.js'
+import { useSettings, requestTemperature, shouldAutoReadAloud, type ReplyLength } from '../settings.js'
 import { showToast } from '../../components/base/toastState.js'
 import { classifyStorageWriteFailure } from '../storage.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
@@ -68,6 +68,7 @@ import {
   createLatestReminder,
   extractClockTime,
   formatClockTime,
+  normalizeLatestReminder,
   stripClockTime,
 } from './latestReminder.js'
 import {
@@ -77,11 +78,15 @@ import {
   URL_PATTERN,
   wantsExtendedRequest,
 } from './request.js'
+import { createChatRuntime } from './runtime.js'
 import { runTwoStepSearch } from './twoStepSearch.js'
 import {
+  appendUserTailNotes,
   applyEvent,
   canContinueReply,
+  formatTurnLengthHint,
   getContextRounds,
+  MAX_REQUEST_IMAGE_BYTES,
   settleReply,
   toRequestMessages,
 } from './reply.js'
@@ -145,8 +150,24 @@ const CONTEXT_GUARD_TOKENS = 850_000
 /** 服务端上下文 1,048,576；留 4 万给输出与估算误差，超过就拦下而不是发出去被拒 */
 const CONTEXT_BLOCK_TOKENS = 1_000_000
 
+/** 全部运行期可变状态统一收口到 runtime 容器，便于隔离测试与后续模块拆解 */
+const runtime = createChatRuntime()
+
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
-const titleRequests = new Set<AbortController>()
+const {
+  titleRequests,
+  sessionAccess,
+  unsavedSessions,
+  pendingFiles,
+  deletingSessions,
+  deletionTasks,
+  streamFlushes,
+  sessionLoads,
+  saveAttempts,
+  persistQueues,
+  compactionTasks,
+  memoryControllers,
+} = runtime
 
 /**
  * 一次落盘失败的详情：界面据此说明「哪部分没存下来、为什么」，并给重试入口。
@@ -244,31 +265,7 @@ const sameSummary = (a: SessionSummary, b: SessionSummary) =>
   a.updatedAt === b.updatedAt &&
   Boolean(a.memoryBackup) === Boolean(b.memoryBackup)
 
-const sessionAccess = new Map<string, number>()
-const unsavedSessions = new Set<string>()
-/** 保存失败时保留原件，重试成功后才释放。 */
-const pendingFiles = new Map<string, db.StoredFile[]>()
-const deletingSessions = new Set<string>()
-const deletionTasks = new Set<Promise<boolean>>()
-const streamFlushes = new Map<string, () => void>()
-let accessSequence = 0
-let historyEpoch = 0
-let initTask: Promise<void> | undefined
-const sessionLoads = new Map<string, { promise: Promise<void> }>()
-/**
- * 每次落盘一个递增序号：只有最新那次能改界面状态。
- * 旧的一次保存晚到（无论成功还是失败）不能盖掉后一次已经定下的结论，
- * 否则条幅会在保存成功之后又被点亮，而这时「重试」已经没有可写的东西。
- */
-const saveAttempts = new Map<string, number>()
-let saveAttemptSequence = 0
-/** 正在执行的重试：连点「重试」复用同一个任务 */
-let retryTask: Promise<boolean> | undefined
-/** 偶发失败（非空间不足）自动补试的定时器与已用次数 */
-let autoRetryTimer: number | undefined
-let autoRetryCount = 0
-
-const touchSession = (id: string) => sessionAccess.set(id, ++accessSequence)
+const touchSession = (id: string) => sessionAccess.set(id, ++runtime.accessSequence)
 
 const trimSessionCache = () => {
   const state = get()
@@ -332,10 +329,10 @@ const updateReply = (sessionId: string, reply: AssistantMessage) =>
 
 /** 停掉自动补试的定时器（保存成功或整库替换时调用） */
 const stopAutoRetry = () => {
-  autoRetryCount = 0
-  if (autoRetryTimer !== undefined) {
-    window.clearTimeout(autoRetryTimer)
-    autoRetryTimer = undefined
+  runtime.autoRetryCount = 0
+  if (runtime.autoRetryTimer !== undefined) {
+    window.clearTimeout(runtime.autoRetryTimer)
+    runtime.autoRetryTimer = undefined
   }
 }
 
@@ -357,15 +354,15 @@ const clearSaveFailure = (sessionId: string) => {
 
 /** 空间不足补试无意义（要把空间清出来），其余偶发写入失败过几秒自动补试两次 */
 const scheduleAutoRetry = () => {
-  if (autoRetryTimer !== undefined || autoRetryCount >= 2) {
+  if (runtime.autoRetryTimer !== undefined || runtime.autoRetryCount >= 2) {
     return
   }
   if (Object.values(get().sessionSaveErrors).every((failure) => failure.kind === 'quota')) {
     return
   }
-  autoRetryTimer = window.setTimeout(() => {
-    autoRetryTimer = undefined
-    autoRetryCount += 1
+  runtime.autoRetryTimer = window.setTimeout(() => {
+    runtime.autoRetryTimer = undefined
+    runtime.autoRetryCount += 1
     if (Object.keys(get().sessionSaveErrors).length > 0) {
       void retrySaveSessions({ silent: true })
     }
@@ -398,8 +395,6 @@ const markSaveFailure = (
   scheduleAutoRetry()
 }
 
-const persistQueues = new Map<string, Promise<void>>()
-
 /**
  * 把会话写进本机，返回这次落盘结束的 promise（失败不算 reject，结论体现在状态里）。
  * 同一会话的写入按队列串行执行，避免并发 readwrite 事务在 WebView 下锁竞争。
@@ -428,11 +423,11 @@ const persistOnce = (sessionId: string): Promise<void> => {
   if (deletingSessions.has(sessionId)) {
     return Promise.resolve()
   }
-  const epoch = historyEpoch
+  const epoch = runtime.historyEpoch
   const files = pendingFiles.get(sessionId) ?? []
-  const attempt = ++saveAttemptSequence
+  const attempt = ++runtime.saveAttemptSequence
   saveAttempts.set(sessionId, attempt)
-  const isLatest = () => epoch === historyEpoch && saveAttempts.get(sessionId) === attempt
+  const isLatest = () => epoch === runtime.historyEpoch && saveAttempts.get(sessionId) === attempt
   // 正文已落库、只差附件时，重试跳过整条会话序列化，只补写附件
   const skipRecord = get().sessionSaveErrors[sessionId]?.recordSaved === true && files.length > 0
   return (async () => {
@@ -536,8 +531,8 @@ const runReplyStream = (
  * 返回是否已全部保存；手动点击时先给失败次数 +1，用户看得到「点了有反应」。
  */
 export const retrySaveSessions = (options: { silent?: boolean } = {}): Promise<boolean> => {
-  if (retryTask) {
-    return retryTask
+  if (runtime.retryTask) {
+    return runtime.retryTask
   }
   if (get().importingHistory) {
     return Promise.resolve(false)
@@ -553,7 +548,7 @@ export const retrySaveSessions = (options: { silent?: boolean } = {}): Promise<b
     return Promise.resolve(Object.keys(get().sessionSaveErrors).length === 0)
   }
   if (!options.silent) {
-    autoRetryCount = 0
+    runtime.autoRetryCount = 0
     set((state) => ({
       sessionSaveErrors: Object.fromEntries(
         Object.entries(state.sessionSaveErrors).map(([id, failure]) => [
@@ -563,7 +558,7 @@ export const retrySaveSessions = (options: { silent?: boolean } = {}): Promise<b
       ),
     }))
   }
-  retryTask = Promise.all([...targets].map((id) => persist(id)))
+  runtime.retryTask = Promise.all([...targets].map((id) => persist(id)))
     .then(() => {
       if (Object.keys(get().sessionSaveErrors).length > 0) {
         // 重试期间可能又攒了新的失败：留给自动补试或下一次手动重试
@@ -575,9 +570,9 @@ export const retrySaveSessions = (options: { silent?: boolean } = {}): Promise<b
       return true
     })
     .finally(() => {
-      retryTask = undefined
+      runtime.retryTask = undefined
     })
-  return retryTask
+  return runtime.retryTask
 }
 
 /** 离开前先合并尚未绘制的增量；隐藏期间浏览器可能暂停动画帧。 */
@@ -656,26 +651,26 @@ export const initChat = (): Promise<void> => {
   if (get().ready) {
     return Promise.resolve()
   }
-  if (initTask) {
-    return initTask
+  if (runtime.initTask) {
+    return runtime.initTask
   }
-  const epoch = historyEpoch
+  const epoch = runtime.historyEpoch
   set({ initError: false })
-  initTask = (async () => {
+  runtime.initTask = (async () => {
     try {
       const summaries = await db.loadSessionSummaries()
-      if (epoch === historyEpoch) {
+      if (epoch === runtime.historyEpoch) {
         set({ ready: true, sessions: sortSessions(summaries) })
         // 空闲时对旧 IndexedDB 做一次幂等补迁（仅补原生磁盘没有且不在墓碑里的老会话）
         const runReconcile = () => {
           void db
             .reconcileMissingFromIdb()
             .then(async (restored) => {
-              if (restored === 0 || get().importingHistory || epoch !== historyEpoch) {
+              if (restored === 0 || get().importingHistory || epoch !== runtime.historyEpoch) {
                 return
               }
               const latest = await db.loadSessionSummaries()
-              if (latest.length === 0 || epoch !== historyEpoch) {
+              if (latest.length === 0 || epoch !== runtime.historyEpoch) {
                 return
               }
               const merged = new Map(get().sessions.map((s) => [s.id, s]))
@@ -693,17 +688,17 @@ export const initChat = (): Promise<void> => {
         }
       }
     } catch (error) {
-      if (epoch === historyEpoch) {
+      if (epoch === runtime.historyEpoch) {
         set({ initError: true })
         db.reportStorageError('read local sessions')(error)
       }
     } finally {
-      if (epoch === historyEpoch) {
-        initTask = undefined
+      if (epoch === runtime.historyEpoch) {
+        runtime.initTask = undefined
       }
     }
   })()
-  return initTask
+  return runtime.initTask
 }
 
 /** 同一会话合并并发读取；切换只改变 activeId，旧请求不会把界面切回去。 */
@@ -715,14 +710,14 @@ const ensureSessionLoaded = (id: string): Promise<void> => {
   if (pending) {
     return pending.promise
   }
-  const epoch = historyEpoch
+  const epoch = runtime.historyEpoch
   set((state) => ({ sessionLoadErrors: { ...state.sessionLoadErrors, [id]: false } }))
   const load = { promise: Promise.resolve() }
   sessionLoads.set(id, load)
   load.promise = (async () => {
     try {
       const stored = await db.loadSession(id)
-      if (epoch !== historyEpoch || sessionLoads.get(id) !== load) {
+      if (epoch !== runtime.historyEpoch || sessionLoads.get(id) !== load) {
         return
       }
       const summary = get().sessions.find((session) => session.id === id)
@@ -743,7 +738,7 @@ const ensureSessionLoaded = (id: string): Promise<void> => {
       }
       trimSessionCache()
     } catch (error) {
-      if (epoch === historyEpoch && sessionLoads.get(id) === load) {
+      if (epoch === runtime.historyEpoch && sessionLoads.get(id) === load) {
         set((state) => ({ sessionLoadErrors: { ...state.sessionLoadErrors, [id]: true } }))
         db.reportStorageError('read session')(error)
       }
@@ -799,8 +794,8 @@ export const replaceHistory = async (
       }
       // 已开始的单条删除先同步到内存，避免本次替换失败后列表残留已被删除的记录。
       await Promise.all(deletionTasks)
-      historyEpoch += 1
-      initTask = undefined
+      runtime.historyEpoch += 1
+      runtime.initTask = undefined
       sessionLoads.clear()
       await waitForIdle()
     }
@@ -913,17 +908,17 @@ const removeSessionData = async (id: string): Promise<boolean> => {
   if (get().importingHistory || deletingSessions.has(id)) {
     return false
   }
-  const epoch = historyEpoch
+  const epoch = runtime.historyEpoch
   deletingSessions.add(id)
   try {
     getStreamController(id)?.abort()
     // 等本会话的流收尾，避免删除之后又被收尾保存写回来。
     await waitForIdle(id)
-    if (epoch !== historyEpoch) {
+    if (epoch !== runtime.historyEpoch) {
       return false
     }
     await db.deleteSession(id)
-    if (epoch !== historyEpoch) {
+    if (epoch !== runtime.historyEpoch) {
       return true
     }
     sessionLoads.delete(id)
@@ -1144,8 +1139,12 @@ export const duplicateSession = async (sessionId: string): Promise<string | null
   return copy.id
 }
 
-/** 重新生成当前路径上的回答：在原问题下新增版本，不覆盖旧回答和后续对话。 */
-export const regenerateReply = (sessionId: string, messageId?: string) => {
+/** 重新生成当前路径上的回答：在原问题下新增版本，不覆盖旧回答和后续对话；可附带仅本轮生效的篇幅覆盖。 */
+export const regenerateReply = (
+  sessionId: string,
+  messageId?: string,
+  options?: { lengthOverride?: Exclude<ReplyLength, 'default'> }
+) => {
   if (get().importingHistory || deletingSessions.has(sessionId)) {
     return
   }
@@ -1167,7 +1166,11 @@ export const regenerateReply = (sessionId: string, messageId?: string) => {
     updatedAt: Date.now(),
   }))
   persist(sessionId)
-  runReplyStream(sessionId, reply, { history, question })
+  runReplyStream(sessionId, reply, {
+    history,
+    question,
+    ...(options?.lengthOverride ? { lengthOverride: options.lengthOverride } : {}),
+  })
 }
 
 /** 编辑 AI 回答并保存为同问题下的新版本（方式 B）：保留原回复与后续分支，可左右切换回 AI 原版。 */
@@ -1321,10 +1324,6 @@ export const retryUpload = (sessionId: string, messageId: string) => {
 }
 
 // ---------------- 外置记忆 ----------------
-
-/** 正在整理记忆的会话：同一会话同时只允许一次整理 */
-const compactionTasks = new Map<string, Promise<boolean>>()
-const memoryControllers = new Map<string, AbortController>()
 
 const emptyMemory = (): SessionMemory => ({
   notes: [],
@@ -1971,7 +1970,13 @@ export const clearSessionMemory = (sessionId: string) => {
   persist(sessionId)
 }
 
-type Request = { history: Message[]; question: UserMessage; prefix?: AssistantMessage }
+type Request = {
+  history: Message[]
+  question: UserMessage
+  prefix?: AssistantMessage
+  /** 仅本轮生效的篇幅微调（展开详述 / 精简一点），不修改全局设置、不写回本地消息 */
+  lengthOverride?: Exclude<ReplyLength, 'default'>
+}
 
 /** 把补传得到的 serverId 写回会话里所有引用同一附件的消息（编辑、重新生成会共用附件） */
 const saveServerIds = (sessionId: string, serverIds: Map<string, string>) => {
@@ -2033,6 +2038,7 @@ const refreshRequest = (sessionId: string, request: Request): Request => {
     history: request.history.map(pick),
     question: pick(request.question),
     prefix: request.prefix,
+    lengthOverride: request.lengthOverride,
   }
 }
 
@@ -2043,7 +2049,7 @@ const refreshRequest = (sessionId: string, request: Request): Request => {
  *   失败静默跳过，该附件不进入本次请求，下次发送时再试。
  */
 const prepareFiles = async (sessionId: string, request: Request, signal: AbortSignal) => {
-  const epoch = historyEpoch
+  const epoch = runtime.historyEpoch
   // 服务端判定 file_id 失效时会清掉会话里的 serverId，先用最新消息替换请求快照，
   // 否则快照里仍是旧 id，补传会直接复用它。
   request = refreshRequest(sessionId, request)
@@ -2062,7 +2068,7 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
     })
   )
   void uploads.then(() => {
-    if (epoch === historyEpoch) {
+    if (epoch === runtime.historyEpoch) {
       saveServerIds(sessionId, serverIds)
     }
   })
@@ -2116,6 +2122,7 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
     history: request.history.map(resolve),
     question: resolve(request.question),
     prefix: request.prefix,
+    lengthOverride: request.lengthOverride,
   }
 }
 
@@ -2304,6 +2311,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   let twoStepSummary: string | null = null
   /** 服务端实际报 400 user input too long 时补触发两步法搜索 */
   let forceTwoStep = false
+  /** 撞上服务端 total size of image 上限时，本轮略去所有较早历史图片块（仅保留本轮图）自动重发 */
+  let dropHistoryImages = false
   try {
     for (let attempt = 0; ; attempt += 1) {
       /** 附件补齐前出错属于上传失败，请求还没有发出 */
@@ -2312,10 +2321,10 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       try {
         const prepared = await prepareFiles(sessionId, request, controller.signal)
         preparing = false
-        // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
-        const latestReminder = prepared.prefix
-          ? prepared.prefix.latestReminder
-          : createLatestReminder(useSettings.getState())
+        // 附件就绪后获取本轮信息；续写沿用规范化后的原回答快照，重新生成的快照独立保存。
+        const latestReminder =
+          (prepared.prefix ? normalizeLatestReminder(prepared.prefix.latestReminder) : undefined) ??
+          createLatestReminder(useSettings.getState())
         reply = { ...reply, latestReminder }
         updateReply(sessionId, reply)
         persist(sessionId)
@@ -2442,28 +2451,20 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           // v4 pro 不支持图片：历史里的图片块直接不发（用户选择「发得出去但看不见图」）
           isPro,
           // v4 pro 不支持 latest_reminder：日期并入 system 保缓存，具体时分附在最后一条提问尾部
-          isPro
+          isPro,
+          // 超 200MB 自动略去较早老图；若仍撞服务端更严上限则略去全部历史图仅保留本轮图
+          dropHistoryImages ? 0 : MAX_REQUEST_IMAGE_BYTES
         )
-        // 具体时刻（HH:mm）按开关附在最后一条 user 消息尾部：仅放极简纯数据标记，
-        // 规则说明静态写在 system 里（不伤前缀缓存），避免模型把时间戳当成用户输入或指令。
+        // 本轮临时尾部附注（具体时刻 + 单次篇幅覆盖）附在最后一条 user 消息末尾，不伤 system 前缀缓存。
+        const tailNotes: string[] = []
         if (prefs.sendClockTime) {
           const clock = (latestReminder ? extractClockTime(latestReminder) : null) ?? formatClockTime()
-          const tailTag = prefs.locale === 'en-US' ? `[Clock: ${clock}]` : `[环境时钟: ${clock}]`
-          for (let idx = messages.length - 1; idx >= 0; idx -= 1) {
-            const msg = messages[idx]
-            if (msg.role === 'user') {
-              if (typeof msg.content === 'string') {
-                messages[idx] = { ...msg, content: `${msg.content}\n\n${tailTag}` }
-              } else {
-                messages[idx] = {
-                  ...msg,
-                  content: [...msg.content, { type: 'text', text: `\n\n${tailTag}` }],
-                }
-              }
-              break
-            }
-          }
+          tailNotes.push(prefs.locale === 'en-US' ? `[Clock: ${clock}]` : `[环境时钟: ${clock}]`)
         }
+        if (prepared.lengthOverride) {
+          tailNotes.push(formatTurnLengthHint(prepared.lengthOverride, prefs.locale))
+        }
+        const finalMessages = appendUserTailNotes(messages, tailNotes)
         // 请求体只从这里出去：扩展模式的四道闸门（工具 / 严格审查 / 标题 / 长输入）
         // 全在 buildRequest 里统一判定，别再往这里加字段。
         const systemRaw = buildSystemPrompt(
@@ -2510,7 +2511,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         const built = buildRequest({
           model,
           system,
-          messages,
+          messages: finalMessages,
           questionText: prepared.question.content,
           search: useTwoStep ? false : (initial.search ?? false),
           safety: prefs.safety,
@@ -2609,6 +2610,17 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           }
           continue
         }
+        // 历史图片累计体积触发服务端 total size of image 上限：略去较早历史图片块（不删本地原图）自动重发一次
+        if (
+          !dropHistoryImages &&
+          !receivedContent &&
+          error instanceof ApiError &&
+          error.status === 400 &&
+          /total\s+size\s+of\s+image/i.test(error.message)
+        ) {
+          dropHistoryImages = true
+          continue
+        }
         // 附件失效：重新补传后重发。收到过内容块（含丢弃的客户端工具）后不自动重发。
         if (
           attempt < FILE_RETRY_LIMIT &&
@@ -2659,10 +2671,10 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       ),
     }))
     persist(sessionId)
-    // 开启「输出完毕自动朗读」且仍停留在当前会话时，自动朗读本条回答正文
+    // 开启「消息朗读」与「输出完毕自动朗读」且仍停留在当前会话时，自动朗读本条回答正文
     if (
       reply.status === 'done' &&
-      useSettings.getState().autoReadAloud &&
+      shouldAutoReadAloud(useSettings.getState()) &&
       get().activeId === sessionId
     ) {
       const spoken = reply.blocks

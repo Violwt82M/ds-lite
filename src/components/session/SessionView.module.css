@@ -29,7 +29,7 @@
 }
 
 .withCollapsedSider {
-  margin-left: 113px;
+  margin-left: 56px;
 }
 
 .headerActions {
@@ -40,6 +40,54 @@
   gap: 8px;
   margin-left: auto;
   padding-right: 4px;
+}
+
+.statusToggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.statusToggle:hover,
+.statusToggle:active {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.statusToggleIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.18s ease;
+}
+
+.statusToggleExpanded .statusToggleIcon {
+  transform: rotate(180deg);
+}
+
+.alertDot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e67e22;
+}
+
+.alertDotCritical {
+  background: #e5484d;
 }
 
 .inputContainer {

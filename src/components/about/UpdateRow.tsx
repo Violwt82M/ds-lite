@@ -2,12 +2,12 @@ import { useState } from 'react'
 import clsx from 'clsx'
 import { useTranslate } from '../../i18n/index.js'
 import { APP_VERSION } from '../../version.js'
+import { platform } from '../../services/platform.js'
 import {
   canDownloadInApp,
   canInstallPackages,
   checkForUpdate,
   downloadApkUpdate,
-  isNativePlatform,
   openInstallPermission,
   openReleasePage,
   useUpdate,
@@ -25,7 +25,7 @@ import settingsStyles from '../settings/Settings.module.css'
  */
 export const UpdateRow = () => {
   const t = useTranslate()
-  const native = isNativePlatform()
+  const native = platform.canInstallApk()
   const update = useUpdate()
   const webAvailable = useWebUpdate((state) => state.available)
   /** 点过「去授权」之后，把提示文案换成「授权完再点下载」 */
